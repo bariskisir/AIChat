@@ -35,6 +35,7 @@ namespace App {
     refs.btnCompact.addEventListener("click", toggleCompactMode);
     refs.btnAlwaysOnTop.addEventListener("click", toggleAlwaysOnTop);
     refs.btnCopyChat.addEventListener("click", ClipboardActions.copyLastAssistant);
+    Renderer.bindScrollTracking(refs, model);
     Composer.bind(refs, model);
     ResizeControls.bind(refs);
   }

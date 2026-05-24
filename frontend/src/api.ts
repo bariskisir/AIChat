@@ -53,9 +53,9 @@ namespace Api {
     return TauriBridge.invokeCommand<AppSnapshot>("chat_send", { input });
   }
 
-  // Stops the currently streaming chat response.
-  export function stopChat(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("chat_stop");
+  // Stops the streaming chat response for one chat session.
+  export function stopChat(sessionId: string): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("chat_stop", { sessionId });
   }
 
   // Writes text through the native clipboard command.

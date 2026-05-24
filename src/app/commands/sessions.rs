@@ -39,10 +39,10 @@ pub fn chat_send(
         .map_err(|error| error.to_string())
 }
 
-/// Stops the currently streaming chat response.
+/// Stops the streaming chat response for the selected session.
 #[tauri::command]
-pub fn chat_stop(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
+pub fn chat_stop(session_id: String, state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
     state
-        .stop_chat_response()
+        .stop_chat_response(&session_id)
         .map_err(|error| error.to_string())
 }

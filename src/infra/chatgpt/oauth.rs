@@ -69,9 +69,9 @@ pub async fn wait_for_oauth_callback(expected_state: String) -> Result<String> {
     let parsed = parse_callback_path(path)?;
     let success = parsed.state == expected_state && !parsed.code.is_empty();
     let body = if success {
-        "ChatGPT Helper sign-in complete. You can close this tab."
+        "ChatGPT Codex sign-in complete. You can close this tab."
     } else {
-        "ChatGPT Helper sign-in failed. Return to the app and try again."
+        "ChatGPT Codex sign-in failed. Return to the app and try again."
     };
     let status = if success { "200 OK" } else { "400 Bad Request" };
     let _ = stream

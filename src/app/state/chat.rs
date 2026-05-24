@@ -54,12 +54,12 @@ impl AppState {
         self.ensure_signed_in()?;
         let (work, title_work) = {
             let mut inner = self.lock()?;
-            if inner.active_chat_response.is_some() {
+            let session_id = inner.settings.active_session_id.clone();
+            if inner.active_chat_responses.contains_key(&session_id) {
                 return Err(anyhow!(
                     "Stop the current answer before sending another message."
                 ));
             }
-            let session_id = inner.settings.active_session_id.clone();
             inner.normalize_model_settings();
             let model = inner.settings.model.clone();
             let thinking_variant = inner.settings.thinking_variant.clone();
@@ -106,11 +106,11 @@ impl AppState {
         self.snapshot()
     }
 
-    /// Stops the active ChatGPT response and keeps any text received so far.
-    pub fn stop_chat_response(&self) -> Result<AppSnapshot> {
+    /// Stops a session's active ChatGPT response and keeps any text received so far.
+    pub fn stop_chat_response(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        let Some(active) = inner.active_chat_response.take() else {
-            inner.status = "No answer is running.".to_owned();
+        let Some(active) = inner.active_chat_responses.remove(session_id) else {
+            inner.status = "No answer is running in this chat.".to_owned();
             return Ok(inner.build_snapshot());
         };
         active.abort_handle.abort();
@@ -134,6 +134,7 @@ impl AppState {
     /// Runs ChatGPT response generation on the background runtime.
     fn spawn_chat_response(&self, work: PendingChatResponse, app_handle: AppHandle) {
         let state = self.clone();
+        let active_session_id = work.session_id.clone();
         let active = ActiveChatResponse {
             session_id: work.session_id.clone(),
             assistant_message_id: work.assistant_message_id.clone(),
@@ -175,7 +176,7 @@ impl AppState {
                 .abort_handle(),
         };
         if let Ok(mut inner) = self.lock() {
-            inner.active_chat_response = Some(active);
+            inner.active_chat_responses.insert(active_session_id, active);
         }
     }
 
@@ -239,7 +240,13 @@ impl AppState {
             message.text = final_answer;
         }
         session.updated_at = Utc::now();
-        inner.active_chat_response = None;
+        if inner
+            .active_chat_responses
+            .get(&work.session_id)
+            .is_some_and(|active| active.assistant_message_id == work.assistant_message_id)
+        {
+            inner.active_chat_responses.remove(&work.session_id);
+        }
         inner.status = "Answer ready.".to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         Ok(inner.build_snapshot())
@@ -266,11 +273,11 @@ impl AppState {
     fn finish_failed_chat_response(&self, work: &PendingChatResponse) {
         if let Ok(mut inner) = self.lock() {
             if inner
-                .active_chat_response
-                .as_ref()
+                .active_chat_responses
+                .get(&work.session_id)
                 .is_some_and(|active| active.assistant_message_id == work.assistant_message_id)
             {
-                inner.active_chat_response = None;
+                inner.active_chat_responses.remove(&work.session_id);
                 if let Ok(session) = inner.session_mut(&work.session_id) {
                     if let Some(index) = session
                         .messages

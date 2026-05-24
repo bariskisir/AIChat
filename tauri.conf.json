@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ChatGPT Codex",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.bariskisir.chatgptcodex",
   "build": {
     "beforeDevCommand": "npm run watch",

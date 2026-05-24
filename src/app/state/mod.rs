@@ -13,6 +13,7 @@ use crate::domain::{
 };
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::runtime::Runtime;
 
@@ -29,7 +30,7 @@ pub(super) struct StateInner {
     pub(super) catalog: CatalogStorage,
     pub(super) status: String,
     pub(super) sessions: Vec<ChatSession>,
-    pub(super) active_chat_response: Option<chat::ActiveChatResponse>,
+    pub(super) active_chat_responses: HashMap<String, chat::ActiveChatResponse>,
 }
 
 impl AppState {
@@ -67,7 +68,7 @@ impl AppState {
                 catalog,
                 status: "Ready.".to_owned(),
                 sessions,
-                active_chat_response: None,
+                active_chat_responses: HashMap::new(),
             })),
             runtime: Arc::new(Runtime::new()?),
         })
@@ -106,6 +107,14 @@ impl AppState {
 impl StateInner {
     /// Builds the serializable snapshot consumed by the frontend.
     pub(super) fn build_snapshot(&self) -> AppSnapshot {
+        let active_session = self
+            .sessions
+            .iter()
+            .find(|session| session.id == self.settings.active_session_id)
+            .cloned()
+            .or_else(|| self.sessions.first().cloned())
+            .unwrap_or_else(ChatSession::new);
+        let is_generating = self.active_chat_responses.contains_key(&active_session.id);
         AppSnapshot {
             settings: self.settings.clone(),
             status: self.status.clone(),
@@ -120,14 +129,8 @@ impl StateInner {
                 limit_label: self.catalog.chatgpt_limit_label.clone(),
             },
             sessions: self.sessions.clone(),
-            active_session: self
-                .sessions
-                .iter()
-                .find(|session| session.id == self.settings.active_session_id)
-                .cloned()
-                .or_else(|| self.sessions.first().cloned())
-                .unwrap_or_else(ChatSession::new),
-            is_generating: self.active_chat_response.is_some(),
+            active_session,
+            is_generating,
         }
     }
 

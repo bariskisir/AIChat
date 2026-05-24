@@ -25,6 +25,7 @@ namespace AppContext {
     appState: null,
     pendingImageDataUrls: [],
     copyResetTimer: 0,
+    streamAutoScroll: true,
   };
 
   // Invokes an action that returns and renders an app snapshot.

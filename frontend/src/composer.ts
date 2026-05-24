@@ -29,7 +29,8 @@ namespace Composer {
     const refs = AppContext.refs;
     const model = AppContext.model;
     if (model.appState?.isGenerating) {
-      await AppContext.renderSnapshot(Api.stopChat);
+      const sessionId = model.appState.activeSession.id;
+      await AppContext.renderSnapshot(() => Api.stopChat(sessionId));
       return;
     }
     const text = refs.inputComposer.value.trim();

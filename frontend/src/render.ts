@@ -7,25 +7,42 @@
 namespace Renderer {
   const MIN_SIDEBAR_WIDTH = 80;
   const MAX_SIDEBAR_WIDTH = 360;
+  const AUTO_SCROLL_BOTTOM_THRESHOLD = 48;
 
   export interface UiModel {
     appState: AppSnapshot | null;
     pendingImageDataUrls: string[];
     copyResetTimer: number;
+    streamAutoScroll: boolean;
   }
 
   // Renders a full backend state update into the UI.
   export function renderState(refs: DomRefs.Refs, model: UiModel, state: AppSnapshot): void {
+    const previousState = model.appState;
+    const preservedScrollTop = refs.chatMessages.scrollTop;
+    const sameSession = previousState?.activeSession.id === state.activeSession.id;
+    if (!sameSession || (!previousState?.isGenerating && state.isGenerating)) {
+      model.streamAutoScroll = true;
+    }
+    const streamScrollPaused = sameSession && !model.streamAutoScroll && Boolean(previousState?.isGenerating || state.isGenerating);
     model.appState = state;
     populateOptions(refs, state);
     renderStatus(refs, state.status);
     renderAccount(refs, state);
     renderSessions(refs, state);
-    renderMessages(refs, state.activeSession);
+    renderMessages(refs, state.activeSession, {
+      preservedScrollTop,
+      scrollToBottom: !streamScrollPaused,
+    });
     setCompactMode(refs, state.settings.compactMode);
     setSidebarWidth(refs, state.settings.sidebarWidth);
     renderImagePreview(refs, model);
     updateButtons(refs, model);
+  }
+
+  // Tracks manual chat scrolling so streamed answers only auto-follow near the bottom.
+  export function bindScrollTracking(refs: DomRefs.Refs, model: UiModel): void {
+    refs.chatMessages.addEventListener("scroll", () => updateStreamAutoScroll(refs, model), { passive: true });
   }
 
   // Updates signed-in and signed-out status text.
@@ -59,9 +76,14 @@ namespace Renderer {
     if (node) {
       renderMessageText(node, message);
     } else {
-      renderMessages(refs, active);
+      renderMessages(refs, active, {
+        preservedScrollTop: refs.chatMessages.scrollTop,
+        scrollToBottom: model.streamAutoScroll,
+      });
     }
-    refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+    if (model.streamAutoScroll) {
+      scrollToBottom(refs.chatMessages);
+    }
     renderStatus(refs, "Streaming answer...");
     updateButtons(refs, model);
   }
@@ -227,7 +249,7 @@ namespace Renderer {
   }
 
   // Renders all messages in the active session.
-  function renderMessages(refs: DomRefs.Refs, session: ChatSession): void {
+  function renderMessages(refs: DomRefs.Refs, session: ChatSession, scrollOptions: MessageScrollOptions): void {
     refs.chatMessages.innerHTML = "";
     if (!session.messages.length) {
       const empty = document.createElement("div");
@@ -239,7 +261,16 @@ namespace Renderer {
     for (const message of session.messages) {
       refs.chatMessages.appendChild(messageNode(message));
     }
-    refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+    if (scrollOptions.scrollToBottom) {
+      scrollToBottom(refs.chatMessages);
+      return;
+    }
+    refs.chatMessages.scrollTop = Math.min(scrollOptions.preservedScrollTop, maxScrollTop(refs.chatMessages));
+  }
+
+  interface MessageScrollOptions {
+    preservedScrollTop: number;
+    scrollToBottom: boolean;
   }
 
   // Builds one message bubble node.
@@ -323,6 +354,32 @@ namespace Renderer {
     if (options.some((option) => option.value === previous)) {
       select.value = previous;
     }
+  }
+
+  // Updates whether streamed chunks should keep the chat scrolled to the latest text.
+  function updateStreamAutoScroll(refs: DomRefs.Refs, model: UiModel): void {
+    if (!model.appState?.isGenerating) {
+      if (isNearBottom(refs.chatMessages)) {
+        model.streamAutoScroll = true;
+      }
+      return;
+    }
+    model.streamAutoScroll = isNearBottom(refs.chatMessages);
+  }
+
+  // Scrolls the message list to the newest content.
+  function scrollToBottom(element: HTMLElement): void {
+    element.scrollTop = element.scrollHeight;
+  }
+
+  // Reports whether the message list is close enough to the bottom to keep following.
+  function isNearBottom(element: HTMLElement): boolean {
+    return maxScrollTop(element) - element.scrollTop <= AUTO_SCROLL_BOTTOM_THRESHOLD;
+  }
+
+  // Returns the largest valid scrollTop for the current message list.
+  function maxScrollTop(element: HTMLElement): number {
+    return Math.max(0, element.scrollHeight - element.clientHeight);
   }
 
   // Sorts model choices with newer and non-mini models first.
