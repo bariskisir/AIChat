@@ -1,0 +1,35 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ChatGPT Codex",
+  "version": "1.0.0",
+  "identifier": "com.bariskisir.chatgptcodex",
+  "build": {
+    "beforeDevCommand": "npm run watch",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "frontend/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "ChatGPT Codex",
+        "width": 800,
+        "height": 800,
+        "minWidth": 700,
+        "minHeight": 500,
+        "resizable": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.ico"
+    ]
+  }
+}

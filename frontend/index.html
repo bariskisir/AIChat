@@ -1,0 +1,74 @@
+<!-- Defines the ChatGPT Codex desktop UI shell. -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ChatGPT Codex</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main id="appShell" class="ch-shell">
+      <section id="viewSignedOut" class="ch-view--signed-out">
+        <div class="ch-auth-card">
+          <h1>ChatGPT Codex</h1>
+          <p id="authStatusText">Sign in with ChatGPT to use Codex-backed chat models.</p>
+          <button id="btnLogin" class="ch-btn--primary ch-btn--auth" type="button">Sign in with ChatGPT</button>
+        </div>
+      </section>
+
+      <section id="viewSignedIn" class="ch-view--signed-in" hidden>
+        <header id="statusRow" class="ch-toolbar">
+          <span id="statusText">Ready.</span>
+        </header>
+        <div class="ch-toolbar ch-toolbar--account">
+          <span id="accountLabel">Signed in</span>
+          <span id="limitText">--</span>
+          <button id="btnRefresh" class="ch-btn--icon" type="button" title="Refresh models and limits">&#8635;</button>
+          <button id="btnSignOut" class="ch-btn--sm ch-btn--danger-outline" type="button">Sign out</button>
+        </div>
+
+        <section class="ch-toolbar--model">
+          <div class="ch-select-group">
+            <select id="modelSelect" title="Model"></select>
+            <select id="thinkingSelect" title="Model variant"></select>
+          </div>
+        </section>
+
+        <section class="ch-toolbar--actions">
+          <div class="ch-tool-group">
+            <button id="btnNewSession" class="ch-btn--add" type="button" title="New chat" aria-label="New chat">+</button>
+            <button id="btnCompact" class="ch-btn--sm" type="button">Compact</button>
+            <button id="btnAlwaysOnTop" class="ch-btn--sm" type="button" aria-pressed="false">Always on Top</button>
+          </div>
+          <button id="btnCopyChat" class="ch-btn--sm ch-btn--copy" type="button" title="Copy chat" aria-label="Copy chat">&#9112;</button>
+        </section>
+
+        <section class="ch-workspace">
+          <aside class="ch-sidebar">
+            <nav id="navSessions" class="ch-sidebar__nav" aria-label="Chat sessions"></nav>
+          </aside>
+          <div id="resizerSidebar" class="ch-sidebar__resizer" role="separator" aria-orientation="vertical"></div>
+
+          <section class="ch-chat">
+            <div id="chatMessages" class="ch-chat__messages"></div>
+            <div id="resizerComposer" class="ch-composer__resizer" role="separator" aria-orientation="horizontal"></div>
+            <form id="formComposer" class="ch-composer">
+              <div id="composerPreview" class="ch-composer__preview" hidden></div>
+              <div class="ch-composer__controls">
+                <textarea id="inputComposer" class="ch-composer__input"></textarea>
+                <button id="btnSend" class="ch-btn--primary ch-btn--send" type="submit">Send</button>
+              </div>
+            </form>
+          </section>
+        </section>
+
+        <footer class="ch-footer">
+          <button id="btnDeveloper" type="button">Developed by Bar&#305;&#351; K&#305;s&#305;r</button>
+          <button id="btnSource" type="button">Source</button>
+        </footer>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,15 @@
+target/
+target-tauri/
+gen/
+frontend/dist/
+node_modules/
+frontend/node_modules/
+.vs/
+.idea/
+*.user
+*.suo
+*.db
+*.log
+.env
+*.tmp
+*.temp
