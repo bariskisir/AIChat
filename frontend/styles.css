@@ -227,12 +227,35 @@ textarea {
 .ch-composer__preview {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
   min-width: 0;
 }
 
 .ch-select-group {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  column-gap: var(--spacing-xl);
+  row-gap: var(--spacing-xs);
+}
+
+.ch-select-field {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  gap: var(--spacing-xs);
+}
+
+.ch-tool-group,
+.ch-composer__controls,
+.ch-composer__preview {
+  gap: var(--spacing-xs);
+}
+
+.ch-select-field span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
 }
 
 /* ── Form controls ────────────────────────────────────── */
@@ -250,7 +273,16 @@ textarea {
 
 select {
   flex: 1 1 0;
+  width: 100%;
   height: var(--control-height-sm);
+}
+
+#modelSelect,
+#thinkingSelect,
+#verbositySelect {
+  flex: 0 0 118px;
+  width: 118px;
+  max-width: 118px;
 }
 
 textarea {

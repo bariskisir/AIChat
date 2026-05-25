@@ -4,8 +4,8 @@ use super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
-    CHAT_RESPONSE_STYLE, ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, TITLE_RESPONSE_STYLE,
-    fallback_session_title, sanitize_session_title,
+    ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, TITLE_RESPONSE_STYLE, fallback_session_title,
+    sanitize_session_title,
 };
 use crate::infra::chatgpt;
 use anyhow::{Result, anyhow};
@@ -63,6 +63,10 @@ impl AppState {
             inner.normalize_model_settings();
             let model = inner.settings.model.clone();
             let thinking_variant = inner.settings.thinking_variant.clone();
+            let verbosity = inner
+                .catalog
+                .resolve_verbosity(&inner.settings.verbosity, &model);
+            inner.save_active_session_model_settings()?;
             let session = inner.active_session_mut()?;
             let user_message = ChatMessage::user(text.clone(), image_data_urls);
             let should_generate_title = session.title == "New chat" && session.messages.is_empty();
@@ -91,7 +95,7 @@ impl AppState {
                     messages: request_messages,
                     model,
                     thinking_variant,
-                    response_style: CHAT_RESPONSE_STYLE.to_owned(),
+                    response_style: verbosity,
                 },
             };
             inner.status = "Generating answer...".to_owned();
@@ -176,7 +180,9 @@ impl AppState {
                 .abort_handle(),
         };
         if let Ok(mut inner) = self.lock() {
-            inner.active_chat_responses.insert(active_session_id, active);
+            inner
+                .active_chat_responses
+                .insert(active_session_id, active);
         }
     }
 

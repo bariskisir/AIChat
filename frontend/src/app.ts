@@ -28,8 +28,9 @@ namespace App {
     refs.btnRefresh.addEventListener("click", refreshChatgptData);
     refs.btnDeveloper.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("developer")));
     refs.btnSource.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("source")));
-    refs.modelSelect.addEventListener("change", AppContext.saveSettings);
+    refs.modelSelect.addEventListener("change", saveModelSettings);
     refs.thinkingSelect.addEventListener("change", AppContext.saveSettings);
+    refs.verbositySelect.addEventListener("change", AppContext.saveSettings);
     refs.btnNewSession.addEventListener("click", createSessionAndFocus);
     refs.navSessions.addEventListener("click", selectSession);
     refs.btnCompact.addEventListener("click", toggleCompactMode);
@@ -38,6 +39,13 @@ namespace App {
     Renderer.bindScrollTracking(refs, model);
     Composer.bind(refs, model);
     ResizeControls.bind(refs);
+  }
+
+  // Persists model changes after selecting that model's default verbosity.
+  async function saveModelSettings(): Promise<void> {
+    const selectedModel = model.appState?.catalog.models.find((item) => item.model === refs.modelSelect.value);
+    refs.verbositySelect.value = selectedModel?.defaultVerbosity || "medium";
+    await AppContext.saveSettings();
   }
 
   // Routes backend events to the appropriate frontend handler.

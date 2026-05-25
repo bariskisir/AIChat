@@ -2,8 +2,8 @@
 
 use super::{AccessContext, CHATGPT_MODELS_URL, chatgpt_headers, fetch_codex_client_version};
 use crate::domain::{
-    AvailableModel, CatalogStorage, DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, ThinkingVariantOption,
-    fallback_models, fallback_thinking_variants,
+    AvailableModel, CatalogStorage, DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY,
+    ThinkingVariantOption, fallback_models, fallback_thinking_variants,
 };
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
@@ -139,5 +139,17 @@ fn normalize_model(value: &Value) -> Option<AvailableModel> {
             .unwrap_or(DEFAULT_THINKING_VARIANT)
             .to_owned(),
         thinking_variants,
+        support_verbosity: value
+            .get("support_verbosity")
+            .or_else(|| value.get("supportVerbosity"))
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        default_verbosity: value
+            .get("default_verbosity")
+            .or_else(|| value.get("defaultVerbosity"))
+            .and_then(Value::as_str)
+            .filter(|value| matches!(*value, "low" | "medium" | "high"))
+            .unwrap_or(DEFAULT_VERBOSITY)
+            .to_owned(),
     })
 }

@@ -11,7 +11,9 @@ impl AppState {
         let mut inner = self.lock()?;
         inner.settings.model = input.model;
         inner.settings.thinking_variant = input.thinking_variant;
+        inner.settings.verbosity = input.verbosity;
         inner.normalize_model_settings();
+        inner.save_active_session_model_settings()?;
         inner.settings.compact_mode = input.compact_mode;
         inner.settings.always_on_top = input.always_on_top;
         if let Some(width) = input.window_width {
@@ -23,6 +25,7 @@ impl AppState {
         if let Some(width) = input.sidebar_width {
             inner.settings.sidebar_width = width.clamp(MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
         }
+        inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())
     }

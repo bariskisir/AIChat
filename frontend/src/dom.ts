@@ -15,6 +15,7 @@ namespace DomRefs {
     btnSignOut: HTMLButtonElement;
     modelSelect: HTMLSelectElement;
     thinkingSelect: HTMLSelectElement;
+    verbositySelect: HTMLSelectElement;
     btnNewSession: HTMLButtonElement;
     navSessions: HTMLElement;
     resizerSidebar: HTMLElement;
@@ -47,6 +48,7 @@ namespace DomRefs {
       btnSignOut: get("btnSignOut"),
       modelSelect: get("modelSelect"),
       thinkingSelect: get("thinkingSelect"),
+      verbositySelect: get("verbositySelect"),
       btnNewSession: get("btnNewSession"),
       navSessions: get("navSessions"),
       resizerSidebar: get("resizerSidebar"),

@@ -28,6 +28,8 @@ pub struct AccountSnapshot {
 pub struct CatalogSnapshot {
     pub models: Vec<AvailableModel>,
     pub thinking_variants: Vec<ThinkingVariantOption>,
+    pub verbosity_supported: bool,
+    pub default_verbosity: String,
     pub limit_label: String,
 }
 
@@ -36,6 +38,8 @@ pub struct CatalogSnapshot {
 pub struct SettingsInput {
     pub model: String,
     pub thinking_variant: String,
+    #[serde(default = "default_verbosity_setting")]
+    pub verbosity: String,
     pub compact_mode: bool,
     pub always_on_top: bool,
     #[serde(default)]
@@ -52,4 +56,9 @@ pub struct SendMessageRequest {
     pub text: String,
     #[serde(default)]
     pub image_data_urls: Vec<String>,
+}
+
+/// Returns the fallback frontend verbosity setting.
+fn default_verbosity_setting() -> String {
+    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
 }

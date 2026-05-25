@@ -60,6 +60,20 @@ impl AppState {
                 .unwrap_or_default();
             storage.save_settings(&settings)?;
         }
+        if let Some(session) = sessions
+            .iter_mut()
+            .find(|session| session.id == settings.active_session_id)
+        {
+            settings.model = catalog.normalize_model(&session.model);
+            settings.thinking_variant =
+                catalog.normalize_thinking_variant(&session.thinking_variant, &settings.model);
+            settings.verbosity = catalog.normalize_verbosity(&session.verbosity, &settings.model);
+            session.model = settings.model.clone();
+            session.thinking_variant = settings.thinking_variant.clone();
+            session.verbosity = settings.verbosity.clone();
+            storage.save_sessions(&sessions)?;
+            storage.save_settings(&settings)?;
+        }
         Ok(Self {
             inner: Arc::new(Mutex::new(StateInner {
                 storage,
@@ -126,6 +140,8 @@ impl StateInner {
             catalog: CatalogSnapshot {
                 models: self.catalog.available_models.clone(),
                 thinking_variants: self.catalog.thinking_variants_for(&self.settings.model),
+                verbosity_supported: self.catalog.supports_verbosity(&self.settings.model),
+                default_verbosity: self.catalog.default_verbosity_for(&self.settings.model),
                 limit_label: self.catalog.chatgpt_limit_label.clone(),
             },
             sessions: self.sessions.clone(),
@@ -140,8 +156,38 @@ impl StateInner {
         let thinking_variant = self
             .catalog
             .normalize_thinking_variant(&self.settings.thinking_variant, &model);
+        let verbosity = self
+            .catalog
+            .normalize_verbosity(&self.settings.verbosity, &model);
         self.settings.model = model;
         self.settings.thinking_variant = thinking_variant;
+        self.settings.verbosity = verbosity;
+    }
+
+    /// Copies the active session's model settings into global settings.
+    pub(super) fn load_active_session_model_settings(&mut self) -> Result<()> {
+        let session = self
+            .sessions
+            .iter()
+            .find(|session| session.id == self.settings.active_session_id)
+            .ok_or_else(|| anyhow!("Chat session was not found."))?;
+        self.settings.model = session.model.clone();
+        self.settings.thinking_variant = session.thinking_variant.clone();
+        self.settings.verbosity = session.verbosity.clone();
+        self.normalize_model_settings();
+        self.save_active_session_model_settings()
+    }
+
+    /// Copies global model settings into the active session.
+    pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
+        let model = self.settings.model.clone();
+        let thinking_variant = self.settings.thinking_variant.clone();
+        let verbosity = self.settings.verbosity.clone();
+        let session = self.active_session_mut()?;
+        session.model = model;
+        session.thinking_variant = thinking_variant;
+        session.verbosity = verbosity;
+        Ok(())
     }
 
     /// Returns the active session for mutation.

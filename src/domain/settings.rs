@@ -1,6 +1,6 @@
 //! Application settings persisted for ChatGPT Codex.
 
-use super::{DEFAULT_MODEL, DEFAULT_THINKING_VARIANT};
+use super::{DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY_SETTING};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_WINDOW_WIDTH: u32 = 800;
@@ -18,6 +18,8 @@ pub struct AppSettings {
     pub model: String,
     #[serde(default = "default_thinking_variant")]
     pub thinking_variant: String,
+    #[serde(default = "default_verbosity_setting")]
+    pub verbosity: String,
     #[serde(default)]
     pub active_session_id: String,
     #[serde(default)]
@@ -44,6 +46,7 @@ impl Default for AppSettings {
         Self {
             model: DEFAULT_MODEL.to_owned(),
             thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
+            verbosity: DEFAULT_VERBOSITY_SETTING.to_owned(),
             active_session_id: String::new(),
             compact_mode: false,
             always_on_top: false,
@@ -65,6 +68,11 @@ fn default_model() -> String {
 /// Returns the fallback reasoning effort value.
 fn default_thinking_variant() -> String {
     DEFAULT_THINKING_VARIANT.to_owned()
+}
+
+/// Returns the fallback verbosity setting value.
+fn default_verbosity_setting() -> String {
+    DEFAULT_VERBOSITY_SETTING.to_owned()
 }
 
 /// Returns the default native window width.

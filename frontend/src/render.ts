@@ -8,6 +8,11 @@ namespace Renderer {
   const MIN_SIDEBAR_WIDTH = 80;
   const MAX_SIDEBAR_WIDTH = 360;
   const AUTO_SCROLL_BOTTOM_THRESHOLD = 48;
+  const VERBOSITY_LEVELS = [
+    { value: "low", label: "low", title: "Shorter, more direct answers" },
+    { value: "medium", label: "medium", title: "Balanced answer detail" },
+    { value: "high", label: "high", title: "More detailed answers" },
+  ];
 
   export interface UiModel {
     appState: AppSnapshot | null;
@@ -122,6 +127,7 @@ namespace Renderer {
     return {
       model: refs.modelSelect.value,
       thinkingVariant: refs.thinkingSelect.value,
+      verbosity: refs.verbositySelect.value,
       compactMode: refs.appShell.classList.contains("is-compact"),
       alwaysOnTop: refs.btnAlwaysOnTop.classList.contains("is-active"),
       windowWidth: Math.round(window.outerWidth || window.innerWidth),
@@ -187,6 +193,7 @@ namespace Renderer {
     refs.btnRefresh.disabled = !loggedIn;
     refs.modelSelect.disabled = !loggedIn;
     refs.thinkingSelect.disabled = !loggedIn;
+    refs.verbositySelect.disabled = !loggedIn || !state.catalog.verbositySupported;
     refs.inputComposer.disabled = !loggedIn;
     refs.btnSend.disabled = !loggedIn || (!state.isGenerating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
     refs.btnSend.classList.toggle("is-stop", state.isGenerating);
@@ -214,7 +221,7 @@ namespace Renderer {
   // Renders the chat session navigation list.
   function renderSessions(refs: DomRefs.Refs, state: AppSnapshot): void {
     refs.navSessions.innerHTML = "";
-    const sessions = [...state.sessions].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    const sessions = [...state.sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
     for (const session of sessions) {
       refs.navSessions.appendChild(sessionItemNode(session, state));
     }
@@ -313,7 +320,7 @@ namespace Renderer {
   function populateOptions(refs: DomRefs.Refs, state: AppSnapshot): void {
     replaceOptions(refs.modelSelect, state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
       value: item.model,
-      label: item.displayName || item.model,
+      label: item.model,
       title: item.description || item.model,
     })));
     refs.modelSelect.value = state.settings.model;
@@ -323,6 +330,25 @@ namespace Renderer {
       title: item.description,
     })));
     refs.thinkingSelect.value = state.settings.thinkingVariant;
+    replaceOptions(refs.verbositySelect, verbosityOptions(state));
+    refs.verbositySelect.value = selectedVerbosity(state);
+  }
+
+  // Builds the static verbosity choices for the selected model.
+  function verbosityOptions(state: AppSnapshot): Array<{ value: string; label: string; title?: string }> {
+    return VERBOSITY_LEVELS.map((item) => ({
+      value: item.value,
+      label: item.label,
+      title: state.catalog.verbositySupported ? item.title : "Verbosity is not supported by this model",
+    }));
+  }
+
+  // Resolves persisted default verbosity settings to a concrete dropdown value.
+  function selectedVerbosity(state: AppSnapshot): string {
+    if (VERBOSITY_LEVELS.some((item) => item.value === state.settings.verbosity)) {
+      return state.settings.verbosity;
+    }
+    return state.catalog.defaultVerbosity || "medium";
   }
 
   // Reports whether the active session has copyable text or image markers.

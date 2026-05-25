@@ -9,7 +9,12 @@ impl AppState {
     /// Creates a new chat session and selects it.
     pub fn create_session(&self) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        let session = ChatSession::new();
+        inner.normalize_model_settings();
+        let session = ChatSession::with_model_settings(
+            inner.settings.model.clone(),
+            inner.settings.thinking_variant.clone(),
+            inner.settings.verbosity.clone(),
+        );
         inner.settings.active_session_id = session.id.clone();
         inner.sessions.push(session);
         inner.status = "New chat created.".to_owned();
@@ -29,7 +34,9 @@ impl AppState {
             return Err(anyhow!("Chat session was not found."));
         }
         inner.settings.active_session_id = session_id.to_owned();
+        inner.load_active_session_model_settings()?;
         inner.status = "Chat selected.".to_owned();
+        inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())
     }
@@ -51,6 +58,7 @@ impl AppState {
                 .first()
                 .map(|session| session.id.clone())
                 .unwrap_or_default();
+            inner.load_active_session_model_settings()?;
         }
         inner.status = "Chat deleted.".to_owned();
         inner.storage.save_sessions(&inner.sessions)?;

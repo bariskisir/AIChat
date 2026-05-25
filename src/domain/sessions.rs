@@ -1,5 +1,6 @@
 //! Chat session and message domain models.
 
+use super::{DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY_SETTING};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +56,12 @@ impl ChatMessage {
 pub struct ChatSession {
     pub id: String,
     pub title: String,
+    #[serde(default = "default_model")]
+    pub model: String,
+    #[serde(default = "default_thinking_variant")]
+    pub thinking_variant: String,
+    #[serde(default = "default_verbosity")]
+    pub verbosity: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -68,11 +75,38 @@ impl ChatSession {
         Self {
             id: new_record_id("session"),
             title: "New chat".to_owned(),
+            model: DEFAULT_MODEL.to_owned(),
+            thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
+            verbosity: DEFAULT_VERBOSITY_SETTING.to_owned(),
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
         }
     }
+
+    /// Creates a new empty chat session with selected model settings.
+    pub fn with_model_settings(model: String, thinking_variant: String, verbosity: String) -> Self {
+        let mut session = Self::new();
+        session.model = model;
+        session.thinking_variant = thinking_variant;
+        session.verbosity = verbosity;
+        session
+    }
+}
+
+/// Returns the fallback ChatGPT model identifier.
+fn default_model() -> String {
+    DEFAULT_MODEL.to_owned()
+}
+
+/// Returns the fallback reasoning effort value.
+fn default_thinking_variant() -> String {
+    DEFAULT_THINKING_VARIANT.to_owned()
+}
+
+/// Returns the fallback verbosity setting value.
+fn default_verbosity() -> String {
+    DEFAULT_VERBOSITY_SETTING.to_owned()
 }
 
 /// Creates a compact fallback session title from the first user message.
