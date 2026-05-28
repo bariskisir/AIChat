@@ -1,4 +1,4 @@
-/** DOM reference collection for ChatGPT Codex. */
+/** DOM reference collection for Claude Chat. */
 
 namespace DomRefs {
   export interface Refs {
@@ -9,13 +9,11 @@ namespace DomRefs {
     statusText: HTMLElement;
     authStatusText: HTMLElement;
     accountLabel: HTMLElement;
-    limitText: HTMLElement;
     btnRefresh: HTMLButtonElement;
     btnLogin: HTMLButtonElement;
     btnSignOut: HTMLButtonElement;
     modelSelect: HTMLSelectElement;
-    thinkingSelect: HTMLSelectElement;
-    verbositySelect: HTMLSelectElement;
+    toggleThinking: HTMLInputElement;
     btnNewSession: HTMLButtonElement;
     navSessions: HTMLElement;
     resizerSidebar: HTMLElement;
@@ -32,7 +30,7 @@ namespace DomRefs {
     btnSource: HTMLButtonElement;
   }
 
-  // Collects and validates all required DOM references.
+  // Resolves all static DOM nodes used by the app.
   export function getRefs(): Refs {
     return {
       appShell: get("appShell"),
@@ -42,13 +40,11 @@ namespace DomRefs {
       statusText: get("statusText"),
       authStatusText: get("authStatusText"),
       accountLabel: get("accountLabel"),
-      limitText: get("limitText"),
       btnRefresh: get("btnRefresh"),
       btnLogin: get("btnLogin"),
       btnSignOut: get("btnSignOut"),
       modelSelect: get("modelSelect"),
-      thinkingSelect: get("thinkingSelect"),
-      verbositySelect: get("verbositySelect"),
+      toggleThinking: get("toggleThinking"),
       btnNewSession: get("btnNewSession"),
       navSessions: get("navSessions"),
       resizerSidebar: get("resizerSidebar"),
@@ -66,7 +62,7 @@ namespace DomRefs {
     };
   }
 
-  // Returns a typed DOM element or throws when it is missing.
+  // Returns a typed element reference or fails fast during startup.
   function get<T extends HTMLElement>(id: string): T {
     const element = document.getElementById(id);
     if (!element) {

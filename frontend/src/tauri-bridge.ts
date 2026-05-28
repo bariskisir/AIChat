@@ -1,10 +1,10 @@
-/** Tauri backend access for the ChatGPT Codex UI. */
+/** Tauri backend access for the Claude Chat UI. */
 
 namespace TauriBridge {
   const { invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
 
-  // Calls a Tauri command through the global frontend bridge.
+  // Invokes a typed Tauri command through the generated bridge.
   export function invokeCommand<T = void>(
     command: string,
     args?: Record<string, unknown>
@@ -12,7 +12,7 @@ namespace TauriBridge {
     return invoke<T>(command, args);
   }
 
-  // Subscribes to backend app events emitted over Tauri.
+  // Subscribes to backend app events.
   export function listenAppEvents(
     handler: (payload: UiEventPayload) => void
   ): Promise<() => void> {

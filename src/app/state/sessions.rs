@@ -6,15 +6,11 @@ use crate::domain::ChatSession;
 use anyhow::{Result, anyhow};
 
 impl AppState {
-    /// Creates a new chat session and selects it.
+    /// Creates a new chat session using the selected model.
     pub fn create_session(&self) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        inner.normalize_model_settings();
-        let session = ChatSession::with_model_settings(
-            inner.settings.model.clone(),
-            inner.settings.thinking_variant.clone(),
-            inner.settings.verbosity.clone(),
-        );
+        inner.ensure_selected_model();
+        let session = ChatSession::with_model(inner.settings.model.clone());
         inner.settings.active_session_id = session.id.clone();
         inner.sessions.push(session);
         inner.status = "New chat created.".to_owned();
@@ -23,15 +19,11 @@ impl AppState {
         Ok(inner.build_snapshot())
     }
 
-    /// Selects an existing chat session.
+    /// Selects a chat session and loads its model settings.
     pub fn select_session(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        if !inner
-            .sessions
-            .iter()
-            .any(|session| session.id == session_id)
-        {
-            return Err(anyhow!("Chat session was not found."));
+        if !inner.sessions.iter().any(|s| s.id == session_id) {
+            return Err(anyhow!("Chat session not found."));
         }
         inner.settings.active_session_id = session_id.to_owned();
         inner.load_active_session_model_settings()?;
@@ -41,22 +33,24 @@ impl AppState {
         Ok(inner.build_snapshot())
     }
 
-    /// Deletes a chat session and keeps at least one session available.
+    /// Deletes a chat session and creates a replacement when needed.
     pub fn delete_session(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        inner.sessions.retain(|session| session.id != session_id);
+        inner.sessions.retain(|s| s.id != session_id);
         if inner.sessions.is_empty() {
-            inner.sessions.push(ChatSession::new());
+            inner.ensure_selected_model();
+            let model = inner.settings.model.clone();
+            inner.sessions.push(ChatSession::with_model(model));
         }
         if !inner
             .sessions
             .iter()
-            .any(|session| session.id == inner.settings.active_session_id)
+            .any(|s| s.id == inner.settings.active_session_id)
         {
             inner.settings.active_session_id = inner
                 .sessions
                 .first()
-                .map(|session| session.id.clone())
+                .map(|s| s.id.clone())
                 .unwrap_or_default();
             inner.load_active_session_model_settings()?;
         }

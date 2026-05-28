@@ -1,8 +1,8 @@
 [package]
-name = "chatgpt-codex"
-version = "1.1.0"
+name = "claude-chat"
+version = "1.0.0"
 edition = "2024"
-description = "Desktop ChatGPT Codex chat client"
+description = "Desktop Claude chat client"
 license = "MIT"
 
 [dependencies]
@@ -13,13 +13,12 @@ dirs = "6.0"
 futures-util = "0.3"
 log = { version = "0.4", features = ["std"] }
 rand = "0.9"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sha2 = "0.10"
 tauri = "2"
-tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "sync", "time"] }
-urlencoding = "2.1"
+tokio = { version = "1.48", features = ["rt-multi-thread", "macros", "sync", "time", "process"] }
+tokio-tungstenite = "0.24"
 windows = { version = "0.61.3", features = ["Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory"] }
 
 [build-dependencies]

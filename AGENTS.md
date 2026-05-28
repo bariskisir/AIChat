@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-ChatGPT Codex is a Windows-focused Tauri 2 desktop chat app. The Rust backend manages shared app state, local JSON storage, OAuth login, ChatGPT Codex model/usage calls, response streaming, clipboard integration, logging, and Tauri commands. The TypeScript frontend is a namespace-based UI that renders sessions, markdown-capable assistant messages, account/catalog status, model controls, pasted images, resize controls, and typed Tauri command calls.
+Claude Chat is a Windows-focused Tauri 2 desktop chat app for Claude.ai. The Rust backend manages shared app state, local JSON storage, browser-based Claude login, Claude model bootstrap parsing, response streaming, image attachment upload, clipboard integration, logging, and Tauri commands. The TypeScript frontend is a namespace-based UI that renders sessions, markdown-capable assistant messages, account/catalog status, model controls, pasted images, resize controls, and typed Tauri command calls.
 
 ## Repository Layout
 
@@ -11,7 +11,9 @@ ChatGPT Codex is a Windows-focused Tauri 2 desktop chat app. The Rust backend ma
 - `src/app/state`: focused state behavior modules for auth, catalog refresh, chat streaming, sessions, and settings.
 - `src/app/view.rs`: frontend-facing `AppSnapshot`, account/catalog snapshots, settings input, and chat send request types.
 - `src/domain`: serializable settings, auth/catalog storage models, chat sessions/messages, defaults, and domain helpers.
-- `src/infra`: persistence, paths, logging, shell helpers, clipboard, and ChatGPT HTTP helpers.
+- `src/infra`: persistence, paths, logging, shell helpers, clipboard, Claude HTTP helpers, and browser extraction helpers.
+- `src/infra/claude`: Claude.ai REST/SSE client, bootstrap parsing, model entitlement filtering, and image upload helpers.
+- `src/infra/extractor.rs`: Chrome DevTools Protocol login and bootstrap fetch support.
 - `frontend/src`: browser-side TypeScript namespaces compiled by `tsc`.
 - `frontend/src/api.ts`: typed wrappers for all Tauri commands; frontend code should call commands through this namespace.
 - `frontend/src/render.ts`: DOM rendering for snapshots, sessions, messages, controls, and streaming updates.
@@ -40,14 +42,15 @@ The Rust build script also tries to ensure `frontend/dist` exists. If TypeScript
   - frontend-facing DTOs belong in `src/app/view.rs`;
   - Tauri command wrappers belong under `src/app/commands`;
   - serializable models, defaults, and pure domain helpers belong in `src/domain`;
-  - OS, storage, network, and ChatGPT integration details belong in `src/infra`.
+  - OS, storage, network, and Claude integration details belong in `src/infra`.
 - Rust errors should use `anyhow::Result` internally and convert to `String` only at Tauri command boundaries.
 - Frontend code uses global namespaces and triple-slash references, not ES module imports.
 - Keep frontend state in `AppContext.model`; render snapshot and streaming changes through `Renderer`.
 - Call backend commands through the typed `Api` namespace, not raw command strings outside `frontend/src/api.ts`.
 - Assistant message rendering should use `MarkdownRenderer`; avoid `innerHTML` and do not execute raw HTML from model output.
 - Persisted chat messages use `imageDataUrls` / `image_data_urls` only; do not reintroduce the legacy single-image field.
-- Persist settings, auth, catalog, sessions, and logs under the `ChatGPTCodex` app data folder.
+- Model IDs must come from Claude bootstrap data; do not add hardcoded fallback models.
+- Persist settings, auth, catalog, sessions, and logs under the `ClaudeChat` app data folder.
 
 ## Verification
 

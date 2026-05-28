@@ -1,6 +1,5 @@
-//! Application settings persisted for ChatGPT Codex.
+//! Application settings persisted for ClaudeChat.
 
-use super::{DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY_SETTING};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_WINDOW_WIDTH: u32 = 800;
@@ -16,14 +15,12 @@ pub const MAX_SIDEBAR_WIDTH: u32 = 360;
 pub struct AppSettings {
     #[serde(default = "default_model")]
     pub model: String,
-    #[serde(default = "default_thinking_variant")]
-    pub thinking_variant: String,
-    #[serde(default = "default_verbosity_setting")]
-    pub verbosity: String,
     #[serde(default)]
     pub active_session_id: String,
     #[serde(default)]
     pub compact_mode: bool,
+    #[serde(default)]
+    pub extended_thinking: bool,
     #[serde(default)]
     pub always_on_top: bool,
     #[serde(default = "default_window_width")]
@@ -41,14 +38,13 @@ pub struct AppSettings {
 }
 
 impl Default for AppSettings {
-    /// Builds the default application settings.
+    /// Provides first-run settings before any Claude model catalog has loaded.
     fn default() -> Self {
         Self {
-            model: DEFAULT_MODEL.to_owned(),
-            thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
-            verbosity: DEFAULT_VERBOSITY_SETTING.to_owned(),
+            model: String::new(),
             active_session_id: String::new(),
             compact_mode: false,
+            extended_thinking: false,
             always_on_top: false,
             window_width: DEFAULT_WINDOW_WIDTH,
             window_height: DEFAULT_WINDOW_HEIGHT,
@@ -60,32 +56,19 @@ impl Default for AppSettings {
     }
 }
 
-/// Returns the fallback ChatGPT model identifier.
+/// Keeps legacy settings deserialization from selecting a hardcoded model.
 fn default_model() -> String {
-    DEFAULT_MODEL.to_owned()
+    String::new()
 }
-
-/// Returns the fallback reasoning effort value.
-fn default_thinking_variant() -> String {
-    DEFAULT_THINKING_VARIANT.to_owned()
-}
-
-/// Returns the fallback verbosity setting value.
-fn default_verbosity_setting() -> String {
-    DEFAULT_VERBOSITY_SETTING.to_owned()
-}
-
-/// Returns the default native window width.
+/// Supplies the initial window width for persisted settings.
 fn default_window_width() -> u32 {
     DEFAULT_WINDOW_WIDTH
 }
-
-/// Returns the default native window height.
+/// Supplies the initial window height for persisted settings.
 fn default_window_height() -> u32 {
     DEFAULT_WINDOW_HEIGHT
 }
-
-/// Returns the default chat navigation sidebar width.
+/// Supplies the initial sidebar width for persisted settings.
 fn default_sidebar_width() -> u32 {
     DEFAULT_SIDEBAR_WIDTH
 }

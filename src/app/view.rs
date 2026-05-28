@@ -1,6 +1,6 @@
 //! View models and data transfer types for the frontend.
 
-use crate::domain::{AppSettings, AvailableModel, ChatSession, ThinkingVariantOption};
+use crate::domain::{AppSettings, AvailableModel, ChatSession};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
@@ -20,6 +20,7 @@ pub struct AppSnapshot {
 pub struct AccountSnapshot {
     pub logged_in: bool,
     pub email: String,
+    pub plan: String,
     pub error: String,
 }
 
@@ -27,20 +28,14 @@ pub struct AccountSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct CatalogSnapshot {
     pub models: Vec<AvailableModel>,
-    pub thinking_variants: Vec<ThinkingVariantOption>,
-    pub verbosity_supported: bool,
-    pub default_verbosity: String,
-    pub limit_label: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SettingsInput {
     pub model: String,
-    pub thinking_variant: String,
-    #[serde(default = "default_verbosity_setting")]
-    pub verbosity: String,
     pub compact_mode: bool,
+    pub extended_thinking: bool,
     pub always_on_top: bool,
     #[serde(default)]
     pub window_width: Option<u32>,
@@ -56,9 +51,4 @@ pub struct SendMessageRequest {
     pub text: String,
     #[serde(default)]
     pub image_data_urls: Vec<String>,
-}
-
-/// Returns the fallback frontend verbosity setting.
-fn default_verbosity_setting() -> String {
-    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
 }

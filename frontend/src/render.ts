@@ -1,4 +1,4 @@
-/** Rendering helpers for ChatGPT Codex. */
+/** Rendering helpers for Claude Chat. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./dom.ts" />
 /// <reference path="./message-utils.ts" />
@@ -8,11 +8,6 @@ namespace Renderer {
   const MIN_SIDEBAR_WIDTH = 80;
   const MAX_SIDEBAR_WIDTH = 360;
   const AUTO_SCROLL_BOTTOM_THRESHOLD = 48;
-  const VERBOSITY_LEVELS = [
-    { value: "low", label: "low", title: "Shorter, more direct answers" },
-    { value: "medium", label: "medium", title: "Balanced answer detail" },
-    { value: "high", label: "high", title: "More detailed answers" },
-  ];
 
   export interface UiModel {
     appState: AppSnapshot | null;
@@ -21,7 +16,7 @@ namespace Renderer {
     streamAutoScroll: boolean;
   }
 
-  // Renders a full backend state update into the UI.
+  // Renders a complete backend snapshot into the UI.
   export function renderState(refs: DomRefs.Refs, model: UiModel, state: AppSnapshot): void {
     const previousState = model.appState;
     const preservedScrollTop = refs.chatMessages.scrollTop;
@@ -45,12 +40,12 @@ namespace Renderer {
     updateButtons(refs, model);
   }
 
-  // Tracks manual chat scrolling so streamed answers only auto-follow near the bottom.
+  // Tracks whether streaming should keep auto-scrolling.
   export function bindScrollTracking(refs: DomRefs.Refs, model: UiModel): void {
     refs.chatMessages.addEventListener("scroll", () => updateStreamAutoScroll(refs, model), { passive: true });
   }
 
-  // Updates signed-in and signed-out status text.
+  // Updates the visible status text.
   export function renderStatus(refs: DomRefs.Refs, message: string, isError = false): void {
     const text = message || "Ready.";
     refs.statusText.textContent = text;
@@ -59,7 +54,7 @@ namespace Renderer {
     refs.authStatusText.classList.toggle("is-error", isError);
   }
 
-  // Appends a streamed assistant message chunk.
+  // Applies a streamed assistant text delta.
   export function renderAssistantMessage(refs: DomRefs.Refs, model: UiModel, sessionId: string, messageId: string, text: string): void {
     const active = model.appState?.activeSession;
     if (!active || active.id !== sessionId) {
@@ -93,7 +88,7 @@ namespace Renderer {
     updateButtons(refs, model);
   }
 
-  // Shows short-lived copy confirmation on the copy button.
+  // Shows short-lived copy confirmation.
   export function renderCopyFeedback(refs: DomRefs.Refs, model: UiModel): void {
     window.clearTimeout(model.copyResetTimer);
     refs.btnCopyChat.classList.add("is-copied");
@@ -105,7 +100,7 @@ namespace Renderer {
     }, 1000);
   }
 
-  // Applies a generated session title without interrupting message streaming.
+  // Updates a session title after background title generation.
   export function renderSessionTitle(refs: DomRefs.Refs, model: UiModel, sessionId: string, title: string): void {
     const state = model.appState;
     if (!state || !sessionId || !title) {
@@ -122,13 +117,12 @@ namespace Renderer {
     renderSessions(refs, state);
   }
 
-  // Reads frontend controls into the settings payload.
+  // Reads current UI controls into a settings payload.
   export function collectSettings(refs: DomRefs.Refs): FrontendSettings {
     return {
       model: refs.modelSelect.value,
-      thinkingVariant: refs.thinkingSelect.value,
-      verbosity: refs.verbositySelect.value,
       compactMode: refs.appShell.classList.contains("is-compact"),
+      extendedThinking: refs.toggleThinking.checked,
       alwaysOnTop: refs.btnAlwaysOnTop.classList.contains("is-active"),
       windowWidth: Math.round(window.outerWidth || window.innerWidth),
       windowHeight: Math.round(window.outerHeight || window.innerHeight),
@@ -136,7 +130,7 @@ namespace Renderer {
     };
   }
 
-  // Shows or clears the pasted image preview.
+  // Renders pending pasted-image thumbnails.
   export function renderImagePreview(refs: DomRefs.Refs, model: UiModel): void {
     refs.composerPreview.hidden = model.pendingImageDataUrls.length === 0;
     refs.composerPreview.innerHTML = "";
@@ -163,13 +157,13 @@ namespace Renderer {
     });
   }
 
-  // Toggles compact UI mode on the app shell.
+  // Applies compact mode CSS and button text.
   export function setCompactMode(refs: DomRefs.Refs, enabled: boolean): void {
     refs.appShell.classList.toggle("is-compact", enabled);
     refs.btnCompact.textContent = enabled ? "Full" : "Compact";
   }
 
-  // Applies the persisted chat navigation sidebar width.
+  // Applies the persisted sidebar width.
   export function setSidebarWidth(refs: DomRefs.Refs, width: number): void {
     const sidebar = sidebarElement(refs);
     if (!sidebar) {
@@ -179,38 +173,41 @@ namespace Renderer {
     sidebar.style.width = `${clamped}px`;
   }
 
-  // Synchronizes button and control disabled states with the model.
+  // Updates control enabled states and active labels.
   export function updateButtons(refs: DomRefs.Refs, model: UiModel): void {
     const state = model.appState;
-    if (!state) {
-      return;
-    }
-    const loggedIn = state.account.loggedIn;
+    const loggedIn = state?.account.loggedIn ?? false;
+    const generating = state?.isGenerating ?? false;
     refs.viewSignedOut.hidden = loggedIn;
     refs.viewSignedIn.hidden = !loggedIn;
     refs.btnLogin.disabled = loggedIn;
     refs.btnSignOut.disabled = !loggedIn;
     refs.btnRefresh.disabled = !loggedIn;
     refs.modelSelect.disabled = !loggedIn;
-    refs.thinkingSelect.disabled = !loggedIn;
-    refs.verbositySelect.disabled = !loggedIn || !state.catalog.verbositySupported;
     refs.inputComposer.disabled = !loggedIn;
-    refs.btnSend.disabled = !loggedIn || (!state.isGenerating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
-    refs.btnSend.classList.toggle("is-stop", state.isGenerating);
-    refs.btnSend.textContent = state.isGenerating ? "Stop" : "Send";
-    refs.btnSend.setAttribute("aria-label", state.isGenerating ? "Stop response" : "Send message");
+    refs.btnSend.disabled = !loggedIn || (!generating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
+    refs.btnSend.classList.toggle("is-stop", generating);
+    refs.btnSend.textContent = generating ? "Stop" : "Send";
+    refs.btnSend.setAttribute("aria-label", generating ? "Stop response" : "Send message");
     refs.btnNewSession.disabled = !loggedIn;
-    refs.btnCopyChat.disabled = !loggedIn || !hasCopyableMessages(state.activeSession);
-    refs.btnAlwaysOnTop.classList.toggle("is-active", state.settings.alwaysOnTop);
-    refs.btnAlwaysOnTop.setAttribute("aria-pressed", String(state.settings.alwaysOnTop));
+    refs.btnCopyChat.disabled = !loggedIn || (state ? !hasCopyableMessages(state.activeSession) : true);
+    refs.btnAlwaysOnTop.classList.toggle("is-active", state?.settings.alwaysOnTop ?? false);
+    refs.btnAlwaysOnTop.setAttribute("aria-pressed", String(state?.settings.alwaysOnTop ?? false));
   }
 
-  // Renders sign-in, account, and usage-limit status.
+  // Renders signed-in account identity and plan.
   function renderAccount(refs: DomRefs.Refs, state: AppSnapshot): void {
-    refs.accountLabel.textContent = state.account.loggedIn ? state.account.email || "Signed in" : "Not signed in";
-    refs.limitText.textContent = state.catalog.limitLabel || "--";
+    if (state.account.loggedIn) {
+      const parts = [state.account.email || "Signed in"];
+      if (state.account.plan) {
+        parts.push(state.account.plan);
+      }
+      refs.accountLabel.textContent = parts.join(" - ");
+    } else {
+      refs.accountLabel.textContent = "Not signed in";
+    }
     if (!state.account.loggedIn && !state.account.error) {
-      refs.authStatusText.textContent = "Sign in with ChatGPT to use Codex-backed chat models.";
+      refs.authStatusText.textContent = "Connect with Claude to start chatting.";
       refs.authStatusText.classList.remove("is-error");
     }
     if (state.account.error) {
@@ -218,7 +215,7 @@ namespace Renderer {
     }
   }
 
-  // Renders the chat session navigation list.
+  // Renders the sidebar session list.
   function renderSessions(refs: DomRefs.Refs, state: AppSnapshot): void {
     refs.navSessions.innerHTML = "";
     const sessions = [...state.sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
@@ -227,7 +224,7 @@ namespace Renderer {
     }
   }
 
-  // Builds one chat session navigation row.
+  // Builds one session row for the sidebar.
   function sessionItemNode(session: ChatSession, state: AppSnapshot): HTMLElement {
     const item = document.createElement("div");
     item.className = "ch-sidebar__item";
@@ -280,7 +277,7 @@ namespace Renderer {
     scrollToBottom: boolean;
   }
 
-  // Builds one message bubble node.
+  // Builds one chat message bubble.
   function messageNode(message: ChatMessage): HTMLElement {
     const item = document.createElement("article");
     item.className = `ch-bubble ch-bubble--${message.role}`;
@@ -299,7 +296,7 @@ namespace Renderer {
     return item;
   }
 
-  // Renders message text as Markdown for assistants and plain text for users.
+  // Renders message text with markdown only for assistant messages.
   function renderMessageText(container: HTMLElement, message: ChatMessage): void {
     const isPendingAssistant = message.role === "assistant" && !message.text.trim();
     container.classList.toggle("is-pending", isPendingAssistant);
@@ -316,57 +313,39 @@ namespace Renderer {
     container.textContent = message.text || "Image";
   }
 
-  // Rebuilds model and reasoning controls from state.
+  // Populates model and thinking controls from the catalog.
   function populateOptions(refs: DomRefs.Refs, state: AppSnapshot): void {
-    replaceOptions(refs.modelSelect, state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
+    const options = state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
       value: item.model,
       label: item.model,
       title: item.description || item.model,
-    })));
-    refs.modelSelect.value = state.settings.model;
-    replaceOptions(refs.thinkingSelect, state.catalog.thinkingVariants.map((item) => ({
-      value: item.value,
-      label: item.value,
-      title: item.description,
-    })));
-    refs.thinkingSelect.value = state.settings.thinkingVariant;
-    replaceOptions(refs.verbositySelect, verbosityOptions(state));
-    refs.verbositySelect.value = selectedVerbosity(state);
-  }
-
-  // Builds the static verbosity choices for the selected model.
-  function verbosityOptions(state: AppSnapshot): Array<{ value: string; label: string; title?: string }> {
-    return VERBOSITY_LEVELS.map((item) => ({
-      value: item.value,
-      label: item.label,
-      title: state.catalog.verbositySupported ? item.title : "Verbosity is not supported by this model",
     }));
-  }
-
-  // Resolves persisted default verbosity settings to a concrete dropdown value.
-  function selectedVerbosity(state: AppSnapshot): string {
-    if (VERBOSITY_LEVELS.some((item) => item.value === state.settings.verbosity)) {
-      return state.settings.verbosity;
+    replaceOptions(refs.modelSelect, options);
+    if (state.settings.model && options.some((option) => option.value === state.settings.model)) {
+      refs.modelSelect.value = state.settings.model;
+    } else if (options.length > 0) {
+      refs.modelSelect.value = options[0].value;
+      state.settings.model = options[0].value;
     }
-    return state.catalog.defaultVerbosity || "medium";
+    refs.toggleThinking.checked = state.settings.extendedThinking;
   }
 
-  // Reports whether the active session has copyable text or image markers.
+  // Returns whether the session has transcript content.
   function hasCopyableMessages(session: ChatSession): boolean {
     return MessageUtils.hasCopyableMessages(session);
   }
 
-  // Returns the current chat navigation sidebar width.
+  // Reads the current sidebar width for persistence.
   function currentSidebarWidth(refs: DomRefs.Refs): number {
     return Math.round(sidebarElement(refs)?.offsetWidth || 115);
   }
 
-  // Finds the chat navigation sidebar container.
+  // Resolves the sidebar container from the nav node.
   function sidebarElement(refs: DomRefs.Refs): HTMLElement | null {
     return refs.navSessions.closest<HTMLElement>(".ch-sidebar");
   }
 
-  // Replaces a select element's options while preserving selection when possible.
+  // Replaces select options while preserving the previous value when possible.
   function replaceOptions(select: HTMLSelectElement, options: Array<{ value: string; label: string; title?: string }>): void {
     const previous = select.value;
     select.innerHTML = "";
@@ -382,7 +361,7 @@ namespace Renderer {
     }
   }
 
-  // Updates whether streamed chunks should keep the chat scrolled to the latest text.
+  // Updates auto-scroll preference based on current scroll position.
   function updateStreamAutoScroll(refs: DomRefs.Refs, model: UiModel): void {
     if (!model.appState?.isGenerating) {
       if (isNearBottom(refs.chatMessages)) {
@@ -393,22 +372,22 @@ namespace Renderer {
     model.streamAutoScroll = isNearBottom(refs.chatMessages);
   }
 
-  // Scrolls the message list to the newest content.
+  // Scrolls a container to its bottom edge.
   function scrollToBottom(element: HTMLElement): void {
     element.scrollTop = element.scrollHeight;
   }
 
-  // Reports whether the message list is close enough to the bottom to keep following.
+  // Returns whether a scroll container is near its bottom.
   function isNearBottom(element: HTMLElement): boolean {
     return maxScrollTop(element) - element.scrollTop <= AUTO_SCROLL_BOTTOM_THRESHOLD;
   }
 
-  // Returns the largest valid scrollTop for the current message list.
+  // Computes the maximum scrollTop for a container.
   function maxScrollTop(element: HTMLElement): number {
     return Math.max(0, element.scrollHeight - element.clientHeight);
   }
 
-  // Sorts model choices with newer and non-mini models first.
+  // Sorts models by version-like numbers and display name.
   function compareModels(leftModel: AvailableModel, rightModel: AvailableModel): number {
     const left = modelSortParts(leftModel.model || leftModel.displayName);
     const right = modelSortParts(rightModel.model || rightModel.displayName);
@@ -424,7 +403,7 @@ namespace Renderer {
     return (leftModel.displayName || leftModel.model).localeCompare(rightModel.displayName || rightModel.model);
   }
 
-  // Extracts model-number and mini flags for sorting.
+  // Extracts sortable numeric parts from a model name.
   function modelSortParts(value: string): { numbers: number[]; mini: boolean } {
     return {
       numbers: (String(value).match(/\d+(?:\.\d+)?/g) || []).map(Number),
@@ -432,7 +411,7 @@ namespace Renderer {
     };
   }
 
-  // Escapes a string for use in a CSS selector.
+  // Escapes a string for the simple attribute selector used here.
   function cssEscape(value: string): string {
     return value.replace(/["\\]/g, "\\$&");
   }

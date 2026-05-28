@@ -13,7 +13,7 @@ pub struct AppPaths {
     pub log_file: PathBuf,
 }
 
-const APP_DATA_DIR: &str = "ChatGPTCodex";
+const APP_DATA_DIR: &str = "ClaudeChat";
 
 /// Resolves and creates the application data paths.
 pub fn app_paths() -> Result<AppPaths> {

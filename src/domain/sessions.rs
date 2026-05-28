@@ -1,6 +1,5 @@
 //! Chat session and message domain models.
 
-use super::{DEFAULT_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY_SETTING};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -23,7 +22,7 @@ pub struct ChatMessage {
 }
 
 impl ChatMessage {
-    /// Builds a persisted user message from composer input.
+    /// Creates a user message with optional pasted image data URLs.
     pub fn user(text: String, image_data_urls: Vec<String>) -> Self {
         Self {
             id: new_record_id("msg"),
@@ -34,7 +33,7 @@ impl ChatMessage {
         }
     }
 
-    /// Builds an empty assistant placeholder for streaming.
+    /// Creates an empty assistant message used while a response streams.
     pub fn assistant_placeholder() -> Self {
         Self {
             id: new_record_id("msg"),
@@ -45,7 +44,7 @@ impl ChatMessage {
         }
     }
 
-    /// Returns true when the message has text or attachments.
+    /// Reports whether a message has text or image content.
     pub fn has_content(&self) -> bool {
         !self.text.trim().is_empty() || !self.image_data_urls.is_empty()
     }
@@ -58,10 +57,8 @@ pub struct ChatSession {
     pub title: String,
     #[serde(default = "default_model")]
     pub model: String,
-    #[serde(default = "default_thinking_variant")]
-    pub thinking_variant: String,
-    #[serde(default = "default_verbosity")]
-    pub verbosity: String,
+    #[serde(default)]
+    pub extended_thinking: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -69,47 +66,34 @@ pub struct ChatSession {
 }
 
 impl ChatSession {
-    /// Creates a new empty chat session.
+    /// Creates an empty local chat session.
     pub fn new() -> Self {
         let now = Utc::now();
         Self {
             id: new_record_id("session"),
             title: "New chat".to_owned(),
-            model: DEFAULT_MODEL.to_owned(),
-            thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
-            verbosity: DEFAULT_VERBOSITY_SETTING.to_owned(),
+            model: String::new(),
+            extended_thinking: false,
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
         }
     }
 
-    /// Creates a new empty chat session with selected model settings.
-    pub fn with_model_settings(model: String, thinking_variant: String, verbosity: String) -> Self {
-        let mut session = Self::new();
-        session.model = model;
-        session.thinking_variant = thinking_variant;
-        session.verbosity = verbosity;
-        session
+    /// Creates an empty local chat session pinned to a model id.
+    pub fn with_model(model: String) -> Self {
+        let mut s = Self::new();
+        s.model = model;
+        s
     }
 }
 
-/// Returns the fallback ChatGPT model identifier.
+/// Provides an empty model until the Claude catalog is loaded.
 fn default_model() -> String {
-    DEFAULT_MODEL.to_owned()
+    String::new()
 }
 
-/// Returns the fallback reasoning effort value.
-fn default_thinking_variant() -> String {
-    DEFAULT_THINKING_VARIANT.to_owned()
-}
-
-/// Returns the fallback verbosity setting value.
-fn default_verbosity() -> String {
-    DEFAULT_VERBOSITY_SETTING.to_owned()
-}
-
-/// Creates a compact fallback session title from the first user message.
+/// Creates a short local fallback title from the first user message.
 pub fn fallback_session_title(message: &ChatMessage) -> String {
     let source = if message.text.trim().is_empty() {
         "Image chat"
@@ -123,7 +107,7 @@ pub fn fallback_session_title(message: &ChatMessage) -> String {
     title
 }
 
-/// Cleans a generated title for sidebar display.
+/// Cleans a Claude-generated session title for local display.
 pub fn sanitize_session_title(value: &str) -> Option<String> {
     let cleaned = value
         .lines()
@@ -142,10 +126,11 @@ pub fn sanitize_session_title(value: &str) -> Option<String> {
     }
 }
 
-/// Creates a locally unique identifier for persisted records.
+/// Generates a stable-enough local record id with a readable prefix.
 fn new_record_id(prefix: &str) -> String {
     format!(
-        "{prefix}-{}-{:016x}",
+        "{}-{}-{:016x}",
+        prefix,
         Utc::now().timestamp_millis(),
         rand::random::<u64>()
     )

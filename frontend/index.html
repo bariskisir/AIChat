@@ -1,19 +1,18 @@
-<!-- Defines the ChatGPT Codex desktop UI shell. -->
 <!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ChatGPT Codex</title>
+    <title>Claude Chat</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main id="appShell" class="ch-shell">
       <section id="viewSignedOut" class="ch-view--signed-out">
         <div class="ch-auth-card">
-          <h1>ChatGPT Codex</h1>
-          <p id="authStatusText">Sign in with ChatGPT to use Codex-backed chat models.</p>
-          <button id="btnLogin" class="ch-btn--primary ch-btn--auth" type="button">Sign in with ChatGPT</button>
+          <h1>Claude Chat</h1>
+          <p id="authStatusText">Connect with Claude to start chatting.</p>
+          <button id="btnLogin" class="ch-btn--primary ch-btn--auth" type="button">Connect with Claude</button>
         </div>
       </section>
 
@@ -23,24 +22,19 @@
         </header>
         <div class="ch-toolbar ch-toolbar--account">
           <span id="accountLabel">Signed in</span>
-          <span id="limitText">--</span>
-          <button id="btnRefresh" class="ch-btn--icon" type="button" title="Refresh models and limits">&#8635;</button>
+          <button id="btnRefresh" class="ch-btn--icon" type="button" title="Refresh models">&#8635;</button>
           <button id="btnSignOut" class="ch-btn--sm ch-btn--danger-outline" type="button">Sign out</button>
         </div>
 
         <section class="ch-toolbar--model">
-          <div class="ch-select-group">
+          <div class="ch-model-bar">
             <label class="ch-select-field">
               <span>Model</span>
               <select id="modelSelect" title="Model"></select>
             </label>
-            <label class="ch-select-field">
-              <span>Thinking</span>
-              <select id="thinkingSelect" title="Thinking"></select>
-            </label>
-            <label class="ch-select-field">
-              <span>Verbosity</span>
-              <select id="verbositySelect" title="Verbosity"></select>
+            <label class="ch-toggle-field" title="Enable extended thinking for step-by-step reasoning">
+              <span>Extended Thinking</span>
+              <input type="checkbox" id="toggleThinking" class="ch-toggle">
             </label>
           </div>
         </section>

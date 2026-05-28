@@ -1,16 +1,14 @@
-# ChatGPT Codex
+# Claude Chat
 
-ChatGPT Codex is a compact Tauri desktop chat client for using ChatGPT through the Codex backend with selectable models and reasoning variants.
+Claude Chat is a compact Windows-focused Tauri desktop client for using Claude.ai with the models available to the signed-in account.
 
-The goal of this app is to use ChatGPT with different high-capability models through the Codex backend and Codex account limits.
-
-![ChatGPT Codex interface](images/interface.png)
+![Claude Chat interface](images/interface.png)
 
 ## Install
 
-1. Download the latest release for Windows from [Releases](https://github.com/bariskisir/ChatGPTCodex/releases/latest).
+1. Download the latest release for Windows from [Releases](https://github.com/bariskisir/ClaudeChat/releases/latest).
 2. Install or extract the package.
-3. Run **ChatGPT Codex**.
+3. Run **Claude Chat**.
 
 ## Development
 
@@ -19,10 +17,11 @@ The goal of this app is to use ChatGPT with different high-capability models thr
 - [Rust](https://rustup.rs/) stable
 - Node.js 22 or newer
 - Visual Studio Build Tools on Windows
+- Google Chrome, Microsoft Edge, or Brave for the Claude login flow
 
 ```bash
-git clone https://github.com/bariskisir/ChatGPTCodex
-cd ChatGPTCodex
+git clone https://github.com/bariskisir/ClaudeChat
+cd ClaudeChat
 
 cd frontend
 npm install

@@ -1,7 +1,8 @@
-//! Infrastructure services for persistence, ChatGPT, paths, shell, and logging.
+//! Infrastructure services for persistence, Claude API, paths, shell, and logging.
 
-pub mod chatgpt;
+pub mod claude;
 pub mod clipboard;
+pub mod extractor;
 pub mod logging;
 pub mod paths;
 pub mod shell;

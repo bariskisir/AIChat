@@ -3,10 +3,9 @@ type ChatRole = "user" | "assistant";
 
 interface AppSettings {
   model: string;
-  thinkingVariant: string;
-  verbosity: string;
   activeSessionId: string;
   compactMode: boolean;
+  extendedThinking: boolean;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
@@ -15,37 +14,22 @@ interface AppSettings {
   windowY?: number;
 }
 
-interface ThinkingVariantOption {
-  value: string;
-  description: string;
-}
-
 interface AvailableModel {
-  id: string;
   model: string;
   displayName: string;
   description: string;
   hidden: boolean;
-  isDefault: boolean;
-  inputModalities: string[];
-  defaultThinkingVariant: string;
-  thinkingVariants: ThinkingVariantOption[];
-  supportVerbosity: boolean;
-  defaultVerbosity: string;
 }
 
 interface AccountSnapshot {
   loggedIn: boolean;
   email: string;
+  plan: string;
   error: string;
 }
 
 interface CatalogSnapshot {
   models: AvailableModel[];
-  thinkingVariants: ThinkingVariantOption[];
-  verbositySupported: boolean;
-  defaultVerbosity: string;
-  limitLabel: string;
 }
 
 interface ChatMessage {
@@ -60,8 +44,7 @@ interface ChatSession {
   id: string;
   title: string;
   model: string;
-  thinkingVariant: string;
-  verbosity: string;
+  extendedThinking: boolean;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -79,9 +62,8 @@ interface AppSnapshot {
 
 interface FrontendSettings {
   model: string;
-  thinkingVariant: string;
-  verbosity: string;
   compactMode: boolean;
+  extendedThinking: boolean;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;

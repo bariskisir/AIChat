@@ -1,4 +1,4 @@
-/** Main browser entry point for the ChatGPT Codex UI. */
+/** Main browser entry point for the Claude Chat UI. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./tauri.d.ts" />
 /// <reference path="./dom.ts" />
@@ -21,16 +21,15 @@ namespace App {
     await refreshState();
   });
 
-  // Connects DOM controls to application actions.
+  // Wires static DOM controls to backend commands and UI helpers.
   function bindEvents(): void {
     refs.btnLogin.addEventListener("click", () => AppContext.renderSnapshot(Api.startLogin));
     refs.btnSignOut.addEventListener("click", () => AppContext.renderSnapshot(Api.signOut));
-    refs.btnRefresh.addEventListener("click", refreshChatgptData);
+    refs.btnRefresh.addEventListener("click", refreshCatalog);
     refs.btnDeveloper.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("developer")));
     refs.btnSource.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("source")));
-    refs.modelSelect.addEventListener("change", saveModelSettings);
-    refs.thinkingSelect.addEventListener("change", AppContext.saveSettings);
-    refs.verbositySelect.addEventListener("change", AppContext.saveSettings);
+    refs.modelSelect.addEventListener("change", AppContext.saveSettings);
+    refs.toggleThinking.addEventListener("change", AppContext.saveSettings);
     refs.btnNewSession.addEventListener("click", createSessionAndFocus);
     refs.navSessions.addEventListener("click", selectSession);
     refs.btnCompact.addEventListener("click", toggleCompactMode);
@@ -41,14 +40,7 @@ namespace App {
     ResizeControls.bind(refs);
   }
 
-  // Persists model changes after selecting that model's default verbosity.
-  async function saveModelSettings(): Promise<void> {
-    const selectedModel = model.appState?.catalog.models.find((item) => item.model === refs.modelSelect.value);
-    refs.verbositySelect.value = selectedModel?.defaultVerbosity || "medium";
-    await AppContext.saveSettings();
-  }
-
-  // Routes backend events to the appropriate frontend handler.
+  // Applies backend-pushed state and stream events to the visible UI.
   function handleUiEvent(payload: UiEventPayload): void {
     if (payload.type === "snapshot" && payload.snapshot) {
       Renderer.renderState(refs, model, payload.snapshot);
@@ -62,30 +54,26 @@ namespace App {
     }
   }
 
-  // Loads the initial backend view state.
+  // Loads initial state and refreshes models once for signed-in users.
   async function refreshState(): Promise<void> {
     const snapshot = await AppContext.safeInvoke(Api.getSnapshot);
     if (snapshot) {
       Renderer.renderState(refs, model, snapshot);
       if (snapshot.account.loggedIn) {
-        void refreshChatgptData();
+        void refreshCatalog();
       }
     }
   }
 
-  // Refreshes model and usage information for the signed-in account.
-  async function refreshChatgptData(): Promise<void> {
-    const modelSnapshot = await AppContext.safeInvoke(Api.refreshModels);
-    if (modelSnapshot) {
-      Renderer.renderState(refs, model, modelSnapshot);
-    }
-    const limitSnapshot = await AppContext.safeInvoke(Api.refreshLimits);
-    if (limitSnapshot) {
-      Renderer.renderState(refs, model, limitSnapshot);
+  // Refreshes the Claude model catalog and rerenders the snapshot.
+  async function refreshCatalog(): Promise<void> {
+    const snapshot = await AppContext.safeInvoke(Api.refreshModels);
+    if (snapshot) {
+      Renderer.renderState(refs, model, snapshot);
     }
   }
 
-  // Selects a session from the sidebar list.
+  // Handles session selection and deletion from the sidebar.
   function selectSession(event: MouseEvent): void {
     const deleteButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-delete-session-id]");
     const deleteSessionId = deleteButton?.dataset.deleteSessionId;
@@ -100,13 +88,13 @@ namespace App {
     }
   }
 
-  // Creates a new session and focuses the composer.
+  // Creates a new session and returns keyboard focus to the composer.
   async function createSessionAndFocus(): Promise<void> {
     await AppContext.renderSnapshot(Api.createSession);
     Composer.focus();
   }
 
-  // Deletes the selected session.
+  // Deletes a session and restores composer focus after rerender.
   async function deleteSession(sessionId: string): Promise<void> {
     if (sessionId) {
       await AppContext.renderSnapshot(() => Api.deleteSession(sessionId));
@@ -114,13 +102,13 @@ namespace App {
     }
   }
 
-  // Toggles the native window always-on-top setting.
+  // Flips the always-on-top setting.
   async function toggleAlwaysOnTop(): Promise<void> {
     const enabled = !model.appState?.settings.alwaysOnTop;
     await AppContext.renderSnapshot(() => Api.setWindowPinned(enabled));
   }
 
-  // Toggles compact UI rendering and persists the setting.
+  // Flips compact mode and persists the updated layout.
   async function toggleCompactMode(): Promise<void> {
     Renderer.setCompactMode(refs, !refs.appShell.classList.contains("is-compact"));
     await AppContext.saveSettings();

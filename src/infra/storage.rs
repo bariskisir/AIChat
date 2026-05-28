@@ -1,6 +1,6 @@
 //! JSON file persistence for settings, auth, model catalog, and chat sessions.
 
-use crate::domain::{AppSettings, AuthStorage, CatalogStorage, ChatSession, SESSION_LIMIT};
+use crate::domain::{AppSettings, CatalogStorage, ChatSession, ClaudeCredential, SESSION_LIMIT};
 use crate::infra::paths::AppPaths;
 use anyhow::{Context, Result};
 use std::fs;
@@ -10,12 +10,13 @@ use std::path::{Path, PathBuf};
 pub struct Storage {
     settings: PathBuf,
     auth: PathBuf,
+    #[allow(dead_code)]
     catalog: PathBuf,
     sessions: PathBuf,
 }
 
 impl Storage {
-    /// Initializes storage paths and creates the app data directory.
+    /// Creates storage paths under the ClaudeChat app data directory.
     pub fn new(paths: &AppPaths) -> Result<Self> {
         fs::create_dir_all(&paths.data_dir).context("Could not create app data directory")?;
         Ok(Self {
@@ -26,49 +27,51 @@ impl Storage {
         })
     }
 
-    /// Loads persisted application settings or returns defaults.
+    /// Loads persisted application settings or defaults.
     pub fn load_settings(&self) -> Result<AppSettings> {
         read_pretty_or_default(&self.settings, "settings")
     }
 
-    /// Saves application settings as pretty-printed JSON.
+    /// Saves application settings as formatted JSON.
     pub fn save_settings(&self, settings: &AppSettings) -> Result<()> {
         write_pretty(&self.settings, settings, "settings")
     }
 
-    /// Loads persisted ChatGPT authentication or returns defaults.
-    pub fn load_auth(&self) -> Result<AuthStorage> {
+    /// Loads stored Claude credentials or an empty credential.
+    pub fn load_auth(&self) -> Result<ClaudeCredential> {
         read_pretty_or_default(&self.auth, "auth")
     }
 
-    /// Saves ChatGPT authentication as pretty-printed JSON.
-    pub fn save_auth(&self, auth: &AuthStorage) -> Result<()> {
+    /// Saves stored Claude credentials as formatted JSON.
+    pub fn save_auth(&self, auth: &ClaudeCredential) -> Result<()> {
         write_pretty(&self.auth, auth, "auth")
     }
 
-    /// Loads the persisted model catalog or returns fallback models.
+    #[allow(dead_code)]
+    /// Loads the cached Claude model catalog or an empty catalog.
     pub fn load_catalog(&self) -> Result<CatalogStorage> {
         read_pretty_or_default(&self.catalog, "catalog")
     }
 
-    /// Saves the model catalog as pretty-printed JSON.
+    #[allow(dead_code)]
+    /// Saves the cached Claude model catalog as formatted JSON.
     pub fn save_catalog(&self, catalog: &CatalogStorage) -> Result<()> {
         write_pretty(&self.catalog, catalog, "catalog")
     }
 
-    /// Loads persisted chat sessions or returns an empty list.
+    /// Loads local chat sessions or an empty session list.
     pub fn load_sessions(&self) -> Result<Vec<ChatSession>> {
         read_pretty_or_default(&self.sessions, "sessions")
     }
 
-    /// Saves the newest chat sessions as pretty-printed JSON.
+    /// Saves local chat sessions, trimming to the configured history limit.
     pub fn save_sessions(&self, sessions: &[ChatSession]) -> Result<()> {
         let start = sessions.len().saturating_sub(SESSION_LIMIT);
         write_pretty(&self.sessions, &sessions[start..], "sessions")
     }
 }
 
-/// Loads pretty-printed JSON or returns a default value when missing.
+/// Reads formatted JSON and falls back to the type default when missing.
 fn read_pretty_or_default<T>(path: &Path, label: &str) -> Result<T>
 where
     T: serde::de::DeserializeOwned + Default,
@@ -80,7 +83,7 @@ where
     serde_json::from_str(&text).with_context(|| format!("Could not parse {label}.json"))
 }
 
-/// Writes a serializable value as pretty-printed JSON.
+/// Writes formatted JSON to disk with contextual errors.
 fn write_pretty<T>(path: &Path, value: &T, label: &str) -> Result<()>
 where
     T: serde::Serialize + ?Sized,

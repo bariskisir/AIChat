@@ -5,48 +5,44 @@ use crate::app::state::AppState;
 use crate::app::view::{AppSnapshot, SettingsInput};
 use tauri::{AppHandle, State};
 
-/// Returns the current application snapshot to the frontend.
 #[tauri::command]
+/// Returns the current application snapshot.
 pub fn app_get_snapshot(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
-    state.snapshot().map_err(|error| error.to_string())
+    state.snapshot().map_err(|e| e.to_string())
 }
 
-/// Persists frontend settings and returns the refreshed snapshot.
 #[tauri::command]
+/// Persists settings received from the frontend.
 pub fn settings_update(
     settings: SettingsInput,
     state: State<'_, AppState>,
 ) -> CmdResult<AppSnapshot> {
-    state
-        .update_settings(settings)
-        .map_err(|error| error.to_string())
+    state.update_settings(settings).map_err(|e| e.to_string())
 }
 
-/// Starts the ChatGPT OAuth sign-in flow.
 #[tauri::command]
+/// Starts the browser-based Claude sign-in flow.
 pub fn auth_start_login(
     state: State<'_, AppState>,
     app_handle: AppHandle,
 ) -> CmdResult<AppSnapshot> {
-    state
-        .start_login(app_handle)
-        .map_err(|error| error.to_string())
+    state.start_login(app_handle).map_err(|e| e.to_string())
 }
 
-/// Clears stored ChatGPT authentication state.
 #[tauri::command]
+/// Clears stored Claude authentication state.
 pub fn auth_sign_out(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
-    state.sign_out().map_err(|error| error.to_string())
+    state.sign_out().map_err(|e| e.to_string())
 }
 
-/// Fetches the latest ChatGPT model catalog for the signed-in account.
 #[tauri::command]
-pub fn catalog_refresh_models(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
-    state.refresh_models().map_err(|error| error.to_string())
+/// Refreshes the Claude model catalog for the signed-in account.
+pub async fn catalog_refresh_models(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
+    state.refresh_models().await.map_err(|e| e.to_string())
 }
 
-/// Refreshes the displayed ChatGPT usage-limit label.
 #[tauri::command]
+/// Refreshes usage-limit status when supported by the backend.
 pub fn catalog_refresh_limits(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
-    state.refresh_limits().map_err(|error| error.to_string())
+    state.refresh_limits().map_err(|e| e.to_string())
 }

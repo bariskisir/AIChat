@@ -6,15 +6,13 @@ use crate::domain::{MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MIN_WINDOW_HEIGHT, MIN
 use anyhow::Result;
 
 impl AppState {
-    /// Normalizes and persists settings received from the frontend.
+    /// Applies user-editable settings and persists them with the active session.
     pub fn update_settings(&self, input: SettingsInput) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         inner.settings.model = input.model;
-        inner.settings.thinking_variant = input.thinking_variant;
-        inner.settings.verbosity = input.verbosity;
-        inner.normalize_model_settings();
         inner.save_active_session_model_settings()?;
         inner.settings.compact_mode = input.compact_mode;
+        inner.settings.extended_thinking = input.extended_thinking;
         inner.settings.always_on_top = input.always_on_top;
         if let Some(width) = input.window_width {
             inner.settings.window_width = width.max(MIN_WINDOW_WIDTH);
@@ -30,21 +28,21 @@ impl AppState {
         Ok(inner.build_snapshot())
     }
 
-    /// Persists the native window size from Tauri resize events.
+    /// Persists the current window size after enforcing minimum dimensions.
     pub fn save_window_size(&self, width: u32, height: u32) -> Result<()> {
         let mut inner = self.lock()?;
-        let width = width.max(MIN_WINDOW_WIDTH);
-        let height = height.max(MIN_WINDOW_HEIGHT);
-        if inner.settings.window_width == width && inner.settings.window_height == height {
+        let w = width.max(MIN_WINDOW_WIDTH);
+        let h = height.max(MIN_WINDOW_HEIGHT);
+        if inner.settings.window_width == w && inner.settings.window_height == h {
             return Ok(());
         }
-        inner.settings.window_width = width;
-        inner.settings.window_height = height;
+        inner.settings.window_width = w;
+        inner.settings.window_height = h;
         inner.storage.save_settings(&inner.settings)?;
         Ok(())
     }
 
-    /// Persists the native window position from Tauri move events.
+    /// Persists the current window position.
     pub fn save_window_position(&self, x: i32, y: i32) -> Result<()> {
         let mut inner = self.lock()?;
         if inner.settings.window_x == Some(x) && inner.settings.window_y == Some(y) {
@@ -56,7 +54,7 @@ impl AppState {
         Ok(())
     }
 
-    /// Persists the always-on-top window setting.
+    /// Persists and returns the always-on-top setting.
     pub fn set_window_pinned(&self, enabled: bool) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         inner.settings.always_on_top = enabled;

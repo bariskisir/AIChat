@@ -1,4 +1,4 @@
-//! Starts the Tauri desktop ChatGPT Codex application.
+//! Starts the Tauri desktop Claude Chat application.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
@@ -15,12 +15,12 @@ use app::{
 use infra::paths::app_paths;
 use tauri::{Manager, PhysicalPosition, PhysicalSize, Position, Size, WindowEvent};
 
-/// Starts the build or application entry point.
+/// Boots the Tauri application, restores window state, and registers commands.
 fn main() -> Result<()> {
     let paths = app_paths()?;
     infra::logging::install_logger(paths.log_file.clone())?;
     log::info!(
-        "ChatGPT Codex Tauri application starting; data_dir={}",
+        "Claude Chat application starting; data_dir={}",
         paths.data_dir.display()
     );
     let state = AppState::new(paths)?;
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         .setup(move |app| {
             let app_version = app.package_info().version.to_string();
             if let Some(window) = app.get_webview_window("main") {
-                window.set_title(&format!("ChatGPT Codex - v{app_version}"))?;
+                window.set_title(&format!("Claude Chat - v{app_version}"))?;
                 if let Ok(snapshot) = state.snapshot() {
                     let size = PhysicalSize::new(
                         snapshot.settings.window_width,
@@ -88,6 +88,6 @@ fn main() -> Result<()> {
         .run(tauri::generate_context!())
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
-    log::info!("ChatGPT Codex Tauri application stopped");
+    log::info!("Claude Chat application stopped");
     Ok(())
 }

@@ -1,34 +1,38 @@
-//! ChatGPT authentication helpers for shared application state.
+//! Claude.ai credential management via browser-based login.
+//! Also fetches available models and user info from claude.ai during login.
 
 use super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::AppSnapshot;
-use crate::domain::{AuthStorage, CatalogStorage};
-use crate::infra::{chatgpt, shell};
+use crate::domain::ClaudeCredential;
+use crate::infra::extractor::BrowserExtractor;
 use anyhow::{Result, anyhow};
-use chrono::Utc;
 use tauri::{AppHandle, Emitter};
 
 impl AppState {
-    /// Starts the ChatGPT OAuth sign-in flow.
+    /// Starts login and emits async status snapshots to the frontend.
     pub fn start_login(&self, app_handle: AppHandle) -> Result<AppSnapshot> {
-        let (pending, authorization_url) = chatgpt::create_login_request()?;
+        // Show immediate status before async work
         {
             let mut inner = self.lock()?;
-            inner.auth.pending_oauth = Some(pending.clone());
-            inner.auth.error.clear();
-            inner.status = "Opening ChatGPT sign-in...".to_owned();
-            inner.storage.save_auth(&inner.auth)?;
+            inner.status = "Launching Chrome...".to_owned();
         }
+
         let state = self.clone();
         let handle = app_handle.clone();
+
+        // Emit snapshot so frontend shows "Launching Chrome..."
+        if let Ok(snapshot) = self.snapshot() {
+            let _ = handle.emit(
+                "app-event",
+                UiEvent::Snapshot {
+                    snapshot: Box::new(snapshot),
+                },
+            );
+        }
+
         self.runtime.spawn(async move {
-            let result = async {
-                let code = chatgpt::wait_for_oauth_callback(pending.state.clone()).await?;
-                let auth = chatgpt::exchange_authorization_code(&code, &pending.verifier).await?;
-                state.complete_login(auth).await
-            }
-            .await;
+            let result = state.do_browser_login().await;
             match result {
                 Ok(snapshot) => {
                     let _ = handle.emit(
@@ -46,79 +50,83 @@ impl AppState {
                             message: error.to_string(),
                         },
                     );
+                    // Also emit a snapshot so frontend gets updated state
+                    if let Ok(snapshot) = state.snapshot() {
+                        let _ = handle.emit(
+                            "app-event",
+                            UiEvent::Snapshot {
+                                snapshot: Box::new(snapshot),
+                            },
+                        );
+                    }
                 }
             }
         });
-        shell::open_url(&authorization_url)?;
+
         self.snapshot()
     }
 
-    /// Clears stored ChatGPT authentication state.
-    pub fn sign_out(&self) -> Result<AppSnapshot> {
+    /// Runs the Chrome login flow and stores the resulting Claude credentials.
+    async fn do_browser_login(&self) -> Result<AppSnapshot> {
+        let status = self.clone();
+        status.set_status("Launching Chrome for Claude login...");
+
+        let mut extractor = BrowserExtractor::new().map_err(|e| anyhow!("{e}"))?;
+
+        extractor.launch().map_err(|e| anyhow!("{e}"))?;
+
+        status.set_status("Waiting for you to log into Claude...");
+
+        let result = extractor.extract().await.map_err(|e| anyhow!("{e}"))?;
+
         let mut inner = self.lock()?;
-        inner.auth = AuthStorage::default();
+        inner.auth = result.credential;
+        inner.catalog.set_models(result.models);
+        inner.ensure_selected_model();
+        inner.save_active_session_model_settings()?;
+        inner.status = "Connected to Claude.".to_owned();
         inner.storage.save_auth(&inner.auth)?;
-        inner.status = "Signed out of ChatGPT.".to_owned();
+        inner.storage.save_catalog(&inner.catalog)?;
+        inner.storage.save_settings(&inner.settings)?;
+        inner.storage.save_sessions(&inner.sessions)?;
         Ok(inner.build_snapshot())
     }
 
-    /// Returns a valid ChatGPT access context, refreshing tokens when needed.
-    pub(super) async fn access_context(&self) -> Result<chatgpt::AccessContext> {
-        let auth = {
-            let inner = self.lock()?;
-            inner.auth.clone()
-        };
-        if !auth.is_signed_in() {
-            return Err(anyhow!("Please sign in with ChatGPT first."));
-        }
-        if !auth.access_token.is_empty()
-            && auth.expires_at > Utc::now().timestamp_millis() + 5 * 60 * 1000
-        {
-            return Ok(chatgpt::AccessContext::from_auth(&auth));
-        }
-        let refreshed = chatgpt::refresh_access_token(&auth).await?;
-        let access = chatgpt::AccessContext::from_auth(&refreshed);
+    /// Clears the stored Claude account.
+    pub fn sign_out(&self) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        inner.auth = refreshed;
+        inner.auth = ClaudeCredential::default();
         inner.storage.save_auth(&inner.auth)?;
-        Ok(access)
+        inner.status = "Signed out.".to_owned();
+        Ok(inner.build_snapshot())
     }
 
-    /// Checks that an auth token or refresh token is available before mutating chat.
+    /// Builds a Claude API context from stored credentials.
+    pub(super) fn claude_context(&self) -> Result<crate::infra::claude::ClaudeContext> {
+        let inner = self.lock()?;
+        if !inner.auth.is_signed_in() {
+            return Err(anyhow!("Connect to Claude first."));
+        }
+        Ok(crate::infra::claude::ClaudeContext::from_credential(
+            &inner.auth,
+        ))
+    }
+
+    /// Ensures commands that require Claude auth have a session.
     pub(super) fn ensure_signed_in(&self) -> Result<()> {
         let inner = self.lock()?;
         if inner.auth.is_signed_in() {
             Ok(())
         } else {
-            Err(anyhow!("Please sign in with ChatGPT first."))
+            Err(anyhow!("Connect to Claude first."))
         }
     }
 
-    /// Stores successful ChatGPT authentication and refreshes account data.
-    async fn complete_login(&self, auth: AuthStorage) -> Result<AppSnapshot> {
-        let access = chatgpt::AccessContext::from_auth(&auth);
-        let mut catalog = chatgpt::fetch_model_catalog(&access)
-            .await
-            .unwrap_or_else(|_| CatalogStorage::default());
-        catalog.chatgpt_limit_label = chatgpt::fetch_usage_limit_label(&access)
-            .await
-            .unwrap_or_default();
-        let mut inner = self.lock()?;
-        inner.auth = auth;
-        inner.catalog = catalog;
-        inner.normalize_model_settings();
-        inner.status = "Signed in with ChatGPT.".to_owned();
-        inner.storage.save_auth(&inner.auth)?;
-        inner.storage.save_catalog(&inner.catalog)?;
-        inner.storage.save_settings(&inner.settings)?;
-        Ok(inner.build_snapshot())
-    }
-
-    /// Records an authentication error in state and persisted auth storage.
+    /// Stores a login error in auth state for display.
     fn set_auth_error(&self, message: &str) {
         if let Ok(mut inner) = self.lock() {
             inner.auth.error = message.to_owned();
-            inner.status = format!("ChatGPT sign-in failed: {message}");
+            inner.status = message.to_owned();
             let _ = inner.storage.save_auth(&inner.auth);
         }
     }

@@ -8,7 +8,7 @@ mod settings;
 
 use super::view::{AccountSnapshot, AppSnapshot, CatalogSnapshot};
 use crate::domain::{
-    AppSettings, AuthStorage, CatalogStorage, ChatSession, DEFAULT_WINDOW_HEIGHT,
+    AppSettings, CatalogStorage, ChatSession, ClaudeCredential, DEFAULT_WINDOW_HEIGHT,
     DEFAULT_WINDOW_WIDTH,
 };
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
@@ -26,7 +26,7 @@ pub struct AppState {
 pub(super) struct StateInner {
     pub(super) storage: Storage,
     pub(super) settings: AppSettings,
-    pub(super) auth: AuthStorage,
+    pub(super) auth: ClaudeCredential,
     pub(super) catalog: CatalogStorage,
     pub(super) status: String,
     pub(super) sessions: Vec<ChatSession>,
@@ -34,7 +34,7 @@ pub(super) struct StateInner {
 }
 
 impl AppState {
-    /// Initializes app state from persisted storage.
+    /// Loads persisted state, repairs missing session selection, and creates the runtime.
     pub fn new(paths: AppPaths) -> Result<Self> {
         let storage = Storage::new(&paths)?;
         let mut settings = storage.load_settings()?;
@@ -50,27 +50,15 @@ impl AppState {
         if sessions.is_empty() {
             sessions.push(ChatSession::new());
         }
-        if !sessions
-            .iter()
-            .any(|session| session.id == settings.active_session_id)
-        {
-            settings.active_session_id = sessions
-                .first()
-                .map(|session| session.id.clone())
-                .unwrap_or_default();
+        if !sessions.iter().any(|s| s.id == settings.active_session_id) {
+            settings.active_session_id = sessions.first().map(|s| s.id.clone()).unwrap_or_default();
             storage.save_settings(&settings)?;
         }
         if let Some(session) = sessions
             .iter_mut()
-            .find(|session| session.id == settings.active_session_id)
+            .find(|s| s.id == settings.active_session_id)
         {
-            settings.model = catalog.normalize_model(&session.model);
-            settings.thinking_variant =
-                catalog.normalize_thinking_variant(&session.thinking_variant, &settings.model);
-            settings.verbosity = catalog.normalize_verbosity(&session.verbosity, &settings.model);
-            session.model = settings.model.clone();
-            session.thinking_variant = settings.thinking_variant.clone();
-            session.verbosity = settings.verbosity.clone();
+            settings.model = session.model.clone();
             storage.save_sessions(&sessions)?;
             storage.save_settings(&settings)?;
         }
@@ -88,29 +76,29 @@ impl AppState {
         })
     }
 
-    /// Returns the current frontend snapshot.
+    /// Returns a frontend-ready snapshot of the current app state.
     pub fn snapshot(&self) -> Result<AppSnapshot> {
         let inner = self.lock()?;
         Ok(inner.build_snapshot())
     }
 
-    /// Opens a known external link target in the default browser.
+    /// Opens a known external link target.
     pub fn open_link(&self, target: &str) -> Result<()> {
         match target {
             "developer" => shell::open_url("https://www.bariskisir.com"),
-            "source" => shell::open_url("https://github.com/bariskisir/ChatGPTCodex"),
+            "source" => shell::open_url("https://github.com/bariskisir/ClaudeChat"),
             _ => Err(anyhow!("Unknown link target.")),
         }
     }
 
-    /// Updates the shared status message when state locking succeeds.
+    /// Updates the current status message without failing the caller.
     pub(super) fn set_status(&self, message: &str) {
         if let Ok(mut inner) = self.lock() {
             inner.status = message.to_owned();
         }
     }
 
-    /// Locks the shared application state with a user-facing error on failure.
+    /// Locks shared state and maps poisoning to an application error.
     pub(super) fn lock(&self) -> Result<MutexGuard<'_, StateInner>> {
         self.inner
             .lock()
@@ -119,12 +107,12 @@ impl AppState {
 }
 
 impl StateInner {
-    /// Builds the serializable snapshot consumed by the frontend.
+    /// Builds the serializable state shape consumed by the frontend.
     pub(super) fn build_snapshot(&self) -> AppSnapshot {
         let active_session = self
             .sessions
             .iter()
-            .find(|session| session.id == self.settings.active_session_id)
+            .find(|s| s.id == self.settings.active_session_id)
             .cloned()
             .or_else(|| self.sessions.first().cloned())
             .unwrap_or_else(ChatSession::new);
@@ -134,15 +122,12 @@ impl StateInner {
             status: self.status.clone(),
             account: AccountSnapshot {
                 logged_in: self.auth.is_signed_in(),
-                email: self.auth.account_email.clone(),
+                email: self.auth.email.clone(),
+                plan: self.auth.plan.clone(),
                 error: self.auth.error.clone(),
             },
             catalog: CatalogSnapshot {
                 models: self.catalog.available_models.clone(),
-                thinking_variants: self.catalog.thinking_variants_for(&self.settings.model),
-                verbosity_supported: self.catalog.supports_verbosity(&self.settings.model),
-                default_verbosity: self.catalog.default_verbosity_for(&self.settings.model),
-                limit_label: self.catalog.chatgpt_limit_label.clone(),
             },
             sessions: self.sessions.clone(),
             active_session,
@@ -150,57 +135,63 @@ impl StateInner {
         }
     }
 
-    /// Keeps model and reasoning settings valid against the current catalog.
-    pub(super) fn normalize_model_settings(&mut self) {
-        let model = self.catalog.normalize_model(&self.settings.model);
-        let thinking_variant = self
-            .catalog
-            .normalize_thinking_variant(&self.settings.thinking_variant, &model);
-        let verbosity = self
-            .catalog
-            .normalize_verbosity(&self.settings.verbosity, &model);
-        self.settings.model = model;
-        self.settings.thinking_variant = thinking_variant;
-        self.settings.verbosity = verbosity;
-    }
-
-    /// Copies the active session's model settings into global settings.
+    /// Copies model and thinking settings from the active session into global settings.
     pub(super) fn load_active_session_model_settings(&mut self) -> Result<()> {
         let session = self
             .sessions
             .iter()
-            .find(|session| session.id == self.settings.active_session_id)
-            .ok_or_else(|| anyhow!("Chat session was not found."))?;
+            .find(|s| s.id == self.settings.active_session_id)
+            .ok_or_else(|| anyhow!("Chat session not found."))?;
         self.settings.model = session.model.clone();
-        self.settings.thinking_variant = session.thinking_variant.clone();
-        self.settings.verbosity = session.verbosity.clone();
-        self.normalize_model_settings();
-        self.save_active_session_model_settings()
-    }
-
-    /// Copies global model settings into the active session.
-    pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
-        let model = self.settings.model.clone();
-        let thinking_variant = self.settings.thinking_variant.clone();
-        let verbosity = self.settings.verbosity.clone();
-        let session = self.active_session_mut()?;
-        session.model = model;
-        session.thinking_variant = thinking_variant;
-        session.verbosity = verbosity;
+        self.settings.extended_thinking = session.extended_thinking;
+        self.ensure_selected_model();
+        self.save_active_session_model_settings()?;
         Ok(())
     }
 
-    /// Returns the active session for mutation.
-    pub(super) fn active_session_mut(&mut self) -> Result<&mut ChatSession> {
-        let session_id = self.settings.active_session_id.clone();
-        self.session_mut(&session_id)
+    /// Copies global model and thinking settings back into the active session.
+    pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
+        let model = self.settings.model.clone();
+        let ext = self.settings.extended_thinking;
+        let session = self.active_session_mut()?;
+        session.model = model;
+        session.extended_thinking = ext;
+        Ok(())
     }
 
-    /// Returns the requested session for mutation.
-    pub(super) fn session_mut(&mut self, session_id: &str) -> Result<&mut ChatSession> {
+    /// Ensures the selected model is valid, preferring the first visible catalog model.
+    pub(super) fn ensure_selected_model(&mut self) {
+        if self
+            .catalog
+            .available_models
+            .iter()
+            .any(|m| !m.hidden && m.model == self.settings.model)
+        {
+            return;
+        }
+        if let Some(model) = self
+            .catalog
+            .available_models
+            .iter()
+            .find(|m| !m.hidden)
+            .or_else(|| self.catalog.available_models.first())
+            .map(|m| m.model.clone())
+        {
+            self.settings.model = model;
+        }
+    }
+
+    /// Returns the active mutable chat session.
+    pub(super) fn active_session_mut(&mut self) -> Result<&mut ChatSession> {
+        let id = self.settings.active_session_id.clone();
+        self.session_mut(&id)
+    }
+
+    /// Returns a mutable chat session by id.
+    pub(super) fn session_mut(&mut self, id: &str) -> Result<&mut ChatSession> {
         self.sessions
             .iter_mut()
-            .find(|session| session.id == session_id)
-            .ok_or_else(|| anyhow!("Chat session was not found."))
+            .find(|s| s.id == id)
+            .ok_or_else(|| anyhow!("Chat session not found."))
     }
 }

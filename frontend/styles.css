@@ -1,4 +1,4 @@
-/* Styles the ChatGPT Codex desktop interface. */
+/* Styles the Claude Chat desktop interface. */
 :root {
   color-scheme: dark;
 
@@ -183,8 +183,7 @@ textarea {
 }
 
 #statusText,
-#accountLabel,
-#limitText {
+#accountLabel {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,10 +193,6 @@ textarea {
 #statusText,
 #accountLabel {
   flex: 1 1 auto;
-}
-
-#limitText {
-  flex: 0 1 auto;
 }
 
 .ch-toolbar--model,
@@ -221,7 +216,7 @@ textarea {
 
 /* ── Inline groups ────────────────────────────────────── */
 
-.ch-select-group,
+.ch-model-bar,
 .ch-tool-group,
 .ch-composer__controls,
 .ch-composer__preview {
@@ -230,14 +225,15 @@ textarea {
   min-width: 0;
 }
 
-.ch-select-group {
+.ch-model-bar {
   flex: 0 0 auto;
   flex-wrap: wrap;
   column-gap: var(--spacing-xl);
   row-gap: var(--spacing-xs);
 }
 
-.ch-select-field {
+.ch-select-field,
+.ch-toggle-field {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -251,11 +247,51 @@ textarea {
   gap: var(--spacing-xs);
 }
 
-.ch-select-field span {
+.ch-select-field span,
+.ch-toggle-field span {
   flex: 0 0 auto;
   color: var(--muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
+}
+
+.ch-toggle {
+  appearance: none;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.ch-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform var(--transition-fast), background var(--transition-fast);
+}
+
+.ch-toggle:checked {
+  border-color: var(--primary);
+  background: var(--primary-a32);
+}
+
+.ch-toggle:checked::after {
+  transform: translateX(12px);
+  background: var(--primary-bright);
+}
+
+.ch-toggle:hover:not(:disabled) {
+  border-color: var(--primary-a60);
 }
 
 /* ── Form controls ────────────────────────────────────── */
@@ -277,12 +313,10 @@ select {
   height: var(--control-height-sm);
 }
 
-#modelSelect,
-#thinkingSelect,
-#verbositySelect {
-  flex: 0 0 118px;
-  width: 118px;
-  max-width: 118px;
+#modelSelect {
+  flex: 0 0 222px;
+  width: 222px;
+  max-width: 222px;
 }
 
 textarea {
