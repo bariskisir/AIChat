@@ -1,4 +1,4 @@
-/* Styles the Claude Chat desktop interface. */
+/* Styles the AI Chat desktop interface. */
 :root {
   color-scheme: dark;
 
@@ -103,6 +103,7 @@ body {
 
 button,
 select,
+input,
 textarea {
   font: inherit;
 }
@@ -117,42 +118,15 @@ textarea {
   background: var(--bg);
 }
 
-/* ── Auth (signed-out) ────────────────────────────────── */
+/* Error state */
 
-.ch-view--signed-out {
-  display: grid;
-  flex: 1 1 auto;
-  place-items: center;
-  padding: var(--spacing-xl);
-}
-
-.ch-auth-card {
-  display: grid;
-  width: min(360px, 100%);
-  gap: var(--spacing-md);
-  padding: var(--spacing-lg);
-  border: var(--border-default);
-  border-radius: var(--radius);
-  background: var(--surface);
-}
-
-.ch-auth-card h1 {
-  font-size: var(--font-size-lg);
-}
-
-.ch-auth-card p {
-  color: var(--muted);
-  line-height: var(--line-height-relaxed);
-}
-
-.ch-auth-card p.is-error,
 .ch-toolbar.is-error {
   color: var(--danger-soft);
 }
 
-/* ── Signed-in layout ─────────────────────────────────── */
+/* Main layout */
 
-.ch-view--signed-in {
+.ch-view--main {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
@@ -174,24 +148,14 @@ textarea {
   font-weight: var(--font-weight-semibold);
 }
 
-.ch-toolbar--account {
-  min-height: var(--control-height-md);
-  justify-content: flex-start;
-  padding-top: 2px;
-  padding-bottom: 2px;
-  background: var(--surface-inset);
-}
-
-#statusText,
-#accountLabel {
+#statusText {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-#statusText,
-#accountLabel {
+#statusText {
   flex: 1 1 auto;
 }
 
@@ -297,6 +261,7 @@ textarea {
 /* ── Form controls ────────────────────────────────────── */
 
 select,
+input,
 textarea {
   min-width: 0;
   border: var(--border-default);
@@ -313,10 +278,10 @@ select {
   height: var(--control-height-sm);
 }
 
-#modelSelect {
-  flex: 0 0 222px;
-  width: 222px;
-  max-width: 222px;
+#reasoningSelect {
+  flex: 0 0 92px;
+  width: 92px;
+  max-width: 92px;
 }
 
 textarea {
@@ -325,6 +290,7 @@ textarea {
 }
 
 select:focus,
+input:focus,
 textarea:focus {
   outline: none;
   border-color: var(--primary-a72);
@@ -380,9 +346,108 @@ option {
   color: #fff;
 }
 
-.ch-btn--auth {
-  width: auto;
-  min-width: 148px;
+.ch-model-dropdown {
+  position: relative;
+  flex: 0 0 390px;
+  width: 390px;
+}
+
+.ch-template-dropdown {
+  width: 100%;
+  flex: 1 1 auto;
+}
+
+.ch-model-dropdown__button {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: var(--control-height-sm);
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+  padding: 0 28px 0 9px;
+  border: var(--border-default);
+  border-radius: var(--radius);
+  background: var(--input);
+  color: var(--text);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-model-dropdown__button::after {
+  position: absolute;
+  right: 10px;
+  color: var(--muted);
+  content: "v";
+  font-size: var(--font-size-xs);
+}
+
+.ch-model-dropdown__button:hover:not(:disabled),
+.ch-model-dropdown__button:focus {
+  outline: none;
+  border-color: var(--primary-a72);
+}
+
+.ch-model-dropdown__panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  display: grid;
+  width: min(546px, calc(100vw - 32px));
+  max-height: 330px;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  border: var(--border-default);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.44);
+}
+
+.ch-template-dropdown .ch-model-dropdown__panel {
+  width: 100%;
+}
+
+.ch-model-dropdown__search {
+  width: 100%;
+  height: var(--control-height-sm);
+}
+
+.ch-model-dropdown__list {
+  display: grid;
+  max-height: 260px;
+  overflow: auto;
+  gap: 3px;
+}
+
+.ch-model-dropdown__option {
+  min-height: var(--control-height-sm);
+  overflow: hidden;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: var(--font-weight-bold);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ch-model-dropdown__option:hover,
+.ch-model-dropdown__option.is-active {
+  background: var(--primary-a14);
+  color: var(--text);
+}
+
+.ch-model-dropdown__empty {
+  padding: var(--spacing-sm);
+  color: var(--quiet);
+  font-style: italic;
 }
 
 .ch-btn--add {
@@ -495,6 +560,8 @@ option {
 
 button:disabled,
 select:disabled,
+input:disabled,
+.ch-model-dropdown__button:disabled,
 textarea:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -925,10 +992,108 @@ textarea:disabled {
   text-decoration: underline;
 }
 
+/* Dialogs */
+
+.ch-dialog {
+  margin: auto;
+  border: var(--border-default);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.48);
+}
+
+.ch-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.ch-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: 42px;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: var(--border-default);
+  background: var(--surface-raised);
+}
+
+.ch-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+.ch-provider-dialog {
+  width: min(280px, calc(100vw - 40px));
+  height: min(460px, calc(100vh - 40px));
+}
+
+.ch-provider-panel {
+  display: flex;
+  min-height: 0;
+  height: calc(100% - 42px);
+}
+
+.ch-provider-panel__sidebar {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-width: 0;
+  padding: var(--spacing-sm);
+  background: var(--surface-sidebar);
+}
+
+.ch-provider-editor {
+  width: min(420px, calc(100vw - 40px));
+}
+
+.ch-provider-form {
+  display: grid;
+  gap: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+}
+
+.ch-provider-form label {
+  display: grid;
+  gap: var(--spacing-xs);
+  padding: 0 var(--spacing-md);
+}
+
+.ch-provider-form label span {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.ch-provider-form input {
+  width: 100%;
+  height: var(--control-height-md);
+}
+
+.ch-provider-form__headers {
+  width: 100%;
+  height: 88px;
+  padding: 8px 9px;
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: var(--font-size-base);
+  line-height: var(--line-height-relaxed);
+  resize: vertical;
+}
+
+.ch-provider-form .ch-dialog__actions {
+  padding: 0 var(--spacing-md);
+}
+
+.ch-provider-form .ch-dialog__actions button {
+  flex: 1 1 0;
+  height: var(--control-height-md);
+}
+
 /* ── Compact mode ─────────────────────────────────────── */
 
 .ch-shell.is-compact .ch-toolbar--model,
-.ch-shell.is-compact .ch-toolbar--account,
 .ch-shell.is-compact .ch-footer {
   display: none;
 }

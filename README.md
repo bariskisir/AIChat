@@ -1,14 +1,14 @@
-# Claude Chat
+# AI Chat
 
-Claude Chat is a compact Windows-focused Tauri desktop client for using Claude.ai with the models available to the signed-in account.
+AI Chat is a compact Windows-focused Tauri desktop client for OpenAI-compatible chat APIs.
 
-![Claude Chat interface](images/interface.png)
+![AI Chat interface](images/interface.png)
 
 ## Install
 
-1. Download the latest release for Windows from [Releases](https://github.com/bariskisir/ClaudeChat/releases/latest).
+1. Download the latest release for Windows.
 2. Install or extract the package.
-3. Run **Claude Chat**.
+3. Run **AI Chat**.
 
 ## Development
 
@@ -17,11 +17,10 @@ Claude Chat is a compact Windows-focused Tauri desktop client for using Claude.a
 - [Rust](https://rustup.rs/) stable
 - Node.js 22 or newer
 - Visual Studio Build Tools on Windows
-- Google Chrome, Microsoft Edge, or Brave for the Claude login flow
 
 ```bash
-git clone https://github.com/bariskisir/ClaudeChat
-cd ClaudeChat
+git clone https://github.com/bariskisir/AIChat
+cd AIChat
 
 cd frontend
 npm install

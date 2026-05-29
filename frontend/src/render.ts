@@ -1,4 +1,4 @@
-/** Rendering helpers for Claude Chat. */
+/** Rendering helpers for AI Chat. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./dom.ts" />
 /// <reference path="./message-utils.ts" />
@@ -28,8 +28,8 @@ namespace Renderer {
     model.appState = state;
     populateOptions(refs, state);
     renderStatus(refs, state.status);
-    renderAccount(refs, state);
     renderSessions(refs, state);
+    renderProviders(refs, state);
     renderMessages(refs, state.activeSession, {
       preservedScrollTop,
       scrollToBottom: !streamScrollPaused,
@@ -49,9 +49,7 @@ namespace Renderer {
   export function renderStatus(refs: DomRefs.Refs, message: string, isError = false): void {
     const text = message || "Ready.";
     refs.statusText.textContent = text;
-    refs.authStatusText.textContent = text;
     refs.statusRow.classList.toggle("is-error", isError);
-    refs.authStatusText.classList.toggle("is-error", isError);
   }
 
   // Applies a streamed assistant text delta.
@@ -122,7 +120,7 @@ namespace Renderer {
     return {
       model: refs.modelSelect.value,
       compactMode: refs.appShell.classList.contains("is-compact"),
-      extendedThinking: refs.toggleThinking.checked,
+      reasoningEffort: refs.reasoningSelect.value,
       alwaysOnTop: refs.btnAlwaysOnTop.classList.contains("is-active"),
       windowWidth: Math.round(window.outerWidth || window.innerWidth),
       windowHeight: Math.round(window.outerHeight || window.innerHeight),
@@ -176,42 +174,32 @@ namespace Renderer {
   // Updates control enabled states and active labels.
   export function updateButtons(refs: DomRefs.Refs, model: UiModel): void {
     const state = model.appState;
-    const loggedIn = state?.account.loggedIn ?? false;
+    const configured = state?.providers.configured ?? false;
     const generating = state?.isGenerating ?? false;
-    refs.viewSignedOut.hidden = loggedIn;
-    refs.viewSignedIn.hidden = !loggedIn;
-    refs.btnLogin.disabled = loggedIn;
-    refs.btnSignOut.disabled = !loggedIn;
-    refs.btnRefresh.disabled = !loggedIn;
-    refs.modelSelect.disabled = !loggedIn;
-    refs.inputComposer.disabled = !loggedIn;
-    refs.btnSend.disabled = !loggedIn || (!generating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
+    refs.btnRefresh.disabled = !configured;
+    refs.modelDropdownButton.disabled = !configured;
+    refs.modelSearchInput.disabled = !configured;
+    refs.modelSelect.disabled = !configured;
+    refs.reasoningSelect.disabled = !configured;
+    refs.inputComposer.disabled = !configured;
+    refs.btnSend.disabled = !configured || (!generating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
     refs.btnSend.classList.toggle("is-stop", generating);
     refs.btnSend.textContent = generating ? "Stop" : "Send";
     refs.btnSend.setAttribute("aria-label", generating ? "Stop response" : "Send message");
-    refs.btnNewSession.disabled = !loggedIn;
-    refs.btnCopyChat.disabled = !loggedIn || (state ? !hasCopyableMessages(state.activeSession) : true);
+    refs.btnNewSession.disabled = !configured;
+    refs.btnCopyChat.disabled = !configured || (state ? !hasCopyableMessages(state.activeSession) : true);
     refs.btnAlwaysOnTop.classList.toggle("is-active", state?.settings.alwaysOnTop ?? false);
     refs.btnAlwaysOnTop.setAttribute("aria-pressed", String(state?.settings.alwaysOnTop ?? false));
   }
 
-  // Renders signed-in account identity and plan.
-  function renderAccount(refs: DomRefs.Refs, state: AppSnapshot): void {
-    if (state.account.loggedIn) {
-      const parts = [state.account.email || "Signed in"];
-      if (state.account.plan) {
-        parts.push(state.account.plan);
-      }
-      refs.accountLabel.textContent = parts.join(" - ");
-    } else {
-      refs.accountLabel.textContent = "Not signed in";
+  // Renders the provider manager list.
+  export function renderProviders(refs: DomRefs.Refs, state: AppSnapshot | null): void {
+    refs.providerList.innerHTML = "";
+    if (!state) {
+      return;
     }
-    if (!state.account.loggedIn && !state.account.error) {
-      refs.authStatusText.textContent = "Connect with Claude to start chatting.";
-      refs.authStatusText.classList.remove("is-error");
-    }
-    if (state.account.error) {
-      renderStatus(refs, state.account.error, true);
+    for (const provider of state.providers.providers) {
+      refs.providerList.appendChild(providerItemNode(provider, state));
     }
   }
 
@@ -248,6 +236,34 @@ namespace Renderer {
     deleteButton.setAttribute("aria-label", `Delete ${titleText}`);
     deleteButton.disabled = state.sessions.length <= 1 && session.messages.length === 0;
     item.appendChild(deleteButton);
+
+    return item;
+  }
+
+  // Builds one provider row for the provider dialog.
+  function providerItemNode(provider: ProviderConfig, state: AppSnapshot): HTMLElement {
+    const item = document.createElement("div");
+    item.className = "ch-sidebar__item";
+    item.dataset.providerId = provider.id;
+    item.classList.toggle("is-active", provider.id === state.providers.activeProviderId);
+
+    const title = document.createElement("button");
+    title.type = "button";
+    title.className = "ch-sidebar__title";
+    title.dataset.providerId = provider.id;
+    title.textContent = provider.name || "Provider";
+    title.title = provider.error || provider.apiUrl;
+    item.appendChild(title);
+
+    if (!provider.builtIn) {
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "ch-btn--delete ch-sidebar__delete";
+      deleteButton.dataset.deleteProviderId = provider.id;
+      deleteButton.title = "Delete provider";
+      deleteButton.setAttribute("aria-label", `Delete ${provider.name || "provider"}`);
+      item.appendChild(deleteButton);
+    }
 
     return item;
   }
@@ -314,20 +330,46 @@ namespace Renderer {
   }
 
   // Populates model and thinking controls from the catalog.
-  function populateOptions(refs: DomRefs.Refs, state: AppSnapshot): void {
-    const options = state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
-      value: item.model,
-      label: item.model,
-      title: item.description || item.model,
-    }));
-    replaceOptions(refs.modelSelect, options);
-    if (state.settings.model && options.some((option) => option.value === state.settings.model)) {
-      refs.modelSelect.value = state.settings.model;
-    } else if (options.length > 0) {
-      refs.modelSelect.value = options[0].value;
-      state.settings.model = options[0].value;
+  export function populateModelOptions(refs: DomRefs.Refs, state: AppSnapshot | null): void {
+    if (!state) {
+      replaceSelectOptions(refs.modelSelect, []);
+      renderModelDropdownOptions(refs, []);
+      refs.modelDropdownButton.textContent = "Select model";
+      return;
     }
-    refs.toggleThinking.checked = state.settings.extendedThinking;
+    const allOptions = state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
+      value: `${item.providerId}/${item.model}`,
+      label: modelLabel(item),
+      title: item.description || modelLabel(item),
+    }));
+    const terms = searchTerms(refs.modelSearchInput.value);
+    const filteredOptions = allOptions.filter((item) => modelMatchesSearch(item, terms));
+    replaceSelectOptions(refs.modelSelect, allOptions);
+    if (state.settings.model && allOptions.some((option) => option.value === state.settings.model)) {
+      refs.modelSelect.value = state.settings.model;
+    } else if (allOptions.length > 0) {
+      refs.modelSelect.value = allOptions[0].value;
+      state.settings.model = allOptions[0].value;
+    }
+    renderModelDropdownOptions(refs, filteredOptions);
+    renderModelDropdownLabel(refs, allOptions);
+    refs.reasoningSelect.value = state.settings.reasoningEffort || "none";
+  }
+
+  // Selects a model in the hidden settings select and visible dropdown label.
+  export function selectModel(refs: DomRefs.Refs, value: string): void {
+    refs.modelSelect.value = value;
+    const options = Array.from(refs.modelSelect.options).map((option) => ({
+      value: option.value,
+      label: option.textContent || option.value,
+      title: option.title,
+    }));
+    renderModelDropdownLabel(refs, options);
+  }
+
+  // Populates model and reasoning controls from the catalog.
+  function populateOptions(refs: DomRefs.Refs, state: AppSnapshot): void {
+    populateModelOptions(refs, state);
   }
 
   // Returns whether the session has transcript content.
@@ -345,8 +387,8 @@ namespace Renderer {
     return refs.navSessions.closest<HTMLElement>(".ch-sidebar");
   }
 
-  // Replaces select options while preserving the previous value when possible.
-  function replaceOptions(select: HTMLSelectElement, options: Array<{ value: string; label: string; title?: string }>): void {
+  // Replaces hidden select options while preserving the previous value when possible.
+  function replaceSelectOptions(select: HTMLSelectElement, options: Array<{ value: string; label: string; title?: string }>): void {
     const previous = select.value;
     select.innerHTML = "";
     for (const option of options) {
@@ -359,6 +401,35 @@ namespace Renderer {
     if (options.some((option) => option.value === previous)) {
       select.value = previous;
     }
+  }
+
+  // Renders the custom dropdown option list.
+  function renderModelDropdownOptions(refs: DomRefs.Refs, options: Array<{ value: string; label: string; title?: string }>): void {
+    refs.modelOptionList.innerHTML = "";
+    if (!options.length) {
+      const empty = document.createElement("div");
+      empty.className = "ch-model-dropdown__empty";
+      empty.textContent = "No models";
+      refs.modelOptionList.appendChild(empty);
+      return;
+    }
+    for (const option of options) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "ch-model-dropdown__option";
+      button.dataset.modelValue = option.value;
+      button.classList.toggle("is-active", option.value === refs.modelSelect.value);
+      button.textContent = option.label;
+      button.title = option.title || option.label;
+      refs.modelOptionList.appendChild(button);
+    }
+  }
+
+  // Updates the custom dropdown button text from the selected model.
+  function renderModelDropdownLabel(refs: DomRefs.Refs, options: Array<{ value: string; label: string }>): void {
+    const selected = options.find((option) => option.value === refs.modelSelect.value);
+    refs.modelDropdownButton.textContent = selected?.label || "Select model";
+    refs.modelDropdownButton.title = selected?.label || "Select model";
   }
 
   // Updates auto-scroll preference based on current scroll position.
@@ -401,6 +472,29 @@ namespace Renderer {
       return left.mini ? 1 : -1;
     }
     return (leftModel.displayName || leftModel.model).localeCompare(rightModel.displayName || rightModel.model);
+  }
+
+  // Formats a model as provider/model for display.
+  function modelLabel(model: AvailableModel): string {
+    return `${model.providerName || model.providerId}/${model.model}`;
+  }
+
+  // Splits a model search into independent terms.
+  function searchTerms(value: string): string[] {
+    return value
+      .toLocaleLowerCase()
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter(Boolean);
+  }
+
+  // Returns models matching every typed search term.
+  function modelMatchesSearch(option: { label: string; title?: string }, terms: string[]): boolean {
+    if (!terms.length) {
+      return true;
+    }
+    const haystack = `${option.label} ${option.title || ""}`.toLocaleLowerCase();
+    return terms.every((term) => haystack.includes(term));
   }
 
   // Extracts sortable numeric parts from a model name.

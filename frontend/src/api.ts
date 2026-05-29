@@ -1,4 +1,4 @@
-/** Typed Tauri command wrappers for Claude Chat. */
+/** Typed Tauri command wrappers for AI Chat. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./tauri-bridge.ts" />
 
@@ -13,24 +13,24 @@ namespace Api {
     return TauriBridge.invokeCommand<AppSnapshot>("settings_update", { settings });
   }
 
-  // Starts the browser-based Claude login flow.
-  export function startLogin(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("auth_start_login");
+  // Saves a provider and refreshes its model list.
+  export function saveProvider(provider: ProviderInput): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("provider_save", { provider });
   }
 
-  // Clears the stored Claude account session.
-  export function signOut(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("auth_sign_out");
+  // Deletes a provider.
+  export function deleteProvider(providerId: string): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("provider_delete", { providerId });
   }
 
-  // Refreshes the Claude model catalog from the backend.
+  // Refreshes every provider model catalog from the backend.
   export function refreshModels(): Promise<AppSnapshot> {
     return TauriBridge.invokeCommand<AppSnapshot>("catalog_refresh_models");
   }
 
-  // Refreshes account limit metadata when available.
-  export function refreshLimits(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("catalog_refresh_limits");
+  // Refreshes one provider model catalog from the backend.
+  export function refreshProviderModels(providerId: string): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("provider_refresh_models", { providerId });
   }
 
   // Creates and selects a new local chat session.
@@ -48,12 +48,12 @@ namespace Api {
     return TauriBridge.invokeCommand<AppSnapshot>("session_delete", { sessionId });
   }
 
-  // Sends a user message to Claude.
+  // Sends a user message to the selected provider.
   export function sendChat(input: SendMessageRequest): Promise<AppSnapshot> {
     return TauriBridge.invokeCommand<AppSnapshot>("chat_send", { input });
   }
 
-  // Stops the active Claude response stream.
+  // Stops the active provider response stream.
   export function stopChat(sessionId: string): Promise<AppSnapshot> {
     return TauriBridge.invokeCommand<AppSnapshot>("chat_stop", { sessionId });
   }

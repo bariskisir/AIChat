@@ -1,4 +1,4 @@
-//! Domain models and constants for ClaudeChat.
+//! Domain models and constants for AI Chat.
 
 mod catalog;
 mod sessions;

@@ -10,10 +10,10 @@ impl AppState {
     pub fn update_settings(&self, input: SettingsInput) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         inner.settings.model = input.model;
-        inner.save_active_session_model_settings()?;
         inner.settings.compact_mode = input.compact_mode;
-        inner.settings.extended_thinking = input.extended_thinking;
+        inner.settings.reasoning_effort = normalize_reasoning_effort(&input.reasoning_effort);
         inner.settings.always_on_top = input.always_on_top;
+        inner.save_active_session_model_settings()?;
         if let Some(width) = input.window_width {
             inner.settings.window_width = width.max(MIN_WINDOW_WIDTH);
         }
@@ -60,5 +60,13 @@ impl AppState {
         inner.settings.always_on_top = enabled;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())
+    }
+}
+
+/// Keeps reasoning effort within supported OpenAI-compatible values.
+fn normalize_reasoning_effort(value: &str) -> String {
+    match value {
+        "low" | "medium" | "high" => value.to_owned(),
+        _ => "none".to_owned(),
     }
 }

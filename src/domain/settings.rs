@@ -1,4 +1,4 @@
-//! Application settings persisted for ClaudeChat.
+//! Application settings persisted for AI Chat.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,8 +19,8 @@ pub struct AppSettings {
     pub active_session_id: String,
     #[serde(default)]
     pub compact_mode: bool,
-    #[serde(default)]
-    pub extended_thinking: bool,
+    #[serde(default = "default_reasoning_effort")]
+    pub reasoning_effort: String,
     #[serde(default)]
     pub always_on_top: bool,
     #[serde(default = "default_window_width")]
@@ -38,13 +38,13 @@ pub struct AppSettings {
 }
 
 impl Default for AppSettings {
-    /// Provides first-run settings before any Claude model catalog has loaded.
+    /// Provides first-run settings before any provider model catalog has loaded.
     fn default() -> Self {
         Self {
             model: String::new(),
             active_session_id: String::new(),
             compact_mode: false,
-            extended_thinking: false,
+            reasoning_effort: default_reasoning_effort(),
             always_on_top: false,
             window_width: DEFAULT_WINDOW_WIDTH,
             window_height: DEFAULT_WINDOW_HEIGHT,
@@ -59,6 +59,10 @@ impl Default for AppSettings {
 /// Keeps legacy settings deserialization from selecting a hardcoded model.
 fn default_model() -> String {
     String::new()
+}
+/// Disables reasoning_effort by default.
+fn default_reasoning_effort() -> String {
+    "none".to_owned()
 }
 /// Supplies the initial window width for persisted settings.
 fn default_window_width() -> u32 {

@@ -57,8 +57,8 @@ pub struct ChatSession {
     pub title: String,
     #[serde(default = "default_model")]
     pub model: String,
-    #[serde(default)]
-    pub extended_thinking: bool,
+    #[serde(default = "default_reasoning_effort")]
+    pub reasoning_effort: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -73,7 +73,7 @@ impl ChatSession {
             id: new_record_id("session"),
             title: "New chat".to_owned(),
             model: String::new(),
-            extended_thinking: false,
+            reasoning_effort: default_reasoning_effort(),
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
@@ -88,9 +88,14 @@ impl ChatSession {
     }
 }
 
-/// Provides an empty model until the Claude catalog is loaded.
+/// Provides an empty model until providers load their model catalogs.
 fn default_model() -> String {
     String::new()
+}
+
+/// Disables reasoning_effort by default.
+fn default_reasoning_effort() -> String {
+    "none".to_owned()
 }
 
 /// Creates a short local fallback title from the first user message.
@@ -107,7 +112,7 @@ pub fn fallback_session_title(message: &ChatMessage) -> String {
     title
 }
 
-/// Cleans a Claude-generated session title for local display.
+/// Cleans a generated session title for local display.
 pub fn sanitize_session_title(value: &str) -> Option<String> {
     let cleaned = value
         .lines()

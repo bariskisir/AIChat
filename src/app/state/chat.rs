@@ -1,4 +1,4 @@
-//! Chat message submission, streaming, and title generation for Claude.
+//! Chat message submission, streaming, and title generation.
 
 use super::AppState;
 use crate::app::events::UiEvent;
@@ -6,7 +6,7 @@ use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
 };
-use crate::infra::claude;
+use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
 use tauri::{AppHandle, Emitter};
@@ -23,20 +23,20 @@ pub(in crate::app) struct ActiveChatResponse {
 struct PendingChatResponse {
     session_id: String,
     assistant_message_id: String,
-    conv_id: String,
-    request: claude::ClaudeChatRequest,
+    ctx: OpenAiContext,
+    request: OpenAiChatRequest,
 }
 
 #[derive(Clone)]
 struct PendingTitleResponse {
     session_id: String,
     fallback_title: String,
-    request: claude::ClaudeChatRequest,
-    conv_id: String,
+    ctx: OpenAiContext,
+    request: OpenAiChatRequest,
 }
 
 impl AppState {
-    /// Queues a user message, starts Claude streaming, and returns the updated snapshot.
+    /// Queues a user message, starts streaming, and returns the updated snapshot.
     pub fn send_message(
         &self,
         input: SendMessageRequest,
@@ -47,7 +47,8 @@ impl AppState {
         if text.is_empty() && image_data_urls.is_empty() {
             return Err(anyhow!("Enter a message or paste an image first."));
         }
-        self.ensure_signed_in()?;
+        self.ensure_provider_ready()?;
+        let (ctx, selected_model) = self.selected_provider_context()?;
 
         let (work, title_work) = {
             let mut inner = self.lock()?;
@@ -58,10 +59,9 @@ impl AppState {
                 ));
             }
             inner.save_active_session_model_settings()?;
-            let model = inner.settings.model.clone();
+            let model_key = inner.settings.model.clone();
+            let reasoning_effort = normalized_reasoning_effort(&inner.settings.reasoning_effort);
             let session = inner.active_session_mut()?;
-            let ext_thinking = session.extended_thinking;
-            let conv_id = uuid_v4();
 
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
             let should_generate_title = session.title == "New chat" && session.messages.is_empty();
@@ -69,13 +69,16 @@ impl AppState {
                 Some(PendingTitleResponse {
                     session_id: session_id.clone(),
                     fallback_title: fallback_session_title(&user_message),
-                    request: claude::ClaudeChatRequest {
-                        prompt: title_prompt(&user_message),
-                        model: model.clone(),
-                        extended_thinking: false,
-                        image_data_urls: Vec::new(),
+                    ctx: ctx.clone(),
+                    request: OpenAiChatRequest {
+                        model: selected_model.clone(),
+                        messages: vec![OpenAiMessage {
+                            role: "user".to_owned(),
+                            text: title_prompt(&user_message),
+                            image_data_urls: Vec::new(),
+                        }],
+                        reasoning_effort: None,
                     },
-                    conv_id: uuid_v4(),
                 })
             } else {
                 None
@@ -90,18 +93,18 @@ impl AppState {
             let assistant_message_id = assistant_message.id.clone();
             session.messages.push(assistant_message);
 
-            let prompt_text = build_context_prompt(session);
+            let messages = build_context_messages(session);
             let work = PendingChatResponse {
                 session_id,
                 assistant_message_id,
-                conv_id,
-                request: claude::ClaudeChatRequest {
-                    prompt: prompt_text,
-                    model,
-                    extended_thinking: ext_thinking,
-                    image_data_urls,
+                ctx,
+                request: OpenAiChatRequest {
+                    model: selected_model,
+                    messages,
+                    reasoning_effort,
                 },
             };
+            inner.settings.model = model_key;
             inner.status = "Generating answer...".to_owned();
             inner.storage.save_sessions(&inner.sessions)?;
             inner.storage.save_settings(&inner.settings)?;
@@ -115,7 +118,7 @@ impl AppState {
         self.snapshot()
     }
 
-    /// Stops an active Claude response and removes an empty assistant placeholder.
+    /// Stops an active response and removes an empty assistant placeholder.
     pub fn stop_chat_response(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         let Some(active) = inner.active_chat_responses.remove(session_id) else {
@@ -140,7 +143,7 @@ impl AppState {
         Ok(inner.build_snapshot())
     }
 
-    /// Spawns the background task that streams a Claude answer into app state.
+    /// Spawns the background task that streams an answer into app state.
     fn spawn_chat_response(&self, work: PendingChatResponse, app_handle: AppHandle) {
         let state = self.clone();
         let active_session_id = work.session_id.clone();
@@ -207,14 +210,9 @@ impl AppState {
         });
     }
 
-    /// Requests a Claude-generated title and stores it when the chat still exists.
+    /// Requests a generated title and stores it when the chat still exists.
     async fn execute_title_response(&self, work: PendingTitleResponse) -> Result<(String, String)> {
-        let ctx = self.claude_context()?;
-        if !claude::create_conversation(&ctx, &work.conv_id, &work.request.model).await? {
-            return Ok((work.session_id, work.fallback_title));
-        }
-        let raw = claude::stream_chat_response(&ctx, &work.conv_id, work.request, |_| {}).await?;
-        let _ = claude::delete_conversation(&ctx, &work.conv_id).await;
+        let raw = openai::stream_chat_response(&work.ctx, work.request, |_| {}).await?;
         let title = sanitize_session_title(&raw).unwrap_or(work.fallback_title);
         let mut inner = self.lock()?;
         if let Ok(session) = inner.session_mut(&work.session_id) {
@@ -227,36 +225,28 @@ impl AppState {
         Ok((work.session_id, title))
     }
 
-    /// Creates a Claude conversation, streams the final answer, and persists it.
+    /// Streams the final answer and persists it.
     async fn execute_chat_response(
         &self,
         work: PendingChatResponse,
         app_handle: AppHandle,
     ) -> Result<AppSnapshot> {
-        let ctx = self.claude_context()?;
-
-        // Create conversation
-        if !claude::create_conversation(&ctx, &work.conv_id, &work.request.model).await? {
-            return Err(anyhow!("Failed to create Claude conversation."));
-        }
-
         let sid = work.session_id.clone();
         let mid = work.assistant_message_id.clone();
         let stream_state = self.clone();
 
-        let final_answer =
-            claude::stream_chat_response(&ctx, &work.conv_id, work.request, |partial| {
-                stream_state.append_streamed_text(&sid, &mid, &partial);
-                let _ = app_handle.emit(
-                    "app-event",
-                    UiEvent::AssistantDelta {
-                        session_id: sid.clone(),
-                        message_id: mid.clone(),
-                        text: partial,
-                    },
-                );
-            })
-            .await?;
+        let final_answer = openai::stream_chat_response(&work.ctx, work.request, move |partial| {
+            stream_state.append_streamed_text(&sid, &mid, &partial);
+            let _ = app_handle.emit(
+                "app-event",
+                UiEvent::AssistantDelta {
+                    session_id: sid.clone(),
+                    message_id: mid.clone(),
+                    text: partial,
+                },
+            );
+        })
+        .await?;
 
         let mut inner = self.lock()?;
         if let Ok(session) = inner.session_mut(&work.session_id) {
@@ -321,8 +311,8 @@ impl AppState {
     }
 }
 
-/// Builds a prompt from session messages for Claude context.
-fn build_context_prompt(session: &crate::domain::ChatSession) -> String {
+/// Builds chat completion messages from the active session context.
+fn build_context_messages(session: &crate::domain::ChatSession) -> Vec<OpenAiMessage> {
     let messages: Vec<_> = session
         .messages
         .iter()
@@ -333,20 +323,16 @@ fn build_context_prompt(session: &crate::domain::ChatSession) -> String {
         .iter()
         .map(|m| {
             let role = match m.role {
-                ChatRole::User => "Human",
-                ChatRole::Assistant => "Assistant",
+                ChatRole::User => "user",
+                ChatRole::Assistant => "assistant",
             };
-            let text = if m.text.trim().is_empty() && !m.image_data_urls.is_empty() {
-                "[Image attached]".to_owned()
-            } else if !m.image_data_urls.is_empty() {
-                format!("{}\n[Image attached]", m.text)
-            } else {
-                m.text.clone()
-            };
-            format!("{role}: {text}")
+            OpenAiMessage {
+                role: role.to_owned(),
+                text: m.text.clone(),
+                image_data_urls: m.image_data_urls.clone(),
+            }
         })
-        .collect::<Vec<_>>()
-        .join("\n\n")
+        .collect()
 }
 
 /// Builds a title-generation prompt.
@@ -363,30 +349,10 @@ fn title_prompt(message: &ChatMessage) -> String {
     )
 }
 
-/// Generates a UUID v4 string for Claude conversation and message identifiers.
-fn uuid_v4() -> String {
-    use rand::Rng;
-    let mut bytes = [0u8; 16];
-    rand::rng().fill(&mut bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        bytes[0],
-        bytes[1],
-        bytes[2],
-        bytes[3],
-        bytes[4],
-        bytes[5],
-        bytes[6],
-        bytes[7],
-        bytes[8],
-        bytes[9],
-        bytes[10],
-        bytes[11],
-        bytes[12],
-        bytes[13],
-        bytes[14],
-        bytes[15],
-    )
+/// Converts "none" to an omitted reasoning_effort field.
+fn normalized_reasoning_effort(value: &str) -> Option<String> {
+    match value {
+        "low" | "medium" | "high" => Some(value.to_owned()),
+        _ => None,
+    }
 }

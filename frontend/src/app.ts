@@ -1,12 +1,15 @@
-/** Main browser entry point for the Claude Chat UI. */
+/** Main browser entry point for the AI Chat UI. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./tauri.d.ts" />
 /// <reference path="./dom.ts" />
 /// <reference path="./tauri-bridge.ts" />
 /// <reference path="./api.ts" />
+/// <reference path="./provider-templates.ts" />
 /// <reference path="./markdown.ts" />
 /// <reference path="./render.ts" />
 /// <reference path="./app-context.ts" />
+/// <reference path="./model-dropdown.ts" />
+/// <reference path="./provider-controls.ts" />
 /// <reference path="./clipboard.ts" />
 /// <reference path="./composer.ts" />
 /// <reference path="./resize.ts" />
@@ -23,19 +26,19 @@ namespace App {
 
   // Wires static DOM controls to backend commands and UI helpers.
   function bindEvents(): void {
-    refs.btnLogin.addEventListener("click", () => AppContext.renderSnapshot(Api.startLogin));
-    refs.btnSignOut.addEventListener("click", () => AppContext.renderSnapshot(Api.signOut));
     refs.btnRefresh.addEventListener("click", refreshCatalog);
     refs.btnDeveloper.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("developer")));
     refs.btnSource.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("source")));
     refs.modelSelect.addEventListener("change", AppContext.saveSettings);
-    refs.toggleThinking.addEventListener("change", AppContext.saveSettings);
+    refs.reasoningSelect.addEventListener("change", AppContext.saveSettings);
     refs.btnNewSession.addEventListener("click", createSessionAndFocus);
     refs.navSessions.addEventListener("click", selectSession);
     refs.btnCompact.addEventListener("click", toggleCompactMode);
     refs.btnAlwaysOnTop.addEventListener("click", toggleAlwaysOnTop);
     refs.btnCopyChat.addEventListener("click", ClipboardActions.copyLastAssistant);
     Renderer.bindScrollTracking(refs, model);
+    ModelDropdown.bind(refs, model);
+    ProviderControls.bind(refs, model);
     Composer.bind(refs, model);
     ResizeControls.bind(refs);
   }
@@ -54,18 +57,18 @@ namespace App {
     }
   }
 
-  // Loads initial state and refreshes models once for signed-in users.
+  // Loads initial state and refreshes models once for configured providers.
   async function refreshState(): Promise<void> {
     const snapshot = await AppContext.safeInvoke(Api.getSnapshot);
     if (snapshot) {
       Renderer.renderState(refs, model, snapshot);
-      if (snapshot.account.loggedIn) {
+      if (snapshot.providers.configured) {
         void refreshCatalog();
       }
     }
   }
 
-  // Refreshes the Claude model catalog and rerenders the snapshot.
+  // Refreshes the provider model catalog and rerenders the snapshot.
   async function refreshCatalog(): Promise<void> {
     const snapshot = await AppContext.safeInvoke(Api.refreshModels);
     if (snapshot) {

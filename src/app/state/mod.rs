@@ -1,15 +1,14 @@
 //! Shared application state and business logic module root.
 
-mod auth;
-mod catalog;
 mod chat;
+mod providers;
 mod sessions;
 mod settings;
 
-use super::view::{AccountSnapshot, AppSnapshot, CatalogSnapshot};
+use super::view::{AppSnapshot, CatalogSnapshot, ProviderSnapshot};
 use crate::domain::{
-    AppSettings, CatalogStorage, ChatSession, ClaudeCredential, DEFAULT_WINDOW_HEIGHT,
-    DEFAULT_WINDOW_WIDTH,
+    AppSettings, ChatSession, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, ProviderStorage,
+    model_key,
 };
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
@@ -26,8 +25,7 @@ pub struct AppState {
 pub(super) struct StateInner {
     pub(super) storage: Storage,
     pub(super) settings: AppSettings,
-    pub(super) auth: ClaudeCredential,
-    pub(super) catalog: CatalogStorage,
+    pub(super) providers: ProviderStorage,
     pub(super) status: String,
     pub(super) sessions: Vec<ChatSession>,
     pub(super) active_chat_responses: HashMap<String, chat::ActiveChatResponse>,
@@ -38,8 +36,9 @@ impl AppState {
     pub fn new(paths: AppPaths) -> Result<Self> {
         let storage = Storage::new(&paths)?;
         let mut settings = storage.load_settings()?;
-        let auth = storage.load_auth()?;
-        let catalog = storage.load_catalog()?;
+        let mut providers = storage.load_providers()?;
+        providers.ensure_builtin_providers();
+        storage.save_providers(&providers)?;
         let mut sessions = storage.load_sessions()?;
         if !settings.window_layout_initialized {
             settings.window_width = DEFAULT_WINDOW_WIDTH;
@@ -62,13 +61,17 @@ impl AppState {
             storage.save_sessions(&sessions)?;
             storage.save_settings(&settings)?;
         }
+        let status = if providers.providers.is_empty() {
+            "Add a provider first.".to_owned()
+        } else {
+            "Ready.".to_owned()
+        };
         Ok(Self {
             inner: Arc::new(Mutex::new(StateInner {
                 storage,
                 settings,
-                auth,
-                catalog,
-                status: "Ready.".to_owned(),
+                providers,
+                status,
                 sessions,
                 active_chat_responses: HashMap::new(),
             })),
@@ -86,7 +89,7 @@ impl AppState {
     pub fn open_link(&self, target: &str) -> Result<()> {
         match target {
             "developer" => shell::open_url("https://www.bariskisir.com"),
-            "source" => shell::open_url("https://github.com/bariskisir/ClaudeChat"),
+            "source" => shell::open_url("https://github.com/bariskisir/AIChat"),
             _ => Err(anyhow!("Unknown link target.")),
         }
     }
@@ -120,14 +123,21 @@ impl StateInner {
         AppSnapshot {
             settings: self.settings.clone(),
             status: self.status.clone(),
-            account: AccountSnapshot {
-                logged_in: self.auth.is_signed_in(),
-                email: self.auth.email.clone(),
-                plan: self.auth.plan.clone(),
-                error: self.auth.error.clone(),
+            providers: ProviderSnapshot {
+                configured: !self.providers.providers.is_empty(),
+                providers: self.providers.providers.clone(),
+                active_provider_id: self.active_provider_id(),
+                error: self
+                    .providers
+                    .providers
+                    .iter()
+                    .find_map(|provider| {
+                        (!provider.error.is_empty()).then(|| provider.error.clone())
+                    })
+                    .unwrap_or_default(),
             },
             catalog: CatalogSnapshot {
-                models: self.catalog.available_models.clone(),
+                models: self.providers.all_models(),
             },
             sessions: self.sessions.clone(),
             active_session,
@@ -143,7 +153,7 @@ impl StateInner {
             .find(|s| s.id == self.settings.active_session_id)
             .ok_or_else(|| anyhow!("Chat session not found."))?;
         self.settings.model = session.model.clone();
-        self.settings.extended_thinking = session.extended_thinking;
+        self.settings.reasoning_effort = session.reasoning_effort.clone();
         self.ensure_selected_model();
         self.save_active_session_model_settings()?;
         Ok(())
@@ -152,33 +162,41 @@ impl StateInner {
     /// Copies global model and thinking settings back into the active session.
     pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
         let model = self.settings.model.clone();
-        let ext = self.settings.extended_thinking;
+        let reasoning_effort = self.settings.reasoning_effort.clone();
         let session = self.active_session_mut()?;
         session.model = model;
-        session.extended_thinking = ext;
+        session.reasoning_effort = reasoning_effort;
         Ok(())
     }
 
-    /// Ensures the selected model is valid, preferring the first visible catalog model.
+    /// Ensures the selected model is valid, preferring the first visible provider model.
     pub(super) fn ensure_selected_model(&mut self) {
         if self
-            .catalog
-            .available_models
+            .providers
+            .all_models()
             .iter()
-            .any(|m| !m.hidden && m.model == self.settings.model)
+            .any(|m| !m.hidden && model_key(&m.provider_id, &m.model) == self.settings.model)
         {
             return;
         }
         if let Some(model) = self
-            .catalog
-            .available_models
+            .providers
+            .all_models()
             .iter()
             .find(|m| !m.hidden)
-            .or_else(|| self.catalog.available_models.first())
-            .map(|m| m.model.clone())
+            .map(|m| model_key(&m.provider_id, &m.model))
         {
             self.settings.model = model;
+        } else {
+            self.settings.model.clear();
         }
+    }
+
+    /// Returns the provider id from the selected model key.
+    pub(super) fn active_provider_id(&self) -> String {
+        crate::domain::split_model_key(&self.settings.model)
+            .map(|(provider_id, _)| provider_id.to_owned())
+            .unwrap_or_default()
     }
 
     /// Returns the active mutable chat session.

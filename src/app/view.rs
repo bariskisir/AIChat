@@ -1,6 +1,6 @@
 //! View models and data transfer types for the frontend.
 
-use crate::domain::{AppSettings, AvailableModel, ChatSession};
+use crate::domain::{AppSettings, AvailableModel, ChatSession, ProviderConfig};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 pub struct AppSnapshot {
     pub settings: AppSettings,
     pub status: String,
-    pub account: AccountSnapshot,
+    pub providers: ProviderSnapshot,
     pub catalog: CatalogSnapshot,
     pub sessions: Vec<ChatSession>,
     pub active_session: ChatSession,
@@ -17,10 +17,10 @@ pub struct AppSnapshot {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountSnapshot {
-    pub logged_in: bool,
-    pub email: String,
-    pub plan: String,
+pub struct ProviderSnapshot {
+    pub configured: bool,
+    pub providers: Vec<ProviderConfig>,
+    pub active_provider_id: String,
     pub error: String,
 }
 
@@ -35,7 +35,7 @@ pub struct CatalogSnapshot {
 pub struct SettingsInput {
     pub model: String,
     pub compact_mode: bool,
-    pub extended_thinking: bool,
+    pub reasoning_effort: String,
     pub always_on_top: bool,
     #[serde(default)]
     pub window_width: Option<u32>,
@@ -51,4 +51,17 @@ pub struct SendMessageRequest {
     pub text: String,
     #[serde(default)]
     pub image_data_urls: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderInput {
+    #[serde(default)]
+    pub id: String,
+    pub name: String,
+    pub api_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub custom_headers: String,
 }

@@ -1,6 +1,6 @@
-//! JSON file persistence for settings, auth, model catalog, and chat sessions.
+//! JSON file persistence for settings, providers, and chat sessions.
 
-use crate::domain::{AppSettings, CatalogStorage, ChatSession, ClaudeCredential, SESSION_LIMIT};
+use crate::domain::{AppSettings, ChatSession, ProviderStorage, SESSION_LIMIT};
 use crate::infra::paths::AppPaths;
 use anyhow::{Context, Result};
 use std::fs;
@@ -9,20 +9,17 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug)]
 pub struct Storage {
     settings: PathBuf,
-    auth: PathBuf,
-    #[allow(dead_code)]
-    catalog: PathBuf,
+    providers: PathBuf,
     sessions: PathBuf,
 }
 
 impl Storage {
-    /// Creates storage paths under the ClaudeChat app data directory.
+    /// Creates storage paths under the AIChat app data directory.
     pub fn new(paths: &AppPaths) -> Result<Self> {
         fs::create_dir_all(&paths.data_dir).context("Could not create app data directory")?;
         Ok(Self {
             settings: paths.settings.clone(),
-            auth: paths.auth.clone(),
-            catalog: paths.catalog.clone(),
+            providers: paths.providers.clone(),
             sessions: paths.sessions.clone(),
         })
     }
@@ -37,26 +34,14 @@ impl Storage {
         write_pretty(&self.settings, settings, "settings")
     }
 
-    /// Loads stored Claude credentials or an empty credential.
-    pub fn load_auth(&self) -> Result<ClaudeCredential> {
-        read_pretty_or_default(&self.auth, "auth")
+    /// Loads stored providers or an empty provider list.
+    pub fn load_providers(&self) -> Result<ProviderStorage> {
+        read_pretty_or_default(&self.providers, "providers")
     }
 
-    /// Saves stored Claude credentials as formatted JSON.
-    pub fn save_auth(&self, auth: &ClaudeCredential) -> Result<()> {
-        write_pretty(&self.auth, auth, "auth")
-    }
-
-    #[allow(dead_code)]
-    /// Loads the cached Claude model catalog or an empty catalog.
-    pub fn load_catalog(&self) -> Result<CatalogStorage> {
-        read_pretty_or_default(&self.catalog, "catalog")
-    }
-
-    #[allow(dead_code)]
-    /// Saves the cached Claude model catalog as formatted JSON.
-    pub fn save_catalog(&self, catalog: &CatalogStorage) -> Result<()> {
-        write_pretty(&self.catalog, catalog, "catalog")
+    /// Saves stored providers as formatted JSON.
+    pub fn save_providers(&self, providers: &ProviderStorage) -> Result<()> {
+        write_pretty(&self.providers, providers, "providers")
     }
 
     /// Loads local chat sessions or an empty session list.

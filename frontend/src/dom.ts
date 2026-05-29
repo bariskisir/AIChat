@@ -1,19 +1,36 @@
-/** DOM reference collection for Claude Chat. */
+/** DOM reference collection for AI Chat. */
 
 namespace DomRefs {
   export interface Refs {
     appShell: HTMLElement;
-    viewSignedOut: HTMLElement;
-    viewSignedIn: HTMLElement;
     statusRow: HTMLElement;
     statusText: HTMLElement;
-    authStatusText: HTMLElement;
-    accountLabel: HTMLElement;
     btnRefresh: HTMLButtonElement;
-    btnLogin: HTMLButtonElement;
-    btnSignOut: HTMLButtonElement;
+    btnProviders: HTMLButtonElement;
+    modelDropdownButton: HTMLButtonElement;
+    modelDropdown: HTMLElement;
+    modelSearchInput: HTMLInputElement;
+    modelOptionList: HTMLElement;
     modelSelect: HTMLSelectElement;
-    toggleThinking: HTMLInputElement;
+    reasoningSelect: HTMLSelectElement;
+    providerDialog: HTMLDialogElement;
+    providerList: HTMLElement;
+    btnAddProvider: HTMLButtonElement;
+    btnCloseProviders: HTMLButtonElement;
+    providerEditorDialog: HTMLDialogElement;
+    providerForm: HTMLFormElement;
+    providerTemplate: HTMLSelectElement;
+    providerTemplateButton: HTMLButtonElement;
+    providerTemplateDropdown: HTMLElement;
+    providerTemplateSearchInput: HTMLInputElement;
+    providerTemplateOptionList: HTMLElement;
+    providerId: HTMLInputElement;
+    providerName: HTMLInputElement;
+    providerApiUrl: HTMLInputElement;
+    providerApiKey: HTMLInputElement;
+    providerCustomHeaders: HTMLTextAreaElement;
+    providerEditorTitle: HTMLElement;
+    btnCancelProvider: HTMLButtonElement;
     btnNewSession: HTMLButtonElement;
     navSessions: HTMLElement;
     resizerSidebar: HTMLElement;
@@ -34,17 +51,34 @@ namespace DomRefs {
   export function getRefs(): Refs {
     return {
       appShell: get("appShell"),
-      viewSignedOut: get("viewSignedOut"),
-      viewSignedIn: get("viewSignedIn"),
       statusRow: get("statusRow"),
       statusText: get("statusText"),
-      authStatusText: get("authStatusText"),
-      accountLabel: get("accountLabel"),
       btnRefresh: get("btnRefresh"),
-      btnLogin: get("btnLogin"),
-      btnSignOut: get("btnSignOut"),
+      btnProviders: get("btnProviders"),
+      modelDropdownButton: get("modelDropdownButton"),
+      modelDropdown: get("modelDropdown"),
+      modelSearchInput: get("modelSearchInput"),
+      modelOptionList: get("modelOptionList"),
       modelSelect: get("modelSelect"),
-      toggleThinking: get("toggleThinking"),
+      reasoningSelect: get("reasoningSelect"),
+      providerDialog: get("providerDialog"),
+      providerList: get("providerList"),
+      btnAddProvider: get("btnAddProvider"),
+      btnCloseProviders: get("btnCloseProviders"),
+      providerEditorDialog: get("providerEditorDialog"),
+      providerForm: get("providerForm"),
+      providerTemplate: get("providerTemplate"),
+      providerTemplateButton: get("providerTemplateButton"),
+      providerTemplateDropdown: get("providerTemplateDropdown"),
+      providerTemplateSearchInput: get("providerTemplateSearchInput"),
+      providerTemplateOptionList: get("providerTemplateOptionList"),
+      providerId: get("providerId"),
+      providerName: get("providerName"),
+      providerApiUrl: get("providerApiUrl"),
+      providerApiKey: get("providerApiKey"),
+      providerCustomHeaders: get("providerCustomHeaders"),
+      providerEditorTitle: get("providerEditorTitle"),
+      btnCancelProvider: get("btnCancelProvider"),
       btnNewSession: get("btnNewSession"),
       navSessions: get("navSessions"),
       resizerSidebar: get("resizerSidebar"),

@@ -61,7 +61,7 @@ namespace Composer {
   function handleImagePaste(event: ClipboardEvent): void {
     const refs = AppContext.refs;
     const model = AppContext.model;
-    if (event.defaultPrevented || refs.viewSignedIn.hidden) {
+    if (event.defaultPrevented || !model.appState?.providers.configured) {
       return;
     }
     const items = Array.from(event.clipboardData?.items || []);

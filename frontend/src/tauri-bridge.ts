@@ -1,4 +1,4 @@
-/** Tauri backend access for the Claude Chat UI. */
+/** Tauri backend access for the AI Chat UI. */
 
 namespace TauriBridge {
   const { invoke } = window.__TAURI__.core;

@@ -3,39 +3,39 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Claude Chat</title>
+    <title>AI Chat</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <main id="appShell" class="ch-shell">
-      <section id="viewSignedOut" class="ch-view--signed-out">
-        <div class="ch-auth-card">
-          <h1>Claude Chat</h1>
-          <p id="authStatusText">Connect with Claude to start chatting.</p>
-          <button id="btnLogin" class="ch-btn--primary ch-btn--auth" type="button">Connect with Claude</button>
-        </div>
-      </section>
-
-      <section id="viewSignedIn" class="ch-view--signed-in" hidden>
+      <section class="ch-view--main">
         <header id="statusRow" class="ch-toolbar">
           <span id="statusText">Ready.</span>
         </header>
-        <div class="ch-toolbar ch-toolbar--account">
-          <span id="accountLabel">Signed in</span>
-          <button id="btnRefresh" class="ch-btn--icon" type="button" title="Refresh models">&#8635;</button>
-          <button id="btnSignOut" class="ch-btn--sm ch-btn--danger-outline" type="button">Sign out</button>
-        </div>
 
         <section class="ch-toolbar--model">
           <div class="ch-model-bar">
             <label class="ch-select-field">
               <span>Model</span>
-              <select id="modelSelect" title="Model"></select>
+              <div class="ch-model-dropdown">
+                <button id="modelDropdownButton" class="ch-model-dropdown__button" type="button">Select model</button>
+                <select id="modelSelect" title="Model" hidden></select>
+                <div id="modelDropdown" class="ch-model-dropdown__panel" hidden>
+                  <input id="modelSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models">
+                  <div id="modelOptionList" class="ch-model-dropdown__list"></div>
+                </div>
+              </div>
             </label>
-            <label class="ch-toggle-field" title="Enable extended thinking for step-by-step reasoning">
-              <span>Extended Thinking</span>
-              <input type="checkbox" id="toggleThinking" class="ch-toggle">
+            <label class="ch-select-field">
+              <span>Reasoning</span>
+              <select id="reasoningSelect" title="Reasoning">
+                <option value="none">none</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
             </label>
+            <button id="btnRefresh" class="ch-btn--icon" type="button" title="Refresh models">&#8635;</button>
           </div>
         </section>
 
@@ -44,6 +44,7 @@
             <button id="btnNewSession" class="ch-btn--add" type="button" title="New chat" aria-label="New chat">+</button>
             <button id="btnCompact" class="ch-btn--sm" type="button">Compact</button>
             <button id="btnAlwaysOnTop" class="ch-btn--sm" type="button" aria-pressed="false">Always on Top</button>
+            <button id="btnProviders" class="ch-btn--sm" type="button">Providers</button>
           </div>
           <button id="btnCopyChat" class="ch-btn--sm ch-btn--copy" type="button" title="Copy chat" aria-label="Copy chat">&#9112;</button>
         </section>
@@ -72,6 +73,59 @@
           <button id="btnSource" type="button">Source</button>
         </footer>
       </section>
+      <dialog id="providerDialog" class="ch-dialog ch-provider-dialog">
+        <div class="ch-dialog__header">
+          <strong>Providers</strong>
+          <button id="btnCloseProviders" class="ch-btn--icon" type="button" title="Close">X</button>
+        </div>
+        <div class="ch-provider-panel">
+          <aside class="ch-provider-panel__sidebar">
+            <button id="btnAddProvider" class="ch-btn--add" type="button" title="Add provider" aria-label="Add provider">+</button>
+            <nav id="providerList" class="ch-sidebar__nav" aria-label="Providers"></nav>
+          </aside>
+        </div>
+      </dialog>
+      <dialog id="providerEditorDialog" class="ch-dialog ch-provider-editor">
+        <form id="providerForm" method="dialog" class="ch-provider-form">
+          <div class="ch-dialog__header">
+            <strong id="providerEditorTitle">Provider</strong>
+          </div>
+          <input id="providerId" type="hidden">
+          <label>
+            <span>Template</span>
+            <div class="ch-model-dropdown ch-template-dropdown">
+              <button id="providerTemplateButton" class="ch-model-dropdown__button" type="button">Custom</button>
+              <select id="providerTemplate" hidden>
+              <option value="">Custom</option>
+            </select>
+              <div id="providerTemplateDropdown" class="ch-model-dropdown__panel" hidden>
+                <input id="providerTemplateSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search providers">
+                <div id="providerTemplateOptionList" class="ch-model-dropdown__list"></div>
+              </div>
+            </div>
+          </label>
+          <label>
+            <span>Provider</span>
+            <input id="providerName" type="text" autocomplete="off" required>
+          </label>
+          <label>
+            <span>API URL</span>
+            <input id="providerApiUrl" type="url" placeholder="https://api.openai.com/v1" required>
+          </label>
+          <label>
+            <span>Token</span>
+            <input id="providerApiKey" type="password" autocomplete="off">
+          </label>
+          <label>
+            <span>Custom Headers</span>
+            <textarea id="providerCustomHeaders" class="ch-provider-form__headers" spellcheck="false" placeholder='{ "x-opencode-session": "" }'></textarea>
+          </label>
+          <div class="ch-dialog__actions">
+            <button id="btnCancelProvider" class="ch-btn--sm" type="button">Cancel</button>
+            <button class="ch-btn--primary" type="submit">Save</button>
+          </div>
+        </form>
+      </dialog>
     </main>
     <script src="app.js"></script>
   </body>

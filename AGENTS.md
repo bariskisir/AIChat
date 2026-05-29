@@ -2,22 +2,23 @@
 
 ## Project Overview
 
-Claude Chat is a Windows-focused Tauri 2 desktop chat app for Claude.ai. The Rust backend manages shared app state, local JSON storage, browser-based Claude login, Claude model bootstrap parsing, response streaming, image attachment upload, clipboard integration, logging, and Tauri commands. The TypeScript frontend is a namespace-based UI that renders sessions, markdown-capable assistant messages, account/catalog status, model controls, pasted images, resize controls, and typed Tauri command calls.
+AI Chat is a Windows-focused Tauri 2 desktop chat app for OpenAI-compatible APIs. The Rust backend manages shared app state, local JSON storage, provider configuration, provider model discovery, response streaming, clipboard integration, logging, and Tauri commands. The TypeScript frontend is a namespace-based UI that renders sessions, markdown-capable assistant messages, provider/model controls, pasted images, resize controls, and typed Tauri command calls.
 
 ## Repository Layout
 
 - `src/main.rs`: Tauri startup, command registration, and window setup.
 - `src/app`: application state modules, frontend snapshots, Tauri command handlers, and UI events.
-- `src/app/state`: focused state behavior modules for auth, catalog refresh, chat streaming, sessions, and settings.
-- `src/app/view.rs`: frontend-facing `AppSnapshot`, account/catalog snapshots, settings input, and chat send request types.
-- `src/domain`: serializable settings, auth/catalog storage models, chat sessions/messages, defaults, and domain helpers.
-- `src/infra`: persistence, paths, logging, shell helpers, clipboard, Claude HTTP helpers, and browser extraction helpers.
-- `src/infra/claude`: Claude.ai REST/SSE client, bootstrap parsing, model entitlement filtering, and image upload helpers.
-- `src/infra/extractor.rs`: Chrome DevTools Protocol login and bootstrap fetch support.
+- `src/app/state`: focused state behavior modules for providers, chat streaming, sessions, and settings.
+- `src/app/view.rs`: frontend-facing `AppSnapshot`, provider/catalog snapshots, settings input, provider input, and chat send request types.
+- `src/domain`: serializable settings, provider/catalog storage models, chat sessions/messages, defaults, and domain helpers.
+- `src/infra`: persistence, paths, logging, shell helpers, clipboard, and OpenAI-compatible HTTP helpers.
+- `src/infra/openai.rs`: OpenAI-compatible REST/SSE client and model discovery helpers.
 - `frontend/src`: browser-side TypeScript namespaces compiled by `tsc`.
 - `frontend/src/api.ts`: typed wrappers for all Tauri commands; frontend code should call commands through this namespace.
-- `frontend/src/render.ts`: DOM rendering for snapshots, sessions, messages, controls, and streaming updates.
+- `frontend/src/render.ts`: DOM rendering for snapshots, sessions, messages, controls, provider dialogs, and streaming updates.
 - `frontend/src/markdown.ts`: safe DOM-based Markdown rendering for assistant messages; do not render raw HTML.
+- `frontend/src/model-dropdown.ts`: searchable model dropdown behavior; model settings still persist through `modelSelect`.
+- `frontend/src/provider-controls.ts` and `provider-templates.ts`: provider dialog behavior and built-in provider template metadata.
 - `frontend/src/composer.ts`, `resize.ts`, `clipboard.ts`, and `message-utils.ts`: focused UI behavior helpers.
 - `frontend/index.html` and `frontend/styles.css`: desktop UI shell and styling.
 - `frontend/scripts/prepare-dist.mjs`: copies frontend assets into `frontend/dist`.
@@ -42,15 +43,18 @@ The Rust build script also tries to ensure `frontend/dist` exists. If TypeScript
   - frontend-facing DTOs belong in `src/app/view.rs`;
   - Tauri command wrappers belong under `src/app/commands`;
   - serializable models, defaults, and pure domain helpers belong in `src/domain`;
-  - OS, storage, network, and Claude integration details belong in `src/infra`.
+  - OS, storage, network, and provider integration details belong in `src/infra`.
 - Rust errors should use `anyhow::Result` internally and convert to `String` only at Tauri command boundaries.
 - Frontend code uses global namespaces and triple-slash references, not ES module imports.
 - Keep frontend state in `AppContext.model`; render snapshot and streaming changes through `Renderer`.
 - Call backend commands through the typed `Api` namespace, not raw command strings outside `frontend/src/api.ts`.
 - Assistant message rendering should use `MarkdownRenderer`; avoid `innerHTML` and do not execute raw HTML from model output.
 - Persisted chat messages use `imageDataUrls` / `image_data_urls` only; do not reintroduce the legacy single-image field.
-- Model IDs must come from Claude bootstrap data; do not add hardcoded fallback models.
-- Persist settings, auth, catalog, sessions, and logs under the `ClaudeChat` app data folder.
+- Model IDs must come from provider `/models` responses; do not add hardcoded fallback models.
+- Keep OpenCode Zen as the only built-in provider; it is seeded in domain storage, cannot be deleted, and defaults to `deepseek-v4-flash-free`.
+- OpenCode Zen uses the provider token/API key field as the `x-opencode-session` header value. Keep the visible custom header key allowed with an empty value; do not store `public` in custom headers. Apply the OpenCode `free` model filter only when the token is exactly `public`.
+- Custom provider headers are stored as structured name/value pairs and edited as a JSON object in the frontend.
+- Persist settings, providers, sessions, and logs under the `AIChat` app data folder.
 
 ## Verification
 

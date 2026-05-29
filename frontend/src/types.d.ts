@@ -5,7 +5,7 @@ interface AppSettings {
   model: string;
   activeSessionId: string;
   compactMode: boolean;
-  extendedThinking: boolean;
+  reasoningEffort: string;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
@@ -15,16 +15,34 @@ interface AppSettings {
 }
 
 interface AvailableModel {
+  providerId: string;
+  providerName: string;
   model: string;
   displayName: string;
   description: string;
   hidden: boolean;
 }
 
-interface AccountSnapshot {
-  loggedIn: boolean;
-  email: string;
-  plan: string;
+interface ProviderConfig {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+  customHeaders: CustomHeader[];
+  builtIn: boolean;
+  models: AvailableModel[];
+  error: string;
+}
+
+interface CustomHeader {
+  name: string;
+  value: string;
+}
+
+interface ProviderSnapshot {
+  configured: boolean;
+  providers: ProviderConfig[];
+  activeProviderId: string;
   error: string;
 }
 
@@ -44,7 +62,7 @@ interface ChatSession {
   id: string;
   title: string;
   model: string;
-  extendedThinking: boolean;
+  reasoningEffort: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -53,7 +71,7 @@ interface ChatSession {
 interface AppSnapshot {
   settings: AppSettings;
   status: string;
-  account: AccountSnapshot;
+  providers: ProviderSnapshot;
   catalog: CatalogSnapshot;
   sessions: ChatSession[];
   activeSession: ChatSession;
@@ -63,7 +81,7 @@ interface AppSnapshot {
 interface FrontendSettings {
   model: string;
   compactMode: boolean;
-  extendedThinking: boolean;
+  reasoningEffort: string;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
@@ -83,6 +101,14 @@ interface UiEventPayload {
 interface SendMessageRequest {
   text: string;
   imageDataUrls: string[];
+}
+
+interface ProviderInput {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+  customHeaders: string;
 }
 
 type LinkTarget = "developer" | "source";

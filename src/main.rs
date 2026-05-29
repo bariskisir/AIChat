@@ -1,4 +1,4 @@
-//! Starts the Tauri desktop Claude Chat application.
+//! Starts the Tauri desktop AI Chat application.
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
@@ -8,8 +8,8 @@ mod infra;
 
 use anyhow::Result;
 use app::{
-    AppState, app_get_snapshot, auth_sign_out, auth_start_login, catalog_refresh_limits,
-    catalog_refresh_models, chat_send, chat_stop, clipboard_write_text, link_open, session_create,
+    AppState, app_get_snapshot, catalog_refresh_models, chat_send, chat_stop, clipboard_write_text,
+    link_open, provider_delete, provider_refresh_models, provider_save, session_create,
     session_delete, session_select, settings_update, window_set_pinned,
 };
 use infra::paths::app_paths;
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     let paths = app_paths()?;
     infra::logging::install_logger(paths.log_file.clone())?;
     log::info!(
-        "Claude Chat application starting; data_dir={}",
+        "AI Chat application starting; data_dir={}",
         paths.data_dir.display()
     );
     let state = AppState::new(paths)?;
@@ -31,7 +31,7 @@ fn main() -> Result<()> {
         .setup(move |app| {
             let app_version = app.package_info().version.to_string();
             if let Some(window) = app.get_webview_window("main") {
-                window.set_title(&format!("Claude Chat - v{app_version}"))?;
+                window.set_title(&format!("AI Chat - v{app_version}"))?;
                 if let Ok(snapshot) = state.snapshot() {
                     let size = PhysicalSize::new(
                         snapshot.settings.window_width,
@@ -72,10 +72,10 @@ fn main() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             app_get_snapshot,
             settings_update,
-            auth_start_login,
-            auth_sign_out,
+            provider_save,
+            provider_delete,
             catalog_refresh_models,
-            catalog_refresh_limits,
+            provider_refresh_models,
             session_create,
             session_select,
             session_delete,
@@ -88,6 +88,6 @@ fn main() -> Result<()> {
         .run(tauri::generate_context!())
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
-    log::info!("Claude Chat application stopped");
+    log::info!("AI Chat application stopped");
     Ok(())
 }
