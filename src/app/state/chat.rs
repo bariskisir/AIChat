@@ -14,9 +14,9 @@ use tokio::task::AbortHandle;
 
 #[derive(Clone)]
 pub(in crate::app) struct ActiveChatResponse {
-    pub(super) session_id: String,
-    pub(super) assistant_message_id: String,
-    pub(super) abort_handle: AbortHandle,
+    pub(in crate::app::state) session_id: String,
+    pub(in crate::app::state) assistant_message_id: String,
+    pub(in crate::app::state) abort_handle: AbortHandle,
 }
 
 #[derive(Clone)]
@@ -43,9 +43,15 @@ impl AppState {
         app_handle: AppHandle,
     ) -> Result<AppSnapshot> {
         let text = input.text.trim().to_owned();
-        let image_data_urls = input.image_data_urls;
+        let image_data_urls = input.image_data_urls.clone();
         if text.is_empty() && image_data_urls.is_empty() {
             return Err(anyhow!("Enter a message or paste an image first."));
+        }
+        if self.selected_provider_is_codex()? {
+            return self.send_codex_message(input, app_handle);
+        }
+        if self.selected_provider_is_claude()? {
+            return self.send_claude_message(input, app_handle);
         }
         self.ensure_provider_ready()?;
         let (ctx, selected_model) = self.selected_provider_context()?;
@@ -272,7 +278,12 @@ impl AppState {
     }
 
     /// Appends one streamed text delta to the assistant message in memory.
-    fn append_streamed_text(&self, session_id: &str, message_id: &str, text: &str) {
+    pub(in crate::app::state) fn append_streamed_text(
+        &self,
+        session_id: &str,
+        message_id: &str,
+        text: &str,
+    ) {
         if text.is_empty() {
             return;
         }
@@ -287,18 +298,27 @@ impl AppState {
 
     /// Cleans up placeholders and running-state bookkeeping after a failed stream.
     fn finish_failed_chat_response(&self, work: &PendingChatResponse) {
+        self.finish_failed_assistant_placeholder(&work.session_id, &work.assistant_message_id);
+    }
+
+    /// Cleans up a pending assistant placeholder after a failed stream.
+    pub(in crate::app::state) fn finish_failed_assistant_placeholder(
+        &self,
+        session_id: &str,
+        assistant_message_id: &str,
+    ) {
         if let Ok(mut inner) = self.lock() {
             if inner
                 .active_chat_responses
-                .get(&work.session_id)
-                .is_some_and(|a| a.assistant_message_id == work.assistant_message_id)
+                .get(session_id)
+                .is_some_and(|a| a.assistant_message_id == assistant_message_id)
             {
-                inner.active_chat_responses.remove(&work.session_id);
-                if let Ok(session) = inner.session_mut(&work.session_id) {
+                inner.active_chat_responses.remove(session_id);
+                if let Ok(session) = inner.session_mut(session_id) {
                     if let Some(index) = session
                         .messages
                         .iter()
-                        .position(|m| m.id == work.assistant_message_id)
+                        .position(|m| m.id == assistant_message_id)
                         && session.messages[index].text.trim().is_empty()
                     {
                         session.messages.remove(index);
@@ -336,7 +356,7 @@ fn build_context_messages(session: &crate::domain::ChatSession) -> Vec<OpenAiMes
 }
 
 /// Builds a title-generation prompt.
-fn title_prompt(message: &ChatMessage) -> String {
+pub(in crate::app::state) fn title_prompt(message: &ChatMessage) -> String {
     let text = if message.text.trim().is_empty() {
         "Image-only first message.".to_string()
     } else {

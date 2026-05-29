@@ -8,6 +8,11 @@ namespace Renderer {
   const MIN_SIDEBAR_WIDTH = 80;
   const MAX_SIDEBAR_WIDTH = 360;
   const AUTO_SCROLL_BOTTOM_THRESHOLD = 48;
+  const VERBOSITY_LEVELS = [
+    { value: "low", label: "low", title: "Shorter, more direct answers" },
+    { value: "medium", label: "medium", title: "Balanced answer detail" },
+    { value: "high", label: "high", title: "More detailed answers" },
+  ];
 
   export interface UiModel {
     appState: AppSnapshot | null;
@@ -121,6 +126,10 @@ namespace Renderer {
       model: refs.modelSelect.value,
       compactMode: refs.appShell.classList.contains("is-compact"),
       reasoningEffort: refs.reasoningSelect.value,
+      thinkingVariant: refs.thinkingSelect.value,
+      verbosity: refs.verbositySelect.value,
+      extendedThinking: refs.claudeExtendedThinking.checked,
+      claudeEffort: refs.claudeEffortSelect.value,
       alwaysOnTop: refs.btnAlwaysOnTop.classList.contains("is-active"),
       windowWidth: Math.round(window.outerWidth || window.innerWidth),
       windowHeight: Math.round(window.outerHeight || window.innerHeight),
@@ -181,11 +190,16 @@ namespace Renderer {
     refs.modelSearchInput.disabled = !configured;
     refs.modelSelect.disabled = !configured;
     refs.reasoningSelect.disabled = !configured;
+    refs.thinkingSelect.disabled = !configured;
+    refs.verbositySelect.disabled = !configured || !state?.catalog.verbositySupported;
+    refs.claudeExtendedThinking.disabled = !configured;
+    refs.claudeEffortSelect.disabled = !configured;
     refs.inputComposer.disabled = !configured;
-    refs.btnSend.disabled = !configured || (!generating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
+    refs.btnSend.disabled = !configured || generating || (!refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
     refs.btnSend.classList.toggle("is-stop", generating);
-    refs.btnSend.textContent = generating ? "Stop" : "Send";
-    refs.btnSend.setAttribute("aria-label", generating ? "Stop response" : "Send message");
+    refs.btnSend.textContent = generating ? "Esc to Stop" : "Send";
+    refs.btnSend.title = generating ? "Press Esc to stop" : "Send message";
+    refs.btnSend.setAttribute("aria-label", generating ? "Press Esc to stop" : "Send message");
     refs.btnNewSession.disabled = !configured;
     refs.btnCopyChat.disabled = !configured || (state ? !hasCopyableMessages(state.activeSession) : true);
     refs.btnAlwaysOnTop.classList.toggle("is-active", state?.settings.alwaysOnTop ?? false);
@@ -199,7 +213,7 @@ namespace Renderer {
       return;
     }
     for (const provider of state.providers.providers) {
-      refs.providerList.appendChild(providerItemNode(provider, state));
+      refs.providerList.appendChild(providerItemNode(provider, refs.providerId.value));
     }
   }
 
@@ -241,11 +255,12 @@ namespace Renderer {
   }
 
   // Builds one provider row for the provider dialog.
-  function providerItemNode(provider: ProviderConfig, state: AppSnapshot): HTMLElement {
+  function providerItemNode(provider: ProviderConfig, selectedProviderId: string): HTMLElement {
     const item = document.createElement("div");
     item.className = "ch-sidebar__item";
     item.dataset.providerId = provider.id;
-    item.classList.toggle("is-active", provider.id === state.providers.activeProviderId);
+    item.classList.toggle("is-active", provider.id === selectedProviderId);
+    item.classList.toggle("is-disabled", !provider.enabled);
 
     const title = document.createElement("button");
     title.type = "button";
@@ -354,6 +369,7 @@ namespace Renderer {
     renderModelDropdownOptions(refs, filteredOptions);
     renderModelDropdownLabel(refs, allOptions);
     refs.reasoningSelect.value = state.settings.reasoningEffort || "none";
+    renderCodexControls(refs, state);
   }
 
   // Selects a model in the hidden settings select and visible dropdown label.
@@ -365,6 +381,69 @@ namespace Renderer {
       title: option.title,
     }));
     renderModelDropdownLabel(refs, options);
+    if (AppContext.model.appState) {
+      renderCodexControls(refs, AppContext.model.appState);
+    }
+  }
+
+  // Toggles OpenAI reasoning versus Codex thinking and verbosity controls.
+  function renderCodexControls(refs: DomRefs.Refs, state: AppSnapshot): void {
+    const apiUrl = selectedProvider(refs, state)?.apiUrl || "";
+    const isCodex = apiUrl === "codex://chatgpt";
+    const isClaude = apiUrl === "claude://claude.ai";
+    const selectedModel = selectedCatalogModel(refs, state);
+    const claudeSupportsEffort = isClaude && !isClaudeHaikuModel(selectedModel);
+    refs.reasoningField.hidden = isCodex || isClaude;
+    refs.thinkingField.hidden = !isCodex;
+    refs.verbosityField.hidden = !isCodex;
+    refs.claudeExtendedThinkingField.hidden = !isClaude;
+    refs.claudeEffortField.hidden = !claudeSupportsEffort;
+    refs.claudeExtendedThinking.checked = state.settings.extendedThinking;
+    refs.claudeEffortSelect.value = visibleClaudeEffortValue(state.settings.claudeEffort);
+    if (!isCodex) {
+      return;
+    }
+    const thinkingVariants = selectedModel?.thinkingVariants?.length ? selectedModel.thinkingVariants : state.catalog.thinkingVariants;
+    replaceSelectOptions(refs.thinkingSelect, thinkingVariants.map((item) => ({
+      value: item.value,
+      label: item.value,
+      title: item.description,
+    })));
+    refs.thinkingSelect.value = state.settings.thinkingVariant || selectedModel?.defaultThinkingVariant || refs.thinkingSelect.value;
+    replaceSelectOptions(refs.verbositySelect, VERBOSITY_LEVELS);
+    refs.verbositySelect.value = visibleVerbosityValue(state.settings.verbosity, selectedModel, state);
+  }
+
+  // Chooses a visible Claude effort value from persisted settings.
+  function visibleClaudeEffortValue(value: string): string {
+    return ["low", "medium", "high"].includes(value) ? value : "high";
+  }
+
+  // Reports whether a Claude model should hide effort controls.
+  function isClaudeHaikuModel(model: AvailableModel | undefined): boolean {
+    const value = `${model?.model || ""} ${model?.displayName || ""}`.toLocaleLowerCase();
+    return value.includes("haiku");
+  }
+
+  // Chooses a visible Codex verbosity level when persisted settings contain legacy "default".
+  function visibleVerbosityValue(value: string, selectedModel: AvailableModel | undefined, state: AppSnapshot): string {
+    if (["low", "medium", "high"].includes(value)) {
+      return value;
+    }
+    const fallback = selectedModel?.defaultVerbosity || state.catalog.defaultVerbosity || "medium";
+    return ["low", "medium", "high"].includes(fallback) ? fallback : "medium";
+  }
+
+  // Returns the selected model record for model-specific Codex controls.
+  function selectedCatalogModel(refs: DomRefs.Refs, state: AppSnapshot): AvailableModel | undefined {
+    const [providerId, modelId] = refs.modelSelect.value.split("/");
+    return state.catalog.models.find((model) => model.providerId === providerId && model.model === modelId);
+  }
+
+  // Returns the selected provider record for the current model key.
+  function selectedProvider(refs: DomRefs.Refs, state: AppSnapshot): ProviderConfig | undefined {
+    const providerId = refs.modelSelect.value.split("/")[0] || state.providers.activeProviderId;
+    return state.providers.providers.find((provider) => provider.id === providerId);
   }
 
   // Populates model and reasoning controls from the catalog.

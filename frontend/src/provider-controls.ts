@@ -1,8 +1,10 @@
-/** Provider manager and provider template dropdown behavior. */
+/** Provider manager behavior and provider editor commands. */
 /// <reference path="./types.d.ts" />
 /// <reference path="./dom.ts" />
 /// <reference path="./api.ts" />
 /// <reference path="./provider-templates.ts" />
+/// <reference path="./provider-template-dropdown.ts" />
+/// <reference path="./provider-account-panels.ts" />
 /// <reference path="./render.ts" />
 /// <reference path="./app-context.ts" />
 
@@ -12,19 +14,31 @@ namespace ProviderControls {
     refs.btnProviders.addEventListener("click", () => openManager(refs, model));
     refs.btnAddProvider.addEventListener("click", () => openEditor(refs, model));
     refs.btnCloseProviders.addEventListener("click", () => refs.providerDialog.close());
-    refs.btnCancelProvider.addEventListener("click", () => refs.providerEditorDialog.close());
+    refs.btnCancelProvider.addEventListener("click", () => refs.providerDialog.close());
     refs.providerList.addEventListener("click", (event) => handleProviderClick(refs, model, event));
     refs.providerForm.addEventListener("submit", saveProvider);
     refs.providerTemplate.addEventListener("change", () => applyTemplate(refs));
-    refs.providerTemplateButton.addEventListener("click", (event) => toggleTemplateDropdown(refs, event));
-    refs.providerTemplateSearchInput.addEventListener("input", () => renderTemplateOptions(refs));
-    refs.providerTemplateOptionList.addEventListener("click", (event) => selectTemplateOption(refs, event));
-    document.addEventListener("click", (event) => closeTemplateDropdownFromOutside(refs, event));
+    refs.providerApiUrl.addEventListener("input", () => ProviderAccountPanels.render(refs));
+    ProviderTemplateDropdown.bind(refs, () => applyTemplate(refs));
+    ProviderAccountPanels.bind(refs, (message, isError) => renderProviderStatus(refs, message, isError));
+  }
+
+  // Keeps the account panel in sync after backend-pushed snapshots.
+  export function sync(refs: DomRefs.Refs): void {
+    if (refs.providerDialog.open) {
+      ProviderAccountPanels.render(refs);
+    }
   }
 
   // Opens the provider manager dialog.
   function openManager(refs: DomRefs.Refs, model: Renderer.UiModel): void {
+    ProviderTemplateDropdown.populate(refs);
     Renderer.renderProviders(refs, model.appState);
+    const providerId = model.appState?.providers.activeProviderId || model.appState?.providers.providers[0]?.id || "";
+    openEditor(refs, model, providerId);
+    if (!providerId) {
+      renderProviderStatus(refs, "Select a provider or add a new one.");
+    }
     refs.providerDialog.showModal();
   }
 
@@ -33,7 +47,7 @@ namespace ProviderControls {
     const deleteButton = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-delete-provider-id]");
     const deleteProviderId = deleteButton?.dataset.deleteProviderId;
     if (deleteProviderId) {
-      void AppContext.renderSnapshot(() => Api.deleteProvider(deleteProviderId));
+      void deleteProvider(refs, model, deleteProviderId);
       return;
     }
     const providerItem = (event.target as HTMLElement).closest<HTMLElement>("[data-provider-id]");
@@ -46,7 +60,7 @@ namespace ProviderControls {
   // Opens the provider editor with blank or existing values.
   function openEditor(refs: DomRefs.Refs, model: Renderer.UiModel, providerId = ""): void {
     const provider = model.appState?.providers.providers.find((item) => item.id === providerId);
-    populateTemplates(refs);
+    ProviderTemplateDropdown.populate(refs);
     refs.providerEditorTitle.textContent = provider ? "Edit Provider" : "New Provider";
     refs.providerId.value = provider?.id || "";
     refs.providerName.value = provider?.name || "";
@@ -54,82 +68,11 @@ namespace ProviderControls {
     refs.providerApiKey.value = provider?.apiKey || "";
     refs.providerCustomHeaders.value = provider ? headersText(provider.customHeaders) : "";
     refs.providerTemplate.value = ProviderTemplates.byApiUrl(provider?.apiUrl || "")?.name || "";
-    refs.providerTemplateSearchInput.value = "";
-    renderTemplateLabel(refs);
-    refs.providerEditorDialog.showModal();
-    refs.providerTemplateButton.focus();
-  }
-
-  // Populates the hidden provider template select once.
-  function populateTemplates(refs: DomRefs.Refs): void {
-    if (refs.providerTemplate.options.length > 1) {
-      return;
-    }
-    for (const template of ProviderTemplates.items) {
-      const option = document.createElement("option");
-      option.value = template.name;
-      option.textContent = template.name;
-      refs.providerTemplate.appendChild(option);
-    }
-  }
-
-  // Opens or closes the searchable provider template dropdown.
-  function toggleTemplateDropdown(refs: DomRefs.Refs, event: MouseEvent): void {
-    event.stopPropagation();
-    const willOpen = refs.providerTemplateDropdown.hidden;
-    refs.providerTemplateDropdown.hidden = !willOpen;
-    refs.providerTemplateButton.setAttribute("aria-expanded", String(willOpen));
-    if (willOpen) {
-      renderTemplateOptions(refs);
-      refs.providerTemplateSearchInput.focus();
-      refs.providerTemplateSearchInput.select();
-    }
-  }
-
-  // Closes the provider template dropdown on outside clicks.
-  function closeTemplateDropdownFromOutside(refs: DomRefs.Refs, event: MouseEvent): void {
-    const target = event.target as Node;
-    if (!refs.providerTemplateDropdown.contains(target) && !refs.providerTemplateButton.contains(target)) {
-      closeTemplateDropdown(refs);
-    }
-  }
-
-  // Selects a provider template from the searchable dropdown.
-  function selectTemplateOption(refs: DomRefs.Refs, event: MouseEvent): void {
-    const option = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-template-value]");
-    const value = option?.dataset.templateValue;
-    if (value === undefined) {
-      return;
-    }
-    refs.providerTemplate.value = value;
-    renderTemplateLabel(refs);
-    closeTemplateDropdown(refs);
-    applyTemplate(refs);
-  }
-
-  // Renders matching provider templates in the custom dropdown.
-  function renderTemplateOptions(refs: DomRefs.Refs): void {
-    const terms = searchTerms(refs.providerTemplateSearchInput.value);
-    const options = [{ name: "", apiUrl: "Custom" }, ...ProviderTemplates.items].filter((template) => {
-      const haystack = `${template.name || "custom"} ${template.apiUrl}`.toLocaleLowerCase();
-      return terms.every((term) => haystack.includes(term));
-    });
-    refs.providerTemplateOptionList.innerHTML = "";
-    for (const template of options) {
-      refs.providerTemplateOptionList.appendChild(templateOptionNode(refs, template));
-    }
-  }
-
-  // Builds one provider template option node.
-  function templateOptionNode(refs: DomRefs.Refs, template: ProviderTemplates.Template): HTMLButtonElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ch-model-dropdown__option";
-    button.dataset.templateValue = template.name;
-    button.classList.toggle("is-active", template.name === refs.providerTemplate.value);
-    button.textContent = template.name || "Custom";
-    button.title = template.apiUrl;
-    return button;
+    ProviderTemplateDropdown.resetSearch(refs);
+    ProviderTemplateDropdown.renderLabel(refs);
+    ProviderAccountPanels.render(refs);
+    renderSelectedProvider(refs, provider?.id || "");
+    renderProviderStatus(refs, editorStatus(provider));
   }
 
   // Applies the selected provider template to the editor form.
@@ -138,18 +81,14 @@ namespace ProviderControls {
     if (!template) {
       return;
     }
-    if (!refs.providerName.value.trim()) {
+    if (ProviderAccountPanels.isSpecialTemplate(template)) {
+      ProviderAccountPanels.applyTemplate(refs, template);
+    } else if (!refs.providerName.value.trim()) {
       refs.providerName.value = template.name;
     }
     refs.providerApiUrl.value = template.apiUrl;
-    if (template.name === "opencodezen") {
-      if (!refs.providerApiKey.value.trim()) {
-        refs.providerApiKey.value = "public";
-      }
-      if (!refs.providerCustomHeaders.value.trim()) {
-        refs.providerCustomHeaders.value = JSON.stringify({ "x-opencode-session": "" }, null, 2);
-      }
-    }
+    ProviderAccountPanels.render(refs);
+    applyOpenCodeDefaults(refs, template);
   }
 
   // Saves the provider editor form.
@@ -163,24 +102,70 @@ namespace ProviderControls {
       apiKey: refs.providerApiKey.value,
       customHeaders: refs.providerCustomHeaders.value,
     };
-    const snapshot = await AppContext.safeInvoke(() => Api.saveProvider(provider));
-    if (snapshot) {
+    renderProviderStatus(refs, "Checking provider models...");
+    try {
+      const snapshot = await Api.saveProvider(provider);
       Renderer.renderState(refs, AppContext.model, snapshot);
       Renderer.renderProviders(refs, snapshot);
-      refs.providerEditorDialog.close();
+      openEditor(refs, AppContext.model, savedProviderId(snapshot, provider));
+      renderProviderStatus(refs, snapshot.status);
+    } catch (error) {
+      renderProviderStatus(refs, String(error), true);
     }
   }
 
-  // Updates the provider template button label.
-  function renderTemplateLabel(refs: DomRefs.Refs): void {
-    refs.providerTemplateButton.textContent = refs.providerTemplate.value || "Custom";
-    refs.providerTemplateButton.title = refs.providerTemplate.value || "Custom";
+  // Deletes a provider and keeps the manager open on the next available provider.
+  async function deleteProvider(refs: DomRefs.Refs, model: Renderer.UiModel, providerId: string): Promise<void> {
+    try {
+      const snapshot = await Api.deleteProvider(providerId);
+      Renderer.renderState(refs, model, snapshot);
+      Renderer.renderProviders(refs, snapshot);
+      const nextProviderId = snapshot.providers.activeProviderId || snapshot.providers.providers[0]?.id || "";
+      openEditor(refs, model, nextProviderId);
+      renderProviderStatus(refs, snapshot.status);
+    } catch (error) {
+      renderProviderStatus(refs, String(error), true);
+    }
   }
 
-  // Hides the provider template dropdown.
-  function closeTemplateDropdown(refs: DomRefs.Refs): void {
-    refs.providerTemplateDropdown.hidden = true;
-    refs.providerTemplateButton.setAttribute("aria-expanded", "false");
+  // Applies OpenCode-specific defaults without overwriting user-entered values.
+  function applyOpenCodeDefaults(refs: DomRefs.Refs, template: ProviderTemplates.Template): void {
+    if (template.name !== "opencodezen") {
+      return;
+    }
+    if (!refs.providerApiKey.value.trim()) {
+      refs.providerApiKey.value = "public";
+    }
+    if (!refs.providerCustomHeaders.value.trim()) {
+      refs.providerCustomHeaders.value = JSON.stringify({ "x-opencode-session": "" });
+    }
+  }
+
+  // Finds the saved provider id after creating or updating provider input.
+  function savedProviderId(snapshot: AppSnapshot, input: ProviderInput): string {
+    if (input.id) {
+      return input.id;
+    }
+    return [...snapshot.providers.providers]
+      .reverse()
+      .find((provider) => provider.name === input.name.trim() && provider.apiUrl === input.apiUrl.trim().replace(/\/+$/, ""))?.id || snapshot.providers.activeProviderId;
+  }
+
+  // Renders provider-manager status text.
+  function renderProviderStatus(refs: DomRefs.Refs, message: string, isError = false): void {
+    refs.providerStatusText.textContent = message || "Ready.";
+    refs.providerStatusRow.classList.toggle("is-error", isError);
+  }
+
+  // Returns the appropriate editor helper status for a provider.
+  function editorStatus(provider: ProviderConfig | undefined): string {
+    if (!provider) {
+      return "New provider details.";
+    }
+    if (provider.error) {
+      return provider.error;
+    }
+    return provider.enabled ? "Edit provider details." : "Provider is disabled until a successful model refresh.";
   }
 
   // Serializes provider headers into the editor JSON field.
@@ -192,11 +177,13 @@ namespace ProviderControls {
     for (const header of headers) {
       value[header.name] = header.value;
     }
-    return JSON.stringify(value, null, 2);
+    return JSON.stringify(value);
   }
 
-  // Splits search text into independent lowercase terms.
-  function searchTerms(value: string): string[] {
-    return value.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  // Marks the provider currently loaded in the editor.
+  function renderSelectedProvider(refs: DomRefs.Refs, providerId: string): void {
+    refs.providerList.querySelectorAll<HTMLElement>("[data-provider-id]").forEach((item) => {
+      item.classList.toggle("is-active", item.dataset.providerId === providerId);
+    });
   }
 }

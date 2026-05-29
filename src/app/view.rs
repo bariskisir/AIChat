@@ -1,6 +1,8 @@
 //! View models and data transfer types for the frontend.
 
-use crate::domain::{AppSettings, AvailableModel, ChatSession, ProviderConfig};
+use crate::domain::{
+    AppSettings, AvailableModel, ChatSession, ProviderConfig, ThinkingVariantOption,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize)]
@@ -8,11 +10,30 @@ use serde::{Deserialize, Serialize};
 pub struct AppSnapshot {
     pub settings: AppSettings,
     pub status: String,
+    pub account: AccountSnapshot,
+    pub claude_account: ClaudeAccountSnapshot,
     pub providers: ProviderSnapshot,
     pub catalog: CatalogSnapshot,
     pub sessions: Vec<ChatSession>,
     pub active_session: ChatSession,
     pub is_generating: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSnapshot {
+    pub logged_in: bool,
+    pub email: String,
+    pub error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeAccountSnapshot {
+    pub logged_in: bool,
+    pub email: String,
+    pub plan: String,
+    pub error: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -28,6 +49,10 @@ pub struct ProviderSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct CatalogSnapshot {
     pub models: Vec<AvailableModel>,
+    pub thinking_variants: Vec<ThinkingVariantOption>,
+    pub verbosity_supported: bool,
+    pub default_verbosity: String,
+    pub limit_label: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -36,6 +61,14 @@ pub struct SettingsInput {
     pub model: String,
     pub compact_mode: bool,
     pub reasoning_effort: String,
+    #[serde(default = "default_thinking_variant")]
+    pub thinking_variant: String,
+    #[serde(default = "default_verbosity_setting")]
+    pub verbosity: String,
+    #[serde(default)]
+    pub extended_thinking: bool,
+    #[serde(default = "default_claude_effort")]
+    pub claude_effort: String,
     pub always_on_top: bool,
     #[serde(default)]
     pub window_width: Option<u32>,
@@ -43,6 +76,21 @@ pub struct SettingsInput {
     pub window_height: Option<u32>,
     #[serde(default)]
     pub sidebar_width: Option<u32>,
+}
+
+/// Returns the fallback Codex thinking setting for older frontends.
+fn default_thinking_variant() -> String {
+    crate::domain::DEFAULT_THINKING_VARIANT.to_owned()
+}
+
+/// Returns the fallback Codex verbosity setting for older frontends.
+fn default_verbosity_setting() -> String {
+    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
+}
+
+/// Returns the fallback Claude effort setting for older frontends.
+fn default_claude_effort() -> String {
+    "high".to_owned()
 }
 
 #[derive(Clone, Debug, Deserialize)]

@@ -13,6 +13,26 @@ namespace Api {
     return TauriBridge.invokeCommand<AppSnapshot>("settings_update", { settings });
   }
 
+  // Starts the ChatGPT OAuth sign-in flow for the Codex provider.
+  export function startLogin(): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("auth_start_login");
+  }
+
+  // Signs out of the ChatGPT account used by the Codex provider.
+  export function signOut(): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("auth_sign_out");
+  }
+
+  // Starts the browser-based Claude.ai sign-in flow.
+  export function startClaudeLogin(): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_start_login");
+  }
+
+  // Signs out of the Claude account used by the Claude provider.
+  export function signOutClaude(): Promise<AppSnapshot> {
+    return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_sign_out");
+  }
+
   // Saves a provider and refreshes its model list.
   export function saveProvider(provider: ProviderInput): Promise<AppSnapshot> {
     return TauriBridge.invokeCommand<AppSnapshot>("provider_save", { provider });

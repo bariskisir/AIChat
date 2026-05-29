@@ -2,7 +2,10 @@
 
 use super::AppState;
 use crate::app::view::{AppSnapshot, SettingsInput};
-use crate::domain::{MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH};
+use crate::domain::{
+    MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
+    is_minimized_window_position,
+};
 use anyhow::Result;
 
 impl AppState {
@@ -12,6 +15,15 @@ impl AppState {
         inner.settings.model = input.model;
         inner.settings.compact_mode = input.compact_mode;
         inner.settings.reasoning_effort = normalize_reasoning_effort(&input.reasoning_effort);
+        inner.settings.thinking_variant = inner.catalog.normalize_thinking_variant(
+            &input.thinking_variant,
+            &active_model_id(&inner.settings.model),
+        );
+        inner.settings.verbosity = inner
+            .catalog
+            .normalize_verbosity(&input.verbosity, &active_model_id(&inner.settings.model));
+        inner.settings.extended_thinking = input.extended_thinking;
+        inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
         inner.settings.always_on_top = input.always_on_top;
         inner.save_active_session_model_settings()?;
         if let Some(width) = input.window_width {
@@ -44,6 +56,9 @@ impl AppState {
 
     /// Persists the current window position.
     pub fn save_window_position(&self, x: i32, y: i32) -> Result<()> {
+        if is_minimized_window_position(x, y) {
+            return Ok(());
+        }
         let mut inner = self.lock()?;
         if inner.settings.window_x == Some(x) && inner.settings.window_y == Some(y) {
             return Ok(());
@@ -69,4 +84,19 @@ fn normalize_reasoning_effort(value: &str) -> String {
         "low" | "medium" | "high" => value.to_owned(),
         _ => "none".to_owned(),
     }
+}
+
+/// Keeps Claude effort within supported values.
+fn normalize_claude_effort(value: &str) -> String {
+    match value {
+        "low" | "medium" | "high" => value.to_owned(),
+        _ => "high".to_owned(),
+    }
+}
+
+/// Returns the model id from a provider/model selection key.
+fn active_model_id(model_key: &str) -> String {
+    crate::domain::split_model_key(model_key)
+        .map(|(_, model)| model.to_owned())
+        .unwrap_or_else(|| model_key.to_owned())
 }

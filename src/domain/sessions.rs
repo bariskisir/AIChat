@@ -59,6 +59,14 @@ pub struct ChatSession {
     pub model: String,
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: String,
+    #[serde(default = "default_thinking_variant")]
+    pub thinking_variant: String,
+    #[serde(default = "default_verbosity_setting")]
+    pub verbosity: String,
+    #[serde(default)]
+    pub extended_thinking: bool,
+    #[serde(default = "default_claude_effort")]
+    pub claude_effort: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     #[serde(default)]
@@ -74,6 +82,10 @@ impl ChatSession {
             title: "New chat".to_owned(),
             model: String::new(),
             reasoning_effort: default_reasoning_effort(),
+            thinking_variant: default_thinking_variant(),
+            verbosity: default_verbosity_setting(),
+            extended_thinking: false,
+            claude_effort: default_claude_effort(),
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
@@ -96,6 +108,21 @@ fn default_model() -> String {
 /// Disables reasoning_effort by default.
 fn default_reasoning_effort() -> String {
     "none".to_owned()
+}
+
+/// Supplies the default Codex thinking setting.
+fn default_thinking_variant() -> String {
+    crate::domain::DEFAULT_THINKING_VARIANT.to_owned()
+}
+
+/// Supplies the default Codex verbosity setting.
+fn default_verbosity_setting() -> String {
+    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
+}
+
+/// Supplies the default Claude effort setting.
+fn default_claude_effort() -> String {
+    "high".to_owned()
 }
 
 /// Creates a short local fallback title from the first user message.

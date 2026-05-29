@@ -8,10 +8,12 @@ mod infra;
 
 use anyhow::Result;
 use app::{
-    AppState, app_get_snapshot, catalog_refresh_models, chat_send, chat_stop, clipboard_write_text,
-    link_open, provider_delete, provider_refresh_models, provider_save, session_create,
-    session_delete, session_select, settings_update, window_set_pinned,
+    AppState, app_get_snapshot, auth_sign_out, auth_start_login, catalog_refresh_models, chat_send,
+    chat_stop, claude_auth_sign_out, claude_auth_start_login, clipboard_write_text, link_open,
+    provider_delete, provider_refresh_models, provider_save, session_create, session_delete,
+    session_select, settings_update, window_set_pinned,
 };
+use domain::is_minimized_window_position;
 use infra::paths::app_paths;
 use tauri::{Manager, PhysicalPosition, PhysicalSize, Position, Size, WindowEvent};
 
@@ -42,6 +44,7 @@ fn main() -> Result<()> {
                     }
                     if let (Some(x), Some(y)) =
                         (snapshot.settings.window_x, snapshot.settings.window_y)
+                        && !is_minimized_window_position(x, y)
                     {
                         let position = PhysicalPosition::new(x, y);
                         if let Err(error) = window.set_position(Position::Physical(position)) {
@@ -72,6 +75,10 @@ fn main() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             app_get_snapshot,
             settings_update,
+            auth_start_login,
+            auth_sign_out,
+            claude_auth_start_login,
+            claude_auth_sign_out,
             provider_save,
             provider_delete,
             catalog_refresh_models,

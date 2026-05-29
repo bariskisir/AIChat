@@ -9,6 +9,8 @@
 /// <reference path="./render.ts" />
 /// <reference path="./app-context.ts" />
 /// <reference path="./model-dropdown.ts" />
+/// <reference path="./provider-template-dropdown.ts" />
+/// <reference path="./provider-account-panels.ts" />
 /// <reference path="./provider-controls.ts" />
 /// <reference path="./clipboard.ts" />
 /// <reference path="./composer.ts" />
@@ -31,6 +33,10 @@ namespace App {
     refs.btnSource.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink("source")));
     refs.modelSelect.addEventListener("change", AppContext.saveSettings);
     refs.reasoningSelect.addEventListener("change", AppContext.saveSettings);
+    refs.thinkingSelect.addEventListener("change", AppContext.saveSettings);
+    refs.verbositySelect.addEventListener("change", AppContext.saveSettings);
+    refs.claudeExtendedThinking.addEventListener("change", AppContext.saveSettings);
+    refs.claudeEffortSelect.addEventListener("change", AppContext.saveSettings);
     refs.btnNewSession.addEventListener("click", createSessionAndFocus);
     refs.navSessions.addEventListener("click", selectSession);
     refs.btnCompact.addEventListener("click", toggleCompactMode);
@@ -47,6 +53,7 @@ namespace App {
   function handleUiEvent(payload: UiEventPayload): void {
     if (payload.type === "snapshot" && payload.snapshot) {
       Renderer.renderState(refs, model, payload.snapshot);
+      ProviderControls.sync(refs);
     } else if (payload.type === "assistantDelta") {
       Renderer.renderAssistantMessage(refs, model, payload.sessionId || "", payload.messageId || "", payload.text || "");
     } else if (payload.type === "sessionTitleUpdated") {

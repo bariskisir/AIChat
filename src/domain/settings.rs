@@ -9,6 +9,7 @@ pub const MIN_WINDOW_HEIGHT: u32 = 500;
 pub const DEFAULT_SIDEBAR_WIDTH: u32 = 115;
 pub const MIN_SIDEBAR_WIDTH: u32 = 80;
 pub const MAX_SIDEBAR_WIDTH: u32 = 360;
+pub const MINIMIZED_WINDOW_POSITION_SENTINEL: i32 = -30000;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -21,6 +22,14 @@ pub struct AppSettings {
     pub compact_mode: bool,
     #[serde(default = "default_reasoning_effort")]
     pub reasoning_effort: String,
+    #[serde(default = "default_thinking_variant")]
+    pub thinking_variant: String,
+    #[serde(default = "default_verbosity_setting")]
+    pub verbosity: String,
+    #[serde(default)]
+    pub extended_thinking: bool,
+    #[serde(default = "default_claude_effort")]
+    pub claude_effort: String,
     #[serde(default)]
     pub always_on_top: bool,
     #[serde(default = "default_window_width")]
@@ -45,6 +54,10 @@ impl Default for AppSettings {
             active_session_id: String::new(),
             compact_mode: false,
             reasoning_effort: default_reasoning_effort(),
+            thinking_variant: default_thinking_variant(),
+            verbosity: default_verbosity_setting(),
+            extended_thinking: false,
+            claude_effort: default_claude_effort(),
             always_on_top: false,
             window_width: DEFAULT_WINDOW_WIDTH,
             window_height: DEFAULT_WINDOW_HEIGHT,
@@ -64,6 +77,18 @@ fn default_model() -> String {
 fn default_reasoning_effort() -> String {
     "none".to_owned()
 }
+/// Supplies the default Codex thinking setting.
+fn default_thinking_variant() -> String {
+    crate::domain::DEFAULT_THINKING_VARIANT.to_owned()
+}
+/// Supplies the default Codex verbosity setting.
+fn default_verbosity_setting() -> String {
+    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
+}
+/// Supplies the default Claude effort setting.
+fn default_claude_effort() -> String {
+    "high".to_owned()
+}
 /// Supplies the initial window width for persisted settings.
 fn default_window_width() -> u32 {
     DEFAULT_WINDOW_WIDTH
@@ -75,4 +100,9 @@ fn default_window_height() -> u32 {
 /// Supplies the initial sidebar width for persisted settings.
 fn default_sidebar_width() -> u32 {
     DEFAULT_SIDEBAR_WIDTH
+}
+
+/// Detects Windows' minimized-window off-screen position sentinel.
+pub fn is_minimized_window_position(x: i32, y: i32) -> bool {
+    x <= MINIMIZED_WINDOW_POSITION_SENTINEL || y <= MINIMIZED_WINDOW_POSITION_SENTINEL
 }

@@ -6,6 +6,8 @@
 /// <reference path="./app-context.ts" />
 
 namespace Composer {
+  let stopInFlight = false;
+
   // Connects composer controls to message and image actions.
   export function bind(refs: DomRefs.Refs, model: Renderer.UiModel): void {
     refs.formComposer.addEventListener("submit", submitMessage);
@@ -13,6 +15,7 @@ namespace Composer {
     refs.inputComposer.addEventListener("keydown", handleComposerKeydown);
     refs.inputComposer.addEventListener("paste", handleImagePaste);
     document.addEventListener("paste", handleImagePaste);
+    document.addEventListener("keydown", handleGlobalKeydown, true);
     refs.composerPreview.addEventListener("click", removePendingImage);
   }
 
@@ -29,8 +32,7 @@ namespace Composer {
     const refs = AppContext.refs;
     const model = AppContext.model;
     if (model.appState?.isGenerating) {
-      const sessionId = model.appState.activeSession.id;
-      await AppContext.renderSnapshot(() => Api.stopChat(sessionId));
+      Renderer.renderStatus(refs, "Press Esc to stop.");
       return;
     }
     const text = refs.inputComposer.value.trim();
@@ -53,8 +55,34 @@ namespace Composer {
   function handleComposerKeydown(event: KeyboardEvent): void {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
+      if (AppContext.model.appState?.isGenerating) {
+        Renderer.renderStatus(AppContext.refs, "Press Esc to stop.");
+        return;
+      }
       AppContext.refs.formComposer.requestSubmit();
     }
+  }
+
+  // Stops a running answer from the global Escape shortcut.
+  function handleGlobalKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || !AppContext.model.appState?.isGenerating) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    void stopActiveAnswer();
+  }
+
+  // Sends a single stop request for the active streaming answer.
+  async function stopActiveAnswer(): Promise<void> {
+    const state = AppContext.model.appState;
+    if (!state?.isGenerating || stopInFlight) {
+      return;
+    }
+    stopInFlight = true;
+    Renderer.renderStatus(AppContext.refs, "Stopping answer...");
+    await AppContext.renderSnapshot(() => Api.stopChat(state.activeSession.id));
+    stopInFlight = false;
   }
 
   // Captures pasted images as data URLs for the next message.

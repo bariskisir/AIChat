@@ -1,9 +1,16 @@
 //! Provider storage and model catalog for AI Chat.
 
+use super::{
+    CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ThinkingVariantOption, default_input_modalities,
+    default_support_verbosity, default_thinking_variant, default_verbosity,
+    fallback_thinking_variants,
+};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 
 pub const OPENCODE_PROVIDER_ID: &str = "opencode-zen";
+pub const CODEX_PROVIDER_ID: &str = "codex";
+pub const CLAUDE_PROVIDER_ID: &str = "claude";
 pub const OPENCODE_DEFAULT_MODEL: &str = "deepseek-v4-flash-free";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -13,10 +20,10 @@ pub struct ProviderStorage {
 }
 
 impl Default for ProviderStorage {
-    /// Starts with the built-in OpenCode Zen provider configured.
+    /// Starts with the built-in fixed providers configured.
     fn default() -> Self {
         Self {
-            providers: vec![opencode_provider()],
+            providers: vec![opencode_provider(), codex_provider(), claude_provider()],
         }
     }
 }
@@ -37,12 +44,19 @@ impl ProviderStorage {
         } else {
             self.providers.insert(0, opencode_provider());
         }
+        ensure_special_builtin_provider(&mut self.providers, CODEX_PROVIDER_URL, codex_provider());
+        ensure_special_builtin_provider(
+            &mut self.providers,
+            CLAUDE_PROVIDER_URL,
+            claude_provider(),
+        );
     }
 
     /// Returns every visible model from every saved provider.
     pub fn all_models(&self) -> Vec<AvailableModel> {
         self.providers
             .iter()
+            .filter(|provider| provider.enabled)
             .flat_map(|provider| {
                 provider.models.iter().cloned().map(|mut model| {
                     model.provider_id = provider.id.clone();
@@ -114,6 +128,8 @@ pub struct ProviderConfig {
     pub custom_headers: Vec<CustomHeader>,
     #[serde(default)]
     pub built_in: bool,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
     #[serde(default)]
     pub models: Vec<AvailableModel>,
     #[serde(default)]
@@ -140,6 +156,18 @@ pub struct AvailableModel {
     pub description: String,
     #[serde(default)]
     pub hidden: bool,
+    #[serde(default)]
+    pub is_default: bool,
+    #[serde(default = "default_input_modalities")]
+    pub input_modalities: Vec<String>,
+    #[serde(default = "default_thinking_variant")]
+    pub default_thinking_variant: String,
+    #[serde(default = "fallback_thinking_variants")]
+    pub thinking_variants: Vec<ThinkingVariantOption>,
+    #[serde(default = "default_support_verbosity")]
+    pub support_verbosity: bool,
+    #[serde(default = "default_verbosity")]
+    pub default_verbosity: String,
 }
 
 /// Builds the persisted model selection key for a provider/model pair.
@@ -173,11 +201,71 @@ fn opencode_provider() -> ProviderConfig {
             value: String::new(),
         }],
         built_in: true,
+        enabled: true,
         models: Vec::new(),
         error: String::new(),
     };
     ensure_opencode_default_model(&mut provider);
     provider
+}
+
+/// Builds the fixed Codex provider shell; models are loaded after ChatGPT sign-in.
+fn codex_provider() -> ProviderConfig {
+    ProviderConfig {
+        id: CODEX_PROVIDER_ID.to_owned(),
+        name: "Codex".to_owned(),
+        api_url: CODEX_PROVIDER_URL.to_owned(),
+        api_key: String::new(),
+        custom_headers: Vec::new(),
+        built_in: true,
+        enabled: false,
+        models: Vec::new(),
+        error: "Sign in with ChatGPT.".to_owned(),
+    }
+}
+
+/// Builds the fixed Claude provider shell; models are loaded after Claude sign-in.
+fn claude_provider() -> ProviderConfig {
+    ProviderConfig {
+        id: CLAUDE_PROVIDER_ID.to_owned(),
+        name: "Claude".to_owned(),
+        api_url: CLAUDE_PROVIDER_URL.to_owned(),
+        api_key: String::new(),
+        custom_headers: Vec::new(),
+        built_in: true,
+        enabled: false,
+        models: Vec::new(),
+        error: "Sign in with Claude.".to_owned(),
+    }
+}
+
+/// Keeps one fixed special provider by API URL while preserving existing ids and models.
+fn ensure_special_builtin_provider(
+    providers: &mut Vec<ProviderConfig>,
+    api_url: &str,
+    fallback: ProviderConfig,
+) {
+    if let Some(index) = providers
+        .iter()
+        .position(|provider| provider.api_url.eq_ignore_ascii_case(api_url))
+    {
+        let provider = &mut providers[index];
+        provider.built_in = true;
+        if provider.name.trim().is_empty() {
+            provider.name = fallback.name.clone();
+        }
+        if provider.id.trim().is_empty() {
+            provider.id = fallback.id.clone();
+        }
+        provider.api_url = fallback.api_url.clone();
+        let keep_id = provider.id.clone();
+        providers.retain(|provider| {
+            provider.id == keep_id || !provider.api_url.eq_ignore_ascii_case(api_url)
+        });
+        return;
+    }
+    let insert_at = providers.len().min(2);
+    providers.insert(insert_at, fallback);
 }
 
 /// Keeps OpenCode's session token in `api_key` while leaving its header value blank in custom headers.
@@ -205,6 +293,11 @@ fn normalize_opencode_provider(provider: &mut ProviderConfig) {
     );
 }
 
+/// Keeps existing persisted providers enabled until a refresh explicitly fails.
+fn default_enabled() -> bool {
+    true
+}
+
 /// Adds the OpenCode default free model when the model list is empty.
 fn ensure_opencode_default_model(provider: &mut ProviderConfig) {
     if provider.models.is_empty() {
@@ -215,6 +308,12 @@ fn ensure_opencode_default_model(provider: &mut ProviderConfig) {
             display_name: OPENCODE_DEFAULT_MODEL.to_owned(),
             description: "OpenCode Zen default free model".to_owned(),
             hidden: false,
+            is_default: true,
+            input_modalities: vec!["text".to_owned()],
+            default_thinking_variant: default_thinking_variant(),
+            thinking_variants: fallback_thinking_variants(),
+            support_verbosity: false,
+            default_verbosity: default_verbosity(),
         });
     }
 }

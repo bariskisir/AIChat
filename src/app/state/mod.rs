@@ -1,14 +1,18 @@
 //! Shared application state and business logic module root.
 
 mod chat;
+mod claude;
+mod codex;
 mod providers;
 mod sessions;
 mod settings;
 
-use super::view::{AppSnapshot, CatalogSnapshot, ProviderSnapshot};
+use super::view::{
+    AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot, ProviderSnapshot,
+};
 use crate::domain::{
-    AppSettings, ChatSession, DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, ProviderStorage,
-    model_key,
+    AppSettings, AuthStorage, CatalogStorage, ChatSession, ClaudeCredential, DEFAULT_WINDOW_HEIGHT,
+    DEFAULT_WINDOW_WIDTH, ProviderStorage, is_minimized_window_position, model_key,
 };
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
@@ -25,6 +29,9 @@ pub struct AppState {
 pub(super) struct StateInner {
     pub(super) storage: Storage,
     pub(super) settings: AppSettings,
+    pub(super) auth: AuthStorage,
+    pub(super) claude_auth: ClaudeCredential,
+    pub(super) catalog: CatalogStorage,
     pub(super) providers: ProviderStorage,
     pub(super) status: String,
     pub(super) sessions: Vec<ChatSession>,
@@ -36,6 +43,9 @@ impl AppState {
     pub fn new(paths: AppPaths) -> Result<Self> {
         let storage = Storage::new(&paths)?;
         let mut settings = storage.load_settings()?;
+        let auth = storage.load_auth()?;
+        let claude_auth = storage.load_claude_auth()?;
+        let catalog = storage.load_catalog()?;
         let mut providers = storage.load_providers()?;
         providers.ensure_builtin_providers();
         storage.save_providers(&providers)?;
@@ -44,6 +54,13 @@ impl AppState {
             settings.window_width = DEFAULT_WINDOW_WIDTH;
             settings.window_height = DEFAULT_WINDOW_HEIGHT;
             settings.window_layout_initialized = true;
+            storage.save_settings(&settings)?;
+        }
+        if let (Some(x), Some(y)) = (settings.window_x, settings.window_y)
+            && is_minimized_window_position(x, y)
+        {
+            settings.window_x = None;
+            settings.window_y = None;
             storage.save_settings(&settings)?;
         }
         if sessions.is_empty() {
@@ -70,6 +87,9 @@ impl AppState {
             inner: Arc::new(Mutex::new(StateInner {
                 storage,
                 settings,
+                auth,
+                claude_auth,
+                catalog,
                 providers,
                 status,
                 sessions,
@@ -123,6 +143,17 @@ impl StateInner {
         AppSnapshot {
             settings: self.settings.clone(),
             status: self.status.clone(),
+            account: AccountSnapshot {
+                logged_in: self.auth.is_signed_in(),
+                email: self.auth.account_email.clone(),
+                error: self.auth.error.clone(),
+            },
+            claude_account: ClaudeAccountSnapshot {
+                logged_in: self.claude_auth.is_signed_in(),
+                email: self.claude_auth.email.clone(),
+                plan: self.claude_auth.plan.clone(),
+                error: self.claude_auth.error.clone(),
+            },
             providers: ProviderSnapshot {
                 configured: !self.providers.providers.is_empty(),
                 providers: self.providers.providers.clone(),
@@ -138,6 +169,16 @@ impl StateInner {
             },
             catalog: CatalogSnapshot {
                 models: self.providers.all_models(),
+                thinking_variants: self
+                    .catalog
+                    .thinking_variants_for(&active_model_id(&self.settings.model)),
+                verbosity_supported: self
+                    .catalog
+                    .supports_verbosity(&active_model_id(&self.settings.model)),
+                default_verbosity: self
+                    .catalog
+                    .default_verbosity_for(&active_model_id(&self.settings.model)),
+                limit_label: self.catalog.chatgpt_limit_label.clone(),
             },
             sessions: self.sessions.clone(),
             active_session,
@@ -154,6 +195,10 @@ impl StateInner {
             .ok_or_else(|| anyhow!("Chat session not found."))?;
         self.settings.model = session.model.clone();
         self.settings.reasoning_effort = session.reasoning_effort.clone();
+        self.settings.thinking_variant = session.thinking_variant.clone();
+        self.settings.verbosity = session.verbosity.clone();
+        self.settings.extended_thinking = session.extended_thinking;
+        self.settings.claude_effort = session.claude_effort.clone();
         self.ensure_selected_model();
         self.save_active_session_model_settings()?;
         Ok(())
@@ -163,9 +208,17 @@ impl StateInner {
     pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
         let model = self.settings.model.clone();
         let reasoning_effort = self.settings.reasoning_effort.clone();
+        let thinking_variant = self.settings.thinking_variant.clone();
+        let verbosity = self.settings.verbosity.clone();
+        let extended_thinking = self.settings.extended_thinking;
+        let claude_effort = self.settings.claude_effort.clone();
         let session = self.active_session_mut()?;
         session.model = model;
         session.reasoning_effort = reasoning_effort;
+        session.thinking_variant = thinking_variant;
+        session.verbosity = verbosity;
+        session.extended_thinking = extended_thinking;
+        session.claude_effort = claude_effort;
         Ok(())
     }
 
@@ -212,4 +265,11 @@ impl StateInner {
             .find(|s| s.id == id)
             .ok_or_else(|| anyhow!("Chat session not found."))
     }
+}
+
+/// Returns the model id from a provider/model selection key.
+fn active_model_id(model_key: &str) -> String {
+    crate::domain::split_model_key(model_key)
+        .map(|(_, model)| model.to_owned())
+        .unwrap_or_else(|| model_key.to_owned())
 }

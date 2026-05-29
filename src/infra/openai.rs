@@ -124,6 +124,12 @@ pub async fn fetch_models(ctx: &OpenAiContext) -> Result<Vec<AvailableModel>> {
             description: item.owned_by,
             model: item.id,
             hidden: false,
+            is_default: false,
+            input_modalities: vec!["text".to_owned()],
+            default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
+            thinking_variants: crate::domain::fallback_thinking_variants(),
+            support_verbosity: false,
+            default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
         })
         .collect::<Vec<_>>();
     models.sort_by(|left, right| left.model.cmp(&right.model));

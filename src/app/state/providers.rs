@@ -1,44 +1,77 @@
 //! Provider configuration and model refresh helpers.
 
-use super::AppState;
+use super::{AppState, claude, codex};
 use crate::app::view::{AppSnapshot, ProviderInput};
 use crate::domain::{CustomHeader, OPENCODE_PROVIDER_ID, ProviderConfig, split_model_key};
 use crate::infra::openai::{self, OpenAiContext};
 use anyhow::{Result, anyhow};
 
+struct RefreshOutcome {
+    snapshot: AppSnapshot,
+    refreshed: bool,
+}
+
 impl AppState {
-    /// Saves a provider and refreshes its model list when possible.
+    /// Saves a provider only after its `/models` endpoint returns at least one model.
     pub async fn save_provider(&self, input: ProviderInput) -> Result<AppSnapshot> {
-        let provider = provider_from_input(input)?;
-        let provider_id = {
-            let mut inner = self.lock()?;
-            let id = inner.providers.upsert(provider);
-            inner.status = "Provider saved. Refreshing models...".to_owned();
-            inner.storage.save_providers(&inner.providers)?;
-            id
+        let mut provider = provider_from_input(input)?;
+        provider.models = if codex::is_codex_provider(&provider) {
+            self.fetch_codex_models_for_provider(&provider).await?
+        } else if claude::is_claude_provider(&provider) {
+            self.fetch_claude_models_for_provider(&provider).await?
+        } else {
+            fetch_models_for_save(&provider).await?
         };
-        self.refresh_provider_models(&provider_id).await
+        {
+            let mut inner = self.lock()?;
+            let provider_name = provider.name.clone();
+            inner.providers.upsert(provider);
+            inner.ensure_selected_model();
+            inner.save_active_session_model_settings()?;
+            inner.status = format!("{provider_name} checked and saved.");
+            inner.storage.save_providers(&inner.providers)?;
+            inner.storage.save_settings(&inner.settings)?;
+            inner.storage.save_sessions(&inner.sessions)?;
+            Ok(inner.build_snapshot())
+        }
     }
 
     /// Deletes a provider and repairs the selected model.
     pub fn delete_provider(&self, provider_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        if inner
+        let provider = inner
             .providers
             .provider(provider_id)
-            .is_some_and(|provider| provider.built_in)
-        {
+            .ok_or_else(|| anyhow!("Provider not found."))?
+            .clone();
+        if provider.built_in {
             return Err(anyhow!("Built-in providers cannot be deleted."));
         }
+        let deletes_codex = codex::is_codex_provider(&provider);
+        let deletes_claude = claude::is_claude_provider(&provider);
         if !inner.providers.delete(provider_id) {
             return Err(anyhow!("Provider not found."));
+        }
+        if deletes_codex {
+            inner.auth = crate::domain::AuthStorage::default();
+            inner.storage.save_auth(&inner.auth)?;
+        }
+        if deletes_claude {
+            inner.claude_auth = crate::domain::ClaudeCredential::default();
+            inner.storage.save_claude_auth(&inner.claude_auth)?;
         }
         inner.ensure_selected_model();
         inner.save_active_session_model_settings()?;
         inner.storage.save_providers(&inner.providers)?;
         inner.storage.save_settings(&inner.settings)?;
         inner.storage.save_sessions(&inner.sessions)?;
-        inner.status = "Provider deleted.".to_owned();
+        inner.status = if deletes_codex {
+            "Provider deleted and signed out of ChatGPT.".to_owned()
+        } else if deletes_claude {
+            "Provider deleted and signed out of Claude.".to_owned()
+        } else {
+            "Provider deleted.".to_owned()
+        };
         Ok(inner.build_snapshot())
     }
 
@@ -46,10 +79,16 @@ impl AppState {
     pub async fn refresh_all_models(&self) -> Result<AppSnapshot> {
         let provider_ids = {
             let inner = self.lock()?;
+            let codex_signed_in = inner.auth.is_signed_in();
+            let claude_signed_in = inner.claude_auth.is_signed_in();
             inner
                 .providers
                 .providers
                 .iter()
+                .filter(|provider| {
+                    (!codex::is_codex_provider(provider) || codex_signed_in)
+                        && (!claude::is_claude_provider(provider) || claude_signed_in)
+                })
                 .map(|provider| provider.id.clone())
                 .collect::<Vec<_>>()
         };
@@ -58,55 +97,74 @@ impl AppState {
             inner.status = "Add a provider first.".to_owned();
             return Ok(inner.build_snapshot());
         }
+        let mut refreshed = 0usize;
+        let mut errors = 0usize;
         let mut last_snapshot = None;
-        let mut failures = Vec::new();
         for provider_id in provider_ids {
-            match self.refresh_provider_models(&provider_id).await {
-                Ok(snapshot) => last_snapshot = Some(snapshot),
-                Err(error) => failures.push(error.to_string()),
+            match self
+                .refresh_provider_models_with_outcome(&provider_id)
+                .await
+            {
+                Ok(outcome) => {
+                    if outcome.refreshed {
+                        refreshed += 1;
+                    } else {
+                        errors += 1;
+                    }
+                    last_snapshot = Some(outcome.snapshot);
+                }
+                Err(_) => errors += 1,
             }
         }
-        let provider_error_count = {
-            let inner = self.lock()?;
-            inner
-                .providers
-                .providers
-                .iter()
-                .filter(|provider| !provider.error.is_empty())
-                .count()
-        };
-        if !failures.is_empty() || provider_error_count > 0 {
-            let mut inner = self.lock()?;
-            inner.status = format!(
-                "Models refreshed with {} provider error(s).",
-                failures.len() + provider_error_count
-            );
-            return Ok(inner.build_snapshot());
-        }
-        last_snapshot.ok_or_else(|| anyhow!("No providers configured."))
+        let mut inner = self.lock()?;
+        inner.status =
+            format!("{refreshed} provider model(s) updated, {errors} provider error(s).");
+        Ok(last_snapshot
+            .map(|mut snapshot| {
+                snapshot.status = inner.status.clone();
+                snapshot
+            })
+            .unwrap_or_else(|| inner.build_snapshot()))
     }
 
     /// Refreshes one provider's model list from its `/models` endpoint.
     pub async fn refresh_provider_models(&self, provider_id: &str) -> Result<AppSnapshot> {
-        let ctx = {
+        Ok(self
+            .refresh_provider_models_with_outcome(provider_id)
+            .await?
+            .snapshot)
+    }
+
+    /// Refreshes one provider and reports whether the model list updated.
+    async fn refresh_provider_models_with_outcome(
+        &self,
+        provider_id: &str,
+    ) -> Result<RefreshOutcome> {
+        let provider = {
             let mut inner = self.lock()?;
-            let ctx = {
-                let provider = inner
+            let provider = {
+                inner
                     .providers
                     .provider(provider_id)
-                    .ok_or_else(|| anyhow!("Provider not found."))?;
-                OpenAiContext::from_provider(provider)
+                    .ok_or_else(|| anyhow!("Provider not found."))?
+                    .clone()
             };
-            inner.status = format!("Refreshing {} models...", ctx.provider_name);
-            ctx
+            inner.status = format!("Refreshing {} models...", provider.name);
+            provider
         };
-        let result = openai::fetch_models(&ctx).await;
+        let result = if codex::is_codex_provider(&provider) {
+            self.fetch_codex_models_for_provider(&provider).await
+        } else if claude::is_claude_provider(&provider) {
+            self.fetch_claude_models_for_provider(&provider).await
+        } else {
+            openai::fetch_models(&OpenAiContext::from_provider(&provider)).await
+        };
         let mut inner = self.lock()?;
         let provider = inner
             .providers
             .provider_mut(provider_id)
             .ok_or_else(|| anyhow!("Provider not found."))?;
-        match result {
+        let refreshed = match result {
             Ok(models) => {
                 let provider_name = provider.name.clone();
                 provider.models =
@@ -115,20 +173,29 @@ impl AppState {
                     } else {
                         models
                     };
+                provider.enabled = true;
                 provider.error.clear();
                 inner.ensure_selected_model();
                 inner.save_active_session_model_settings()?;
                 inner.status = format!("{provider_name} models refreshed.");
+                true
             }
             Err(error) => {
                 provider.error = error.to_string();
+                provider.enabled = false;
+                inner.ensure_selected_model();
+                inner.save_active_session_model_settings()?;
                 inner.status = format!("Provider error: {error}");
+                false
             }
-        }
+        };
         inner.storage.save_providers(&inner.providers)?;
         inner.storage.save_settings(&inner.settings)?;
         inner.storage.save_sessions(&inner.sessions)?;
-        Ok(inner.build_snapshot())
+        Ok(RefreshOutcome {
+            snapshot: inner.build_snapshot(),
+            refreshed,
+        })
     }
 
     /// Builds a request context and model id from the current selection.
@@ -140,7 +207,36 @@ impl AppState {
             .providers
             .provider(provider_id)
             .ok_or_else(|| anyhow!("Selected provider was not found."))?;
+        if !provider.enabled {
+            return Err(anyhow!(
+                "Selected provider is disabled after a model refresh error."
+            ));
+        }
         Ok((OpenAiContext::from_provider(provider), model.to_owned()))
+    }
+
+    /// Returns whether the selected model belongs to the Codex provider.
+    pub(super) fn selected_provider_is_codex(&self) -> Result<bool> {
+        let inner = self.lock()?;
+        let (provider_id, _) = split_model_key(&inner.settings.model)
+            .ok_or_else(|| anyhow!("Select a provider model first."))?;
+        let provider = inner
+            .providers
+            .provider(provider_id)
+            .ok_or_else(|| anyhow!("Selected provider was not found."))?;
+        Ok(codex::is_codex_provider(provider))
+    }
+
+    /// Returns whether the selected model belongs to the Claude provider.
+    pub(super) fn selected_provider_is_claude(&self) -> Result<bool> {
+        let inner = self.lock()?;
+        let (provider_id, _) = split_model_key(&inner.settings.model)
+            .ok_or_else(|| anyhow!("Select a provider model first."))?;
+        let provider = inner
+            .providers
+            .provider(provider_id)
+            .ok_or_else(|| anyhow!("Selected provider was not found."))?;
+        Ok(claude::is_claude_provider(provider))
     }
 
     /// Ensures commands that require a provider have one.
@@ -175,9 +271,25 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
         api_key: api_key.to_owned(),
         custom_headers,
         built_in: false,
+        enabled: true,
         models: Vec::new(),
         error: String::new(),
     })
+}
+
+/// Fetches and validates a provider model list before saving user input.
+async fn fetch_models_for_save(
+    provider: &ProviderConfig,
+) -> Result<Vec<crate::domain::AvailableModel>> {
+    let ctx = OpenAiContext::from_provider(provider);
+    let models = openai::fetch_models(&ctx).await?;
+    if models.is_empty() {
+        return Err(anyhow!(
+            "{} /models returned an empty model list; provider was not saved.",
+            provider.name
+        ));
+    }
+    Ok(models)
 }
 
 /// Parses a provider custom header JSON object from the UI.
@@ -226,6 +338,12 @@ fn filtered_opencode_models(
             display_name: crate::domain::OPENCODE_DEFAULT_MODEL.to_owned(),
             description: "OpenCode Zen default free model".to_owned(),
             hidden: false,
+            is_default: true,
+            input_modalities: vec!["text".to_owned()],
+            default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
+            thinking_variants: crate::domain::fallback_thinking_variants(),
+            support_verbosity: false,
+            default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
         });
     }
     models.sort_by(|left, right| {

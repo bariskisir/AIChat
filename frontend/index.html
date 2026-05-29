@@ -21,15 +21,39 @@
                 <button id="modelDropdownButton" class="ch-model-dropdown__button" type="button">Select model</button>
                 <select id="modelSelect" title="Model" hidden></select>
                 <div id="modelDropdown" class="ch-model-dropdown__panel" hidden>
-                  <input id="modelSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models">
+                  <input id="modelSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models" autocomplete="off">
                   <div id="modelOptionList" class="ch-model-dropdown__list"></div>
                 </div>
               </div>
             </label>
-            <label class="ch-select-field">
+            <label id="reasoningField" class="ch-select-field">
               <span>Reasoning</span>
               <select id="reasoningSelect" title="Reasoning">
                 <option value="none">none</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label id="thinkingField" class="ch-select-field" hidden>
+              <span>Thinking</span>
+              <select id="thinkingSelect" title="Thinking"></select>
+            </label>
+            <label id="verbosityField" class="ch-select-field" hidden>
+              <span>Verbosity</span>
+              <select id="verbositySelect" title="Verbosity">
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+              </select>
+            </label>
+            <label id="claudeExtendedThinkingField" class="ch-toggle-field" title="Enable extended thinking for Claude" hidden>
+              <span>Extended Thinking</span>
+              <input id="claudeExtendedThinking" class="ch-toggle" type="checkbox">
+            </label>
+            <label id="claudeEffortField" class="ch-select-field" hidden>
+              <span>Effort</span>
+              <select id="claudeEffortSelect" title="Claude effort">
                 <option value="low">low</option>
                 <option value="medium">medium</option>
                 <option value="high">high</option>
@@ -78,53 +102,108 @@
           <strong>Providers</strong>
           <button id="btnCloseProviders" class="ch-btn--icon" type="button" title="Close">X</button>
         </div>
+        <header id="providerStatusRow" class="ch-toolbar ch-provider-status">
+          <span id="providerStatusText">Select a provider or add a new one.</span>
+        </header>
         <div class="ch-provider-panel">
           <aside class="ch-provider-panel__sidebar">
             <button id="btnAddProvider" class="ch-btn--add" type="button" title="Add provider" aria-label="Add provider">+</button>
             <nav id="providerList" class="ch-sidebar__nav" aria-label="Providers"></nav>
           </aside>
-        </div>
-      </dialog>
-      <dialog id="providerEditorDialog" class="ch-dialog ch-provider-editor">
-        <form id="providerForm" method="dialog" class="ch-provider-form">
-          <div class="ch-dialog__header">
-            <strong id="providerEditorTitle">Provider</strong>
-          </div>
-          <input id="providerId" type="hidden">
-          <label>
-            <span>Template</span>
-            <div class="ch-model-dropdown ch-template-dropdown">
-              <button id="providerTemplateButton" class="ch-model-dropdown__button" type="button">Custom</button>
-              <select id="providerTemplate" hidden>
-              <option value="">Custom</option>
-            </select>
-              <div id="providerTemplateDropdown" class="ch-model-dropdown__panel" hidden>
-                <input id="providerTemplateSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search providers">
-                <div id="providerTemplateOptionList" class="ch-model-dropdown__list"></div>
-              </div>
+          <form id="providerForm" method="dialog" class="ch-provider-form">
+            <div class="ch-provider-form__header">
+              <strong id="providerEditorTitle">Provider</strong>
             </div>
-          </label>
-          <label>
-            <span>Provider</span>
-            <input id="providerName" type="text" autocomplete="off" required>
-          </label>
-          <label>
-            <span>API URL</span>
-            <input id="providerApiUrl" type="url" placeholder="https://api.openai.com/v1" required>
-          </label>
-          <label>
-            <span>Token</span>
-            <input id="providerApiKey" type="password" autocomplete="off">
-          </label>
-          <label>
-            <span>Custom Headers</span>
-            <textarea id="providerCustomHeaders" class="ch-provider-form__headers" spellcheck="false" placeholder='{ "x-opencode-session": "" }'></textarea>
-          </label>
-          <div class="ch-dialog__actions">
-            <button id="btnCancelProvider" class="ch-btn--sm" type="button">Cancel</button>
-            <button class="ch-btn--primary" type="submit">Save</button>
-          </div>
-        </form>
+            <input id="providerId" type="hidden">
+            <label id="providerTemplateField">
+              <span>Template</span>
+              <div class="ch-model-dropdown ch-template-dropdown">
+                <button id="providerTemplateButton" class="ch-model-dropdown__button" type="button">Custom</button>
+                <select id="providerTemplate" hidden>
+                  <option value="">Custom</option>
+                </select>
+                <div id="providerTemplateDropdown" class="ch-model-dropdown__panel" hidden>
+                  <input id="providerTemplateSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search providers" autocomplete="off">
+                  <div id="providerTemplateOptionList" class="ch-model-dropdown__list"></div>
+                </div>
+              </div>
+            </label>
+            <label id="providerNameField">
+              <span>Provider</span>
+              <input id="providerName" type="text" autocomplete="off" required>
+            </label>
+            <label id="providerApiUrlField">
+              <span>API URL</span>
+              <input id="providerApiUrl" type="url" placeholder="https://api.openai.com/v1" required>
+            </label>
+            <label id="providerApiKeyField">
+              <span>Token</span>
+              <input id="providerApiKey" type="text" autocomplete="off">
+            </label>
+            <label id="providerCustomHeadersField">
+              <span>Custom Headers</span>
+              <input id="providerCustomHeaders" class="ch-provider-form__headers" type="text" spellcheck="false" placeholder='{ "x-opencode-session": "" }'>
+            </label>
+            <div id="codexLoginRow" class="ch-provider-form__auth" hidden>
+              <button id="btnCodexLogin" class="ch-btn--primary" type="button">Sign in with ChatGPT</button>
+              <section id="codexAccountPanel" class="ch-codex-account" hidden>
+                <dl class="ch-codex-account__details">
+                  <div>
+                    <dt>Email</dt>
+                    <dd id="codexAccountEmail">--</dd>
+                  </div>
+                  <div>
+                    <dt>Plan</dt>
+                    <dd id="codexAccountPlan">--</dd>
+                  </div>
+                  <div>
+                    <dt>Limit</dt>
+                    <dd class="ch-codex-account__limit">
+                      <span id="codexAccountLimit">--</span>
+                      <button id="btnCodexRefresh" class="ch-btn--icon" type="button" title="Refresh Codex account">&#8635;</button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Reset</dt>
+                    <dd id="codexAccountReset">--</dd>
+                  </div>
+                  <div>
+                    <dt>Models</dt>
+                    <dd id="codexAccountModels">--</dd>
+                  </div>
+                </dl>
+                <button id="btnCodexSignOut" class="ch-btn--sm" type="button">Sign out</button>
+              </section>
+            </div>
+            <div id="claudeLoginRow" class="ch-provider-form__auth" hidden>
+              <button id="btnClaudeLogin" class="ch-btn--primary" type="button">Sign in with Claude</button>
+              <section id="claudeAccountPanel" class="ch-codex-account" hidden>
+                <dl class="ch-codex-account__details">
+                  <div>
+                    <dt>Email</dt>
+                    <dd id="claudeAccountEmail">--</dd>
+                  </div>
+                  <div>
+                    <dt>Plan</dt>
+                    <dd id="claudeAccountPlan">--</dd>
+                  </div>
+                  <div>
+                    <dt>Models</dt>
+                    <dd class="ch-codex-account__limit">
+                      <span id="claudeAccountModels">--</span>
+                      <button id="btnClaudeRefresh" class="ch-btn--icon" type="button" title="Refresh Claude account">&#8635;</button>
+                    </dd>
+                  </div>
+                </dl>
+                <button id="btnClaudeSignOut" class="ch-btn--sm" type="button">Sign out</button>
+              </section>
+            </div>
+            <div id="providerActions" class="ch-dialog__actions">
+              <button id="btnCancelProvider" class="ch-btn--sm" type="button">Cancel</button>
+              <button class="ch-btn--primary" type="submit">Check and Save</button>
+            </div>
+          </form>
+        </div>
       </dialog>
     </main>
     <script src="app.js"></script>

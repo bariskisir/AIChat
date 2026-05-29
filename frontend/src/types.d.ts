@@ -6,6 +6,10 @@ interface AppSettings {
   activeSessionId: string;
   compactMode: boolean;
   reasoningEffort: string;
+  thinkingVariant: string;
+  verbosity: string;
+  extendedThinking: boolean;
+  claudeEffort: string;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
@@ -21,6 +25,17 @@ interface AvailableModel {
   displayName: string;
   description: string;
   hidden: boolean;
+  isDefault: boolean;
+  inputModalities: string[];
+  defaultThinkingVariant: string;
+  thinkingVariants: ThinkingVariantOption[];
+  supportVerbosity: boolean;
+  defaultVerbosity: string;
+}
+
+interface ThinkingVariantOption {
+  value: string;
+  description: string;
 }
 
 interface ProviderConfig {
@@ -30,6 +45,7 @@ interface ProviderConfig {
   apiKey: string;
   customHeaders: CustomHeader[];
   builtIn: boolean;
+  enabled: boolean;
   models: AvailableModel[];
   error: string;
 }
@@ -46,8 +62,25 @@ interface ProviderSnapshot {
   error: string;
 }
 
+interface AccountSnapshot {
+  loggedIn: boolean;
+  email: string;
+  error: string;
+}
+
+interface ClaudeAccountSnapshot {
+  loggedIn: boolean;
+  email: string;
+  plan: string;
+  error: string;
+}
+
 interface CatalogSnapshot {
   models: AvailableModel[];
+  thinkingVariants: ThinkingVariantOption[];
+  verbositySupported: boolean;
+  defaultVerbosity: string;
+  limitLabel: string;
 }
 
 interface ChatMessage {
@@ -63,6 +96,8 @@ interface ChatSession {
   title: string;
   model: string;
   reasoningEffort: string;
+  extendedThinking: boolean;
+  claudeEffort: string;
   createdAt: string;
   updatedAt: string;
   messages: ChatMessage[];
@@ -71,6 +106,8 @@ interface ChatSession {
 interface AppSnapshot {
   settings: AppSettings;
   status: string;
+  account: AccountSnapshot;
+  claudeAccount: ClaudeAccountSnapshot;
   providers: ProviderSnapshot;
   catalog: CatalogSnapshot;
   sessions: ChatSession[];
@@ -82,6 +119,10 @@ interface FrontendSettings {
   model: string;
   compactMode: boolean;
   reasoningEffort: string;
+  thinkingVariant: string;
+  verbosity: string;
+  extendedThinking: boolean;
+  claudeEffort: string;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
