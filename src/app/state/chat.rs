@@ -4,8 +4,8 @@ use super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
-    ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
-    split_model_key, CODEX_PROVIDER_URL, CLAUDE_PROVIDER_URL,
+    CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT,
+    fallback_session_title, sanitize_session_title, split_model_key,
 };
 use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
@@ -150,51 +150,23 @@ impl AppState {
     fn spawn_chat_response(&self, work: PendingChatResponse, app_handle: AppHandle) {
         let state = self.clone();
         let active_session_id = work.session_id.clone();
-        let active = ActiveChatResponse {
-            session_id: work.session_id.clone(),
-            assistant_message_id: work.assistant_message_id.clone(),
-            abort_handle: self
-                .runtime
-                .spawn(async move {
-                    let result = state
-                        .execute_chat_response(work.clone(), app_handle.clone())
-                        .await;
-                    match result {
-                        Ok(snapshot) => {
-                            let _ = app_handle.emit(
-                                "app-event",
-                                UiEvent::Snapshot {
-                                    snapshot: Box::new(snapshot),
-                                },
-                            );
-                        }
-                        Err(error) => {
-                            state.finish_failed_chat_response(&work);
-                            state.set_status(&format!("Error: {error}"));
-                            let _ = app_handle.emit(
-                                "app-event",
-                                UiEvent::Error {
-                                    message: error.to_string(),
-                                },
-                            );
-                            if let Ok(snapshot) = state.snapshot() {
-                                let _ = app_handle.emit(
-                                    "app-event",
-                                    UiEvent::Snapshot {
-                                        snapshot: Box::new(snapshot),
-                                    },
-                                );
-                            }
-                        }
+        let assistant_message_id = work.assistant_message_id.clone();
+        let abort_handle = self
+            .runtime
+            .spawn(async move {
+                let result = state
+                    .execute_chat_response(work.clone(), app_handle.clone())
+                    .await;
+                match result {
+                    Ok(snapshot) => Self::emit_snapshot_event(&app_handle, snapshot),
+                    Err(error) => {
+                        state.finish_failed_chat_response(&work);
+                        state.emit_error_snapshot(&app_handle, error);
                     }
-                })
-                .abort_handle(),
-        };
-        if let Ok(mut inner) = self.lock() {
-            inner
-                .active_chat_responses
-                .insert(active_session_id, active);
-        }
+                }
+            })
+            .abort_handle();
+        self.register_active_chat_response(active_session_id, assistant_message_id, abort_handle);
     }
 
     /// Spawns the background task that generates a short session title.
@@ -202,13 +174,7 @@ impl AppState {
         let state = self.clone();
         self.runtime.spawn(async move {
             if let Ok((sid, title)) = state.execute_title_response(work).await {
-                let _ = app_handle.emit(
-                    "app-event",
-                    UiEvent::SessionTitleUpdated {
-                        session_id: sid,
-                        title,
-                    },
-                );
+                Self::emit_session_title_event(&app_handle, sid, title);
             }
         });
     }
@@ -217,14 +183,7 @@ impl AppState {
     async fn execute_title_response(&self, work: PendingTitleResponse) -> Result<(String, String)> {
         let raw = openai::stream_chat_response(&work.ctx, work.request, |_| {}).await?;
         let title = sanitize_session_title(&raw).unwrap_or(work.fallback_title);
-        let mut inner = self.lock()?;
-        if let Ok(session) = inner.session_mut(&work.session_id) {
-            if !session.messages.is_empty() {
-                session.title = title.clone();
-                session.updated_at = Utc::now();
-                inner.storage.save_sessions(&inner.sessions)?;
-            }
-        }
+        self.save_generated_session_title(&work.session_id, &title)?;
         Ok((work.session_id, title))
     }
 
@@ -240,38 +199,15 @@ impl AppState {
 
         let final_answer = openai::stream_chat_response(&work.ctx, work.request, move |partial| {
             stream_state.append_streamed_text(&sid, &mid, &partial);
-            let _ = app_handle.emit(
-                "app-event",
-                UiEvent::AssistantDelta {
-                    session_id: sid.clone(),
-                    message_id: mid.clone(),
-                    text: partial,
-                },
-            );
+            Self::emit_assistant_delta_event(&app_handle, &sid, &mid, partial);
         })
         .await?;
 
-        let mut inner = self.lock()?;
-        if let Ok(session) = inner.session_mut(&work.session_id) {
-            if let Some(msg) = session
-                .messages
-                .iter_mut()
-                .find(|m| m.id == work.assistant_message_id)
-            {
-                msg.text = final_answer;
-            }
-            session.updated_at = Utc::now();
-        }
-        if inner
-            .active_chat_responses
-            .get(&work.session_id)
-            .is_some_and(|a| a.assistant_message_id == work.assistant_message_id)
-        {
-            inner.active_chat_responses.remove(&work.session_id);
-        }
-        inner.status = "Answer ready.".to_owned();
-        inner.storage.save_sessions(&inner.sessions)?;
-        Ok(inner.build_snapshot())
+        self.finish_successful_chat_response(
+            &work.session_id,
+            &work.assistant_message_id,
+            final_answer,
+        )
     }
 
     /// Appends one streamed text delta to the assistant message in memory.
@@ -296,6 +232,130 @@ impl AppState {
     /// Cleans up placeholders and running-state bookkeeping after a failed stream.
     fn finish_failed_chat_response(&self, work: &PendingChatResponse) {
         self.finish_failed_assistant_placeholder(&work.session_id, &work.assistant_message_id);
+    }
+
+    /// Registers a running chat response so later stop/failure paths can find it.
+    pub(in crate::app::state) fn register_active_chat_response(
+        &self,
+        session_id: String,
+        assistant_message_id: String,
+        abort_handle: AbortHandle,
+    ) {
+        let active = ActiveChatResponse {
+            session_id: session_id.clone(),
+            assistant_message_id,
+            abort_handle,
+        };
+        if let Ok(mut inner) = self.lock() {
+            inner.active_chat_responses.insert(session_id, active);
+        }
+    }
+
+    /// Emits a complete snapshot to the frontend event stream.
+    pub(in crate::app::state) fn emit_snapshot_event(
+        app_handle: &AppHandle,
+        snapshot: AppSnapshot,
+    ) {
+        let _ = app_handle.emit(
+            "app-event",
+            UiEvent::Snapshot {
+                snapshot: Box::new(snapshot),
+            },
+        );
+    }
+
+    /// Emits one streamed assistant delta to the frontend event stream.
+    pub(in crate::app::state) fn emit_assistant_delta_event(
+        app_handle: &AppHandle,
+        session_id: &str,
+        message_id: &str,
+        text: String,
+    ) {
+        let _ = app_handle.emit(
+            "app-event",
+            UiEvent::AssistantDelta {
+                session_id: session_id.to_owned(),
+                message_id: message_id.to_owned(),
+                text,
+            },
+        );
+    }
+
+    /// Emits a generated session title update to the frontend event stream.
+    pub(in crate::app::state) fn emit_session_title_event(
+        app_handle: &AppHandle,
+        session_id: String,
+        title: String,
+    ) {
+        let _ = app_handle.emit(
+            "app-event",
+            UiEvent::SessionTitleUpdated { session_id, title },
+        );
+    }
+
+    /// Emits an error event and follows it with the newest available snapshot.
+    pub(in crate::app::state) fn emit_error_snapshot(
+        &self,
+        app_handle: &AppHandle,
+        error: anyhow::Error,
+    ) {
+        self.set_status(&format!("Error: {error}"));
+        let _ = app_handle.emit(
+            "app-event",
+            UiEvent::Error {
+                message: error.to_string(),
+            },
+        );
+        if let Ok(snapshot) = self.snapshot() {
+            Self::emit_snapshot_event(app_handle, snapshot);
+        }
+    }
+
+    /// Stores a generated session title when the target session still has content.
+    pub(in crate::app::state) fn save_generated_session_title(
+        &self,
+        session_id: &str,
+        title: &str,
+    ) -> Result<()> {
+        let mut inner = self.lock()?;
+        if let Ok(session) = inner.session_mut(session_id)
+            && !session.messages.is_empty()
+        {
+            session.title = title.to_owned();
+            session.updated_at = Utc::now();
+            inner.storage.save_sessions(&inner.sessions)?;
+        }
+        Ok(())
+    }
+
+    /// Finalizes a successful stream, removes active bookkeeping, and returns a snapshot.
+    pub(in crate::app::state) fn finish_successful_chat_response(
+        &self,
+        session_id: &str,
+        assistant_message_id: &str,
+        final_answer: String,
+    ) -> Result<AppSnapshot> {
+        let mut inner = self.lock()?;
+        if let Ok(session) = inner.session_mut(session_id) {
+            if let Some(msg) = session
+                .messages
+                .iter_mut()
+                .find(|m| m.id == assistant_message_id)
+            {
+                msg.text = final_answer;
+            }
+            session.updated_at = Utc::now();
+        }
+        if inner
+            .active_chat_responses
+            .get(session_id)
+            .is_some_and(|a| a.assistant_message_id == assistant_message_id)
+        {
+            inner.active_chat_responses.remove(session_id);
+        }
+        inner.status = "Answer ready.".to_owned();
+        inner.storage.save_sessions(&inner.sessions)?;
+        Ok(inner.build_snapshot())
     }
 
     /// Cleans up a pending assistant placeholder after a failed stream.

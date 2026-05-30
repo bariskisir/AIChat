@@ -18,11 +18,11 @@
             <label class="ch-select-field">
               <span>Model</span>
               <div class="ch-model-dropdown">
-                <button id="modelDropdownButton" class="ch-model-dropdown__button" type="button">Select model</button>
+                <button id="modelDropdownButton" class="ch-model-dropdown__button" type="button" aria-haspopup="listbox" aria-expanded="false">Select model</button>
                 <select id="modelSelect" title="Model" hidden></select>
                 <div id="modelDropdown" class="ch-model-dropdown__panel" hidden>
                   <input id="modelSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models" autocomplete="off">
-                  <div id="modelOptionList" class="ch-model-dropdown__list"></div>
+                  <div id="modelOptionList" class="ch-model-dropdown__list" role="listbox"></div>
                 </div>
               </div>
             </label>
@@ -119,13 +119,13 @@
             <label id="providerTemplateField">
               <span>Template</span>
               <div class="ch-model-dropdown ch-template-dropdown">
-                <button id="providerTemplateButton" class="ch-model-dropdown__button" type="button">Custom</button>
+                <button id="providerTemplateButton" class="ch-model-dropdown__button" type="button" aria-haspopup="listbox" aria-expanded="false">Custom</button>
                 <select id="providerTemplate" hidden>
                   <option value="">Custom</option>
                 </select>
                 <div id="providerTemplateDropdown" class="ch-model-dropdown__panel" hidden>
                   <input id="providerTemplateSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search providers" autocomplete="off">
-                  <div id="providerTemplateOptionList" class="ch-model-dropdown__list"></div>
+                  <div id="providerTemplateOptionList" class="ch-model-dropdown__list" role="listbox"></div>
                 </div>
               </div>
             </label>
@@ -223,11 +223,11 @@
           <label class="ch-select-field ch-settings-title-gen">
             <span>Title Generation</span>
             <div class="ch-model-dropdown">
-              <button id="settingsTitleGenDropdownButton" class="ch-model-dropdown__button" type="button">Current</button>
+              <button id="settingsTitleGenDropdownButton" class="ch-model-dropdown__button" type="button" aria-haspopup="listbox" aria-expanded="false">Current</button>
               <select id="settingsTitleGenSelect" hidden></select>
               <div id="settingsTitleGenDropdown" class="ch-model-dropdown__panel" hidden>
                 <input id="settingsTitleGenSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models" autocomplete="off">
-                <div id="settingsTitleGenOptionList" class="ch-model-dropdown__list"></div>
+                <div id="settingsTitleGenOptionList" class="ch-model-dropdown__list" role="listbox"></div>
               </div>
             </div>
           </label>

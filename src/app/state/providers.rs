@@ -355,3 +355,76 @@ fn filtered_opencode_models(
     });
     models
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{
+        AvailableModel, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY, OPENCODE_DEFAULT_MODEL,
+    };
+
+    /// Builds a minimal available model fixture for provider filtering tests.
+    fn model(id: &str) -> AvailableModel {
+        AvailableModel {
+            provider_id: OPENCODE_PROVIDER_ID.to_owned(),
+            provider_name: "OpenCode Zen".to_owned(),
+            model: id.to_owned(),
+            display_name: id.to_owned(),
+            description: String::new(),
+            hidden: false,
+            is_default: false,
+            input_modalities: vec!["text".to_owned()],
+            default_thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
+            thinking_variants: crate::domain::fallback_thinking_variants(),
+            support_verbosity: false,
+            default_verbosity: DEFAULT_VERBOSITY.to_owned(),
+        }
+    }
+
+    /// Accepts structured custom headers from the provider editor JSON field.
+    #[test]
+    fn parse_custom_headers_accepts_string_object() {
+        let headers = parse_custom_headers(r#"{ "x-test": "one", "x-empty": "" }"#).unwrap();
+
+        assert_eq!(headers.len(), 2);
+        assert!(
+            headers
+                .iter()
+                .any(|item| item.name == "x-test" && item.value == "one")
+        );
+        assert!(
+            headers
+                .iter()
+                .any(|item| item.name == "x-empty" && item.value.is_empty())
+        );
+    }
+
+    /// Rejects malformed custom header values before a provider is saved.
+    #[test]
+    fn parse_custom_headers_rejects_non_string_values() {
+        let error = parse_custom_headers(r#"{ "x-test": 1 }"#).unwrap_err();
+
+        assert!(
+            error
+                .to_string()
+                .contains("Custom header values must be strings")
+        );
+    }
+
+    /// Keeps only free OpenCode models and injects the default free model when absent.
+    #[test]
+    fn filtered_opencode_models_keeps_free_models_with_default_first() {
+        let models = filtered_opencode_models(vec![model("paid-model"), model("alpha-free")]);
+
+        assert!(
+            models
+                .iter()
+                .all(|item| item.model.to_lowercase().contains("free"))
+        );
+        assert_eq!(
+            models.first().map(|item| item.model.as_str()),
+            Some(OPENCODE_DEFAULT_MODEL)
+        );
+        assert!(models.iter().any(|item| item.model == "alpha-free"));
+    }
+}

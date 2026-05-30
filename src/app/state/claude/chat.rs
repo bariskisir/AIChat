@@ -1,8 +1,7 @@
 //! Claude chat submission and streaming state helpers.
 
 use super::super::AppState;
-use crate::app::events::UiEvent;
-use crate::app::state::chat::{ActiveChatResponse, title_prompt};
+use crate::app::state::chat::title_prompt;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
@@ -10,7 +9,7 @@ use crate::domain::{
 use crate::infra::claude;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
-use tauri::{AppHandle, Emitter};
+use tauri::AppHandle;
 
 #[derive(Clone)]
 struct PendingClaudeChatResponse {
@@ -62,24 +61,23 @@ impl AppState {
             let conv_id = uuid_v4();
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
             let should_generate_title = session.title == "New chat" && session.messages.is_empty();
-            let title_work = if should_generate_title
-                && !title_gen_model.trim().eq_ignore_ascii_case("none")
-            {
-                Some(PendingClaudeTitleResponse {
-                    session_id: session_id.clone(),
-                    fallback_title: fallback_session_title(&user_message),
-                    conv_id: uuid_v4(),
-                    request: claude::ClaudeChatRequest {
-                        prompt: title_prompt(&user_message),
-                        model: model.clone(),
-                        extended_thinking: false,
-                        effort: None,
-                        image_data_urls: Vec::new(),
-                    },
-                })
-            } else {
-                None
-            };
+            let title_work =
+                if should_generate_title && !title_gen_model.trim().eq_ignore_ascii_case("none") {
+                    Some(PendingClaudeTitleResponse {
+                        session_id: session_id.clone(),
+                        fallback_title: fallback_session_title(&user_message),
+                        conv_id: uuid_v4(),
+                        request: claude::ClaudeChatRequest {
+                            prompt: title_prompt(&user_message),
+                            model: model.clone(),
+                            extended_thinking: false,
+                            effort: None,
+                            image_data_urls: Vec::new(),
+                        },
+                    })
+                } else {
+                    None
+                };
             let assistant_message = ChatMessage::assistant_placeholder();
             if session.title == "New chat" {
                 session.title = fallback_session_title(&user_message);
@@ -117,54 +115,26 @@ impl AppState {
     fn spawn_claude_chat_response(&self, work: PendingClaudeChatResponse, app_handle: AppHandle) {
         let state = self.clone();
         let active_session_id = work.session_id.clone();
-        let active = ActiveChatResponse {
-            session_id: work.session_id.clone(),
-            assistant_message_id: work.assistant_message_id.clone(),
-            abort_handle: self
-                .runtime
-                .spawn(async move {
-                    let result = state
-                        .execute_claude_chat_response(work.clone(), app_handle.clone())
-                        .await;
-                    match result {
-                        Ok(snapshot) => {
-                            let _ = app_handle.emit(
-                                "app-event",
-                                UiEvent::Snapshot {
-                                    snapshot: Box::new(snapshot),
-                                },
-                            );
-                        }
-                        Err(error) => {
-                            state.finish_failed_assistant_placeholder(
-                                &work.session_id,
-                                &work.assistant_message_id,
-                            );
-                            state.set_status(&format!("Error: {error}"));
-                            let _ = app_handle.emit(
-                                "app-event",
-                                UiEvent::Error {
-                                    message: error.to_string(),
-                                },
-                            );
-                            if let Ok(snapshot) = state.snapshot() {
-                                let _ = app_handle.emit(
-                                    "app-event",
-                                    UiEvent::Snapshot {
-                                        snapshot: Box::new(snapshot),
-                                    },
-                                );
-                            }
-                        }
+        let assistant_message_id = work.assistant_message_id.clone();
+        let abort_handle = self
+            .runtime
+            .spawn(async move {
+                let result = state
+                    .execute_claude_chat_response(work.clone(), app_handle.clone())
+                    .await;
+                match result {
+                    Ok(snapshot) => Self::emit_snapshot_event(&app_handle, snapshot),
+                    Err(error) => {
+                        state.finish_failed_assistant_placeholder(
+                            &work.session_id,
+                            &work.assistant_message_id,
+                        );
+                        state.emit_error_snapshot(&app_handle, error);
                     }
-                })
-                .abort_handle(),
-        };
-        if let Ok(mut inner) = self.lock() {
-            inner
-                .active_chat_responses
-                .insert(active_session_id, active);
-        }
+                }
+            })
+            .abort_handle();
+        self.register_active_chat_response(active_session_id, assistant_message_id, abort_handle);
     }
 
     /// Spawns a hidden Claude title request.
@@ -172,13 +142,7 @@ impl AppState {
         let state = self.clone();
         self.runtime.spawn(async move {
             if let Ok((sid, title)) = state.execute_claude_title_response(work).await {
-                let _ = app_handle.emit(
-                    "app-event",
-                    UiEvent::SessionTitleUpdated {
-                        session_id: sid,
-                        title,
-                    },
-                );
+                Self::emit_session_title_event(&app_handle, sid, title);
             }
         });
     }
@@ -195,14 +159,7 @@ impl AppState {
         let raw = claude::stream_chat_response(&ctx, &work.conv_id, work.request, |_| {}).await?;
         let _ = claude::delete_conversation(&ctx, &work.conv_id).await;
         let title = sanitize_session_title(&raw).unwrap_or(work.fallback_title);
-        let mut inner = self.lock()?;
-        if let Ok(session) = inner.session_mut(&work.session_id)
-            && !session.messages.is_empty()
-        {
-            session.title = title.clone();
-            session.updated_at = Utc::now();
-            inner.storage.save_sessions(&inner.sessions)?;
-        }
+        self.save_generated_session_title(&work.session_id, &title)?;
         Ok((work.session_id, title))
     }
 
@@ -222,38 +179,15 @@ impl AppState {
         let final_answer =
             claude::stream_chat_response(&ctx, &work.conv_id, work.request, move |partial| {
                 stream_state.append_streamed_text(&sid, &mid, &partial);
-                let _ = app_handle.emit(
-                    "app-event",
-                    UiEvent::AssistantDelta {
-                        session_id: sid.clone(),
-                        message_id: mid.clone(),
-                        text: partial,
-                    },
-                );
+                Self::emit_assistant_delta_event(&app_handle, &sid, &mid, partial);
             })
             .await?;
         let _ = claude::delete_conversation(&ctx, &work.conv_id).await;
-        let mut inner = self.lock()?;
-        if let Ok(session) = inner.session_mut(&work.session_id) {
-            if let Some(msg) = session
-                .messages
-                .iter_mut()
-                .find(|m| m.id == work.assistant_message_id)
-            {
-                msg.text = final_answer;
-            }
-            session.updated_at = Utc::now();
-        }
-        if inner
-            .active_chat_responses
-            .get(&work.session_id)
-            .is_some_and(|a| a.assistant_message_id == work.assistant_message_id)
-        {
-            inner.active_chat_responses.remove(&work.session_id);
-        }
-        inner.status = "Answer ready.".to_owned();
-        inner.storage.save_sessions(&inner.sessions)?;
-        Ok(inner.build_snapshot())
+        self.finish_successful_chat_response(
+            &work.session_id,
+            &work.assistant_message_id,
+            final_answer,
+        )
     }
 }
 

@@ -8,6 +8,7 @@
 /// <reference path="./markdown.ts" />
 /// <reference path="./render.ts" />
 /// <reference path="./app-context.ts" />
+/// <reference path="./searchable-dropdown.ts" />
 /// <reference path="./model-dropdown.ts" />
 /// <reference path="./provider-template-dropdown.ts" />
 /// <reference path="./provider-account-panels.ts" />

@@ -518,6 +518,8 @@ namespace Renderer {
       button.className = "ch-model-dropdown__option";
       button.dataset.modelValue = option.value;
       button.classList.toggle("is-active", option.value === refs.modelSelect.value);
+      button.setAttribute("role", "option");
+      button.setAttribute("aria-selected", String(option.value === refs.modelSelect.value));
       button.textContent = option.label;
       button.title = option.title || option.label;
       refs.modelOptionList.appendChild(button);
