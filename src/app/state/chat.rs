@@ -5,6 +5,7 @@ use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
+    split_model_key, CODEX_PROVIDER_URL, CLAUDE_PROVIDER_URL,
 };
 use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
@@ -67,25 +68,21 @@ impl AppState {
             inner.save_active_session_model_settings()?;
             let model_key = inner.settings.model.clone();
             let reasoning_effort = normalized_reasoning_effort(&inner.settings.reasoning_effort);
+            let title_gen_model = inner.settings.title_gen_model.clone();
+            let title_provider = resolve_title_provider(&title_gen_model, &inner.providers);
             let session = inner.active_session_mut()?;
 
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
             let should_generate_title = session.title == "New chat" && session.messages.is_empty();
             let title_work = if should_generate_title {
-                Some(PendingTitleResponse {
-                    session_id: session_id.clone(),
-                    fallback_title: fallback_session_title(&user_message),
-                    ctx: ctx.clone(),
-                    request: OpenAiChatRequest {
-                        model: selected_model.clone(),
-                        messages: vec![OpenAiMessage {
-                            role: "user".to_owned(),
-                            text: title_prompt(&user_message),
-                            image_data_urls: Vec::new(),
-                        }],
-                        reasoning_effort: None,
-                    },
-                })
+                build_title_response(
+                    &title_gen_model,
+                    title_provider.as_ref(),
+                    &session_id,
+                    &user_message,
+                    &ctx,
+                    &selected_model,
+                )
             } else {
                 None
             };
@@ -375,4 +372,68 @@ fn normalized_reasoning_effort(value: &str) -> Option<String> {
         "low" | "medium" | "high" => Some(value.to_owned()),
         _ => None,
     }
+}
+
+/// Resolves the target provider and model for title generation.
+fn resolve_title_provider(
+    title_gen_model: &str,
+    providers: &crate::domain::ProviderStorage,
+) -> Option<(crate::domain::ProviderConfig, String)> {
+    let normalized = title_gen_model.trim().to_lowercase();
+    if normalized.is_empty() || normalized == "current" || normalized == "none" {
+        return None;
+    }
+    let (provider_id, model) = split_model_key(title_gen_model)?;
+    let provider = providers.provider(provider_id)?.clone();
+    if provider.api_url == CODEX_PROVIDER_URL || provider.api_url == CLAUDE_PROVIDER_URL {
+        return None;
+    }
+    Some((provider, model.to_owned()))
+}
+
+/// Builds a title generation response based on the title_gen_model setting.
+fn build_title_response(
+    title_gen_model: &str,
+    title_provider: Option<&(crate::domain::ProviderConfig, String)>,
+    session_id: &str,
+    user_message: &ChatMessage,
+    current_ctx: &OpenAiContext,
+    current_model: &str,
+) -> Option<PendingTitleResponse> {
+    let fallback_title = fallback_session_title(user_message);
+    let normalized = title_gen_model.trim().to_lowercase();
+    if normalized == "none" {
+        return None;
+    }
+    if let Some((provider, model)) = title_provider {
+        let ctx = OpenAiContext::from_provider(provider);
+        return Some(PendingTitleResponse {
+            session_id: session_id.to_owned(),
+            fallback_title,
+            ctx,
+            request: OpenAiChatRequest {
+                model: model.clone(),
+                messages: vec![OpenAiMessage {
+                    role: "user".to_owned(),
+                    text: title_prompt(user_message),
+                    image_data_urls: Vec::new(),
+                }],
+                reasoning_effort: None,
+            },
+        });
+    }
+    Some(PendingTitleResponse {
+        session_id: session_id.to_owned(),
+        fallback_title,
+        ctx: current_ctx.clone(),
+        request: OpenAiChatRequest {
+            model: current_model.to_owned(),
+            messages: vec![OpenAiMessage {
+                role: "user".to_owned(),
+                text: title_prompt(user_message),
+                image_data_urls: Vec::new(),
+            }],
+            reasoning_effort: None,
+        },
+    })
 }

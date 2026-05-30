@@ -57,11 +57,14 @@ impl AppState {
             let model = model.to_owned();
             let extended_thinking = inner.settings.extended_thinking;
             let effort = claude_effort_for_model(&inner.settings.claude_effort, &model);
+            let title_gen_model = inner.settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let conv_id = uuid_v4();
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
             let should_generate_title = session.title == "New chat" && session.messages.is_empty();
-            let title_work = if should_generate_title {
+            let title_work = if should_generate_title
+                && !title_gen_model.trim().eq_ignore_ascii_case("none")
+            {
                 Some(PendingClaudeTitleResponse {
                     session_id: session_id.clone(),
                     fallback_title: fallback_session_title(&user_message),

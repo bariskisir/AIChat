@@ -44,6 +44,12 @@ pub struct AppSettings {
     pub window_y: Option<i32>,
     #[serde(default)]
     pub window_layout_initialized: bool,
+    #[serde(default = "default_show_footer")]
+    pub show_footer: bool,
+    #[serde(default = "default_show_info_bar")]
+    pub show_info_bar: bool,
+    #[serde(default)]
+    pub title_gen_model: String,
 }
 
 impl Default for AppSettings {
@@ -65,6 +71,9 @@ impl Default for AppSettings {
             window_x: None,
             window_y: None,
             window_layout_initialized: true,
+            show_footer: true,
+            show_info_bar: true,
+            title_gen_model: String::new(),
         }
     }
 }
@@ -100,6 +109,16 @@ fn default_window_height() -> u32 {
 /// Supplies the initial sidebar width for persisted settings.
 fn default_sidebar_width() -> u32 {
     DEFAULT_SIDEBAR_WIDTH
+}
+
+/// Supplies the default show-footer setting.
+fn default_show_footer() -> bool {
+    true
+}
+
+/// Supplies the default show-info-bar setting.
+fn default_show_info_bar() -> bool {
+    true
 }
 
 /// Detects Windows' minimized-window off-screen position sentinel.

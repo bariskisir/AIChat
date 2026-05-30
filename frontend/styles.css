@@ -1031,6 +1031,51 @@ textarea:disabled {
   height: min(620px, calc(100vh - 40px));
 }
 
+.ch-settings-dialog {
+  width: min(960px, calc(100vw - 40px));
+  height: min(480px, calc(100vh - 40px));
+}
+
+.ch-settings-panel {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+
+.ch-settings-panel .ch-toggle-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-sm);
+}
+
+.ch-settings-panel .ch-toggle-field span {
+  color: var(--text);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-bold);
+}
+
+.ch-settings-title-gen {
+  display: grid;
+  gap: var(--spacing-xs);
+}
+
+.ch-settings-title-gen > span {
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.ch-settings-title-gen .ch-model-dropdown {
+  width: 100%;
+}
+
+.ch-settings-title-gen .ch-model-dropdown__panel {
+  width: 100%;
+  max-width: none;
+}
+
 .ch-provider-status {
   min-height: var(--control-height-sm);
 }

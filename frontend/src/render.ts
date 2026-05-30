@@ -41,6 +41,8 @@ namespace Renderer {
     });
     setCompactMode(refs, state.settings.compactMode);
     setSidebarWidth(refs, state.settings.sidebarWidth);
+    applyShowFooter(refs, state.settings.showFooter);
+    applyShowInfoBar(refs, state.settings.showInfoBar);
     renderImagePreview(refs, model);
     updateButtons(refs, model);
   }
@@ -122,6 +124,7 @@ namespace Renderer {
 
   // Reads current UI controls into a settings payload.
   export function collectSettings(refs: DomRefs.Refs): FrontendSettings {
+    const state = AppContext.model.appState;
     return {
       model: refs.modelSelect.value,
       compactMode: refs.appShell.classList.contains("is-compact"),
@@ -134,6 +137,9 @@ namespace Renderer {
       windowWidth: Math.round(window.outerWidth || window.innerWidth),
       windowHeight: Math.round(window.outerHeight || window.innerHeight),
       sidebarWidth: currentSidebarWidth(refs),
+      showFooter: state?.settings.showFooter ?? true,
+      showInfoBar: state?.settings.showInfoBar ?? true,
+      titleGenModel: state?.settings.titleGenModel ?? "",
     };
   }
 
@@ -180,6 +186,20 @@ namespace Renderer {
     sidebar.style.width = `${clamped}px`;
   }
 
+  // Shows or hides the footer row.
+  export function applyShowFooter(refs: DomRefs.Refs, show: boolean): void {
+    const footer = refs.btnDeveloper.closest<HTMLElement>(".ch-footer");
+    if (footer) {
+      footer.style.display = show ? "" : "none";
+    }
+  }
+
+  // Shows or hides the status/info bar at the top.
+  export function applyShowInfoBar(refs: DomRefs.Refs, show: boolean): void {
+    refs.statusRow.style.display = show ? "" : "none";
+    refs.statusRow.classList.toggle("is-hidden", !show);
+  }
+
   // Updates control enabled states and active labels.
   export function updateButtons(refs: DomRefs.Refs, model: UiModel): void {
     const state = model.appState;
@@ -195,11 +215,11 @@ namespace Renderer {
     refs.claudeExtendedThinking.disabled = !configured;
     refs.claudeEffortSelect.disabled = !configured;
     refs.inputComposer.disabled = !configured;
-    refs.btnSend.disabled = !configured || generating || (!refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
+    refs.btnSend.disabled = !configured || (!generating && !refs.inputComposer.value.trim() && model.pendingImageDataUrls.length === 0);
     refs.btnSend.classList.toggle("is-stop", generating);
     refs.btnSend.textContent = generating ? "Esc to Stop" : "Send";
-    refs.btnSend.title = generating ? "Press Esc to stop" : "Send message";
-    refs.btnSend.setAttribute("aria-label", generating ? "Press Esc to stop" : "Send message");
+    refs.btnSend.title = generating ? "Click or press Esc to stop" : "Send message";
+    refs.btnSend.setAttribute("aria-label", generating ? "Click or press Esc to stop" : "Send message");
     refs.btnNewSession.disabled = !configured;
     refs.btnCopyChat.disabled = !configured || (state ? !hasCopyableMessages(state.activeSession) : true);
     refs.btnAlwaysOnTop.classList.toggle("is-active", state?.settings.alwaysOnTop ?? false);

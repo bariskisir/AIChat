@@ -32,7 +32,7 @@ namespace Composer {
     const refs = AppContext.refs;
     const model = AppContext.model;
     if (model.appState?.isGenerating) {
-      Renderer.renderStatus(refs, "Press Esc to stop.");
+      void stopActiveAnswer();
       return;
     }
     const text = refs.inputComposer.value.trim();
@@ -56,7 +56,7 @@ namespace Composer {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       if (AppContext.model.appState?.isGenerating) {
-        Renderer.renderStatus(AppContext.refs, "Press Esc to stop.");
+        Renderer.renderStatus(AppContext.refs, "Press Esc or click Stop to stop.");
         return;
       }
       AppContext.refs.formComposer.requestSubmit();

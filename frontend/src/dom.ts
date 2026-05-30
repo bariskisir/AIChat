@@ -79,6 +79,16 @@ namespace DomRefs {
     btnCopyChat: HTMLButtonElement;
     btnDeveloper: HTMLButtonElement;
     btnSource: HTMLButtonElement;
+    btnSettings: HTMLButtonElement;
+    settingsDialog: HTMLDialogElement;
+    btnCloseSettings: HTMLButtonElement;
+    settingsShowFooter: HTMLInputElement;
+    settingsShowInfoBar: HTMLInputElement;
+    settingsTitleGenDropdownButton: HTMLButtonElement;
+    settingsTitleGenDropdown: HTMLElement;
+    settingsTitleGenSearchInput: HTMLInputElement;
+    settingsTitleGenOptionList: HTMLElement;
+    settingsTitleGenSelect: HTMLSelectElement;
   }
 
   // Resolves all static DOM nodes used by the app.
@@ -161,6 +171,16 @@ namespace DomRefs {
       btnCopyChat: get("btnCopyChat"),
       btnDeveloper: get("btnDeveloper"),
       btnSource: get("btnSource"),
+      btnSettings: get("btnSettings"),
+      settingsDialog: get("settingsDialog"),
+      btnCloseSettings: get("btnCloseSettings"),
+      settingsShowFooter: get("settingsShowFooter"),
+      settingsShowInfoBar: get("settingsShowInfoBar"),
+      settingsTitleGenDropdownButton: get("settingsTitleGenDropdownButton"),
+      settingsTitleGenDropdown: get("settingsTitleGenDropdown"),
+      settingsTitleGenSearchInput: get("settingsTitleGenSearchInput"),
+      settingsTitleGenOptionList: get("settingsTitleGenOptionList"),
+      settingsTitleGenSelect: get("settingsTitleGenSelect"),
     };
   }
 

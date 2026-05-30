@@ -25,6 +25,9 @@ impl AppState {
         inner.settings.extended_thinking = input.extended_thinking;
         inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
         inner.settings.always_on_top = input.always_on_top;
+        inner.settings.show_footer = input.show_footer;
+        inner.settings.show_info_bar = input.show_info_bar;
+        inner.settings.title_gen_model = input.title_gen_model;
         inner.save_active_session_model_settings()?;
         if let Some(width) = input.window_width {
             inner.settings.window_width = width.max(MIN_WINDOW_WIDTH);

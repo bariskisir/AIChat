@@ -76,6 +76,12 @@ pub struct SettingsInput {
     pub window_height: Option<u32>,
     #[serde(default)]
     pub sidebar_width: Option<u32>,
+    #[serde(default = "default_show_footer")]
+    pub show_footer: bool,
+    #[serde(default = "default_show_info_bar")]
+    pub show_info_bar: bool,
+    #[serde(default)]
+    pub title_gen_model: String,
 }
 
 /// Returns the fallback Codex thinking setting for older frontends.
@@ -91,6 +97,16 @@ fn default_verbosity_setting() -> String {
 /// Returns the fallback Claude effort setting for older frontends.
 fn default_claude_effort() -> String {
     "high".to_owned()
+}
+
+/// Returns the default show-footer setting for older frontends.
+fn default_show_footer() -> bool {
+    true
+}
+
+/// Returns the default show-info-bar setting for older frontends.
+fn default_show_info_bar() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, Deserialize)]

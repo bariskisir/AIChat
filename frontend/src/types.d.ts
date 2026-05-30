@@ -16,6 +16,9 @@ interface AppSettings {
   sidebarWidth: number;
   windowX?: number;
   windowY?: number;
+  showFooter: boolean;
+  showInfoBar: boolean;
+  titleGenModel: string;
 }
 
 interface AvailableModel {
@@ -127,6 +130,9 @@ interface FrontendSettings {
   windowWidth: number;
   windowHeight: number;
   sidebarWidth: number;
+  showFooter: boolean;
+  showInfoBar: boolean;
+  titleGenModel: string;
 }
 
 interface UiEventPayload {

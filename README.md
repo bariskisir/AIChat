@@ -1,6 +1,6 @@
 # AI Chat
 
-AI Chat is a compact Windows-focused Tauri desktop client for Codex (OAuth), Claude (Oauth), and OpenAI-compatible chat APIs.
+AI Chat is a compact Windows-focused Tauri desktop client for Codex (OAuth), Claude (OAuth), and OpenAI-compatible chat APIs.
 
 ![AI Chat interface](images/interface.png)
 

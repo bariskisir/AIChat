@@ -12,6 +12,7 @@
 /// <reference path="./provider-template-dropdown.ts" />
 /// <reference path="./provider-account-panels.ts" />
 /// <reference path="./provider-controls.ts" />
+/// <reference path="./settings-controls.ts" />
 /// <reference path="./clipboard.ts" />
 /// <reference path="./composer.ts" />
 /// <reference path="./resize.ts" />
@@ -45,6 +46,7 @@ namespace App {
     Renderer.bindScrollTracking(refs, model);
     ModelDropdown.bind(refs, model);
     ProviderControls.bind(refs, model);
+    SettingsControls.bind(refs);
     Composer.bind(refs, model);
     ResizeControls.bind(refs);
   }

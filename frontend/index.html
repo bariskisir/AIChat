@@ -69,6 +69,7 @@
             <button id="btnCompact" class="ch-btn--sm" type="button">Compact</button>
             <button id="btnAlwaysOnTop" class="ch-btn--sm" type="button" aria-pressed="false">Always on Top</button>
             <button id="btnProviders" class="ch-btn--sm" type="button">Providers</button>
+            <button id="btnSettings" class="ch-btn--sm" type="button">Settings</button>
           </div>
           <button id="btnCopyChat" class="ch-btn--sm ch-btn--copy" type="button" title="Copy chat" aria-label="Copy chat">&#9112;</button>
         </section>
@@ -203,6 +204,33 @@
               <button class="ch-btn--primary" type="submit">Check and Save</button>
             </div>
           </form>
+        </div>
+      </dialog>
+      <dialog id="settingsDialog" class="ch-dialog ch-settings-dialog">
+        <div class="ch-dialog__header">
+          <strong>Settings</strong>
+          <button id="btnCloseSettings" class="ch-btn--icon" type="button" title="Close">X</button>
+        </div>
+        <div class="ch-settings-panel">
+          <label class="ch-toggle-field">
+            <span>Show Footer</span>
+            <input id="settingsShowFooter" class="ch-toggle" type="checkbox" checked>
+          </label>
+          <label class="ch-toggle-field">
+            <span>Show Information Bar</span>
+            <input id="settingsShowInfoBar" class="ch-toggle" type="checkbox" checked>
+          </label>
+          <label class="ch-select-field ch-settings-title-gen">
+            <span>Title Generation</span>
+            <div class="ch-model-dropdown">
+              <button id="settingsTitleGenDropdownButton" class="ch-model-dropdown__button" type="button">Current</button>
+              <select id="settingsTitleGenSelect" hidden></select>
+              <div id="settingsTitleGenDropdown" class="ch-model-dropdown__panel" hidden>
+                <input id="settingsTitleGenSearchInput" class="ch-model-dropdown__search" type="search" placeholder="Search models" autocomplete="off">
+                <div id="settingsTitleGenOptionList" class="ch-model-dropdown__list"></div>
+              </div>
+            </div>
+          </label>
         </div>
       </dialog>
     </main>
