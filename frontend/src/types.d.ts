@@ -5,11 +5,11 @@ interface AppSettings {
   model: string;
   activeSessionId: string;
   compactMode: boolean;
-  reasoningEffort: string;
+  reasoningEffort: EffortSetting;
   thinkingVariant: string;
-  verbosity: string;
+  verbosity: VerbositySetting;
   extendedThinking: boolean;
-  claudeEffort: string;
+  claudeEffort: ClaudeEffort;
   alwaysOnTop: boolean;
   windowWidth: number;
   windowHeight: number;
@@ -99,6 +99,8 @@ interface ChatSession {
   title: string;
   model: string;
   reasoningEffort: string;
+  thinkingVariant: string;
+  verbosity: string;
   extendedThinking: boolean;
   claudeEffort: string;
   createdAt: string;
@@ -157,5 +159,14 @@ interface ProviderInput {
   apiKey: string;
   customHeaders: string;
 }
+
+type EffortLevel = "low" | "medium" | "high";
+type EffortSetting = EffortLevel | "none";
+type VerbosityLevel = "low" | "medium" | "high";
+type VerbositySetting = VerbosityLevel | "default";
+type ClaudeEffort = "low" | "medium" | "high";
+type EventType = "snapshot" | "assistantDelta" | "sessionTitleUpdated" | "error";
+type ThinkingVariantValue = string;
+type SelectOption<T extends string = string> = { value: T; label: string; title?: string; };
 
 type LinkTarget = "developer" | "source";

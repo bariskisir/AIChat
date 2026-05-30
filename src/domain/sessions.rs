@@ -1,5 +1,6 @@
 //! Chat session and message domain models.
 
+use super::messages::*;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -57,15 +58,15 @@ pub struct ChatSession {
     pub title: String,
     #[serde(default = "default_model")]
     pub model: String,
-    #[serde(default = "default_reasoning_effort")]
+    #[serde(default = "super::default_reasoning_effort")]
     pub reasoning_effort: String,
-    #[serde(default = "default_thinking_variant")]
+    #[serde(default = "super::default_thinking_variant")]
     pub thinking_variant: String,
-    #[serde(default = "default_verbosity_setting")]
+    #[serde(default = "super::default_verbosity_setting")]
     pub verbosity: String,
     #[serde(default)]
     pub extended_thinking: bool,
-    #[serde(default = "default_claude_effort")]
+    #[serde(default = "super::default_claude_effort")]
     pub claude_effort: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -79,13 +80,13 @@ impl ChatSession {
         let now = Utc::now();
         Self {
             id: new_record_id("session"),
-            title: "New chat".to_owned(),
+            title: CHAT_DEFAULT_TITLE.to_owned(),
             model: String::new(),
-            reasoning_effort: default_reasoning_effort(),
-            thinking_variant: default_thinking_variant(),
-            verbosity: default_verbosity_setting(),
+            reasoning_effort: super::default_reasoning_effort(),
+            thinking_variant: super::default_thinking_variant(),
+            verbosity: super::default_verbosity_setting(),
             extended_thinking: false,
-            claude_effort: default_claude_effort(),
+            claude_effort: super::default_claude_effort(),
             created_at: now,
             updated_at: now,
             messages: Vec::new(),
@@ -105,30 +106,11 @@ fn default_model() -> String {
     String::new()
 }
 
-/// Disables reasoning_effort by default.
-fn default_reasoning_effort() -> String {
-    "none".to_owned()
-}
-
-/// Supplies the default Codex thinking setting.
-fn default_thinking_variant() -> String {
-    crate::domain::DEFAULT_THINKING_VARIANT.to_owned()
-}
-
-/// Supplies the default Codex verbosity setting.
-fn default_verbosity_setting() -> String {
-    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
-}
-
-/// Supplies the default Claude effort setting.
-fn default_claude_effort() -> String {
-    "high".to_owned()
-}
 
 /// Creates a short local fallback title from the first user message.
 pub fn fallback_session_title(message: &ChatMessage) -> String {
     let source = if message.text.trim().is_empty() {
-        "Image chat"
+        CHAT_IMAGE_TITLE
     } else {
         message.text.trim()
     };

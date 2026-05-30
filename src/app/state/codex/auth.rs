@@ -4,6 +4,7 @@ use super::super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::AppSnapshot;
 use crate::domain::{AuthStorage, CODEX_PROVIDER_URL, CatalogStorage, ProviderConfig, model_key};
+use crate::domain::messages::*;
 use crate::infra::{chatgpt, shell};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -17,7 +18,7 @@ impl AppState {
             let mut inner = self.lock()?;
             inner.auth.pending_oauth = Some(pending.clone());
             inner.auth.error.clear();
-            inner.status = "Opening ChatGPT sign-in...".to_owned();
+            inner.status = STATUS_OPENING_CHATGPT_SIGNIN.to_owned();
             inner.storage.save_auth(&inner.auth)?;
         }
         let state = self.clone();
@@ -60,7 +61,7 @@ impl AppState {
             inner.auth.clone()
         };
         if !auth.is_signed_in() {
-            return Err(anyhow!("Please sign in with ChatGPT first."));
+            return Err(anyhow!(AUTH_SIGN_IN_CHATGPT_REQUIRED));
         }
         if !auth.access_token.is_empty()
             && auth.expires_at > Utc::now().timestamp_millis() + 5 * 60 * 1000
@@ -86,11 +87,11 @@ impl AppState {
             .find(|provider| provider.api_url.eq_ignore_ascii_case(CODEX_PROVIDER_URL))
         {
             provider.enabled = false;
-            provider.error = "Signed out of ChatGPT.".to_owned();
+            provider.error = AUTH_SIGNED_OUT_CHATGPT.to_owned();
         }
         inner.ensure_selected_model();
         inner.save_active_session_model_settings()?;
-        inner.status = "Signed out of ChatGPT.".to_owned();
+        inner.status = AUTH_SIGNED_OUT_CHATGPT.to_owned();
         inner.storage.save_auth(&inner.auth)?;
         inner.storage.save_providers(&inner.providers)?;
         inner.storage.save_settings(&inner.settings)?;
@@ -139,7 +140,7 @@ impl AppState {
         } else {
             inner.ensure_selected_model();
         }
-        inner.status = "Signed in with ChatGPT.".to_owned();
+        inner.status = AUTH_SIGNED_IN_CHATGPT.to_owned();
         inner.storage.save_auth(&inner.auth)?;
         inner.storage.save_catalog(&inner.catalog)?;
         inner.storage.save_providers(&inner.providers)?;
@@ -163,11 +164,11 @@ fn codex_provider_from_catalog(id: &str, catalog: &CatalogStorage) -> ProviderCo
     let mut models = catalog.available_models.clone();
     for model in &mut models {
         model.provider_id = id.to_owned();
-        model.provider_name = "Codex".to_owned();
+        model.provider_name = PROVIDER_CODEX_NAME.to_owned();
     }
     ProviderConfig {
         id: id.to_owned(),
-        name: "Codex".to_owned(),
+        name: PROVIDER_CODEX_NAME.to_owned(),
         api_url: CODEX_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),

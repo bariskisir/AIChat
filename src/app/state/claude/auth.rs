@@ -4,6 +4,7 @@ use super::super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::AppSnapshot;
 use crate::domain::{CLAUDE_PROVIDER_URL, ClaudeCredential, ProviderConfig, model_key};
+use crate::domain::messages::*;
 use crate::infra::extractor::{BrowserExtractor, LoginResult};
 use anyhow::{Result, anyhow};
 use tauri::{AppHandle, Emitter};
@@ -13,7 +14,7 @@ impl AppState {
     pub fn start_claude_login(&self, app_handle: AppHandle) -> Result<AppSnapshot> {
         {
             let mut inner = self.lock()?;
-            inner.status = "Launching Chrome for Claude login...".to_owned();
+            inner.status = STATUS_LAUNCHING_CHROME_LOGIN.to_owned();
         }
         let state = self.clone();
         let handle = app_handle.clone();
@@ -61,11 +62,11 @@ impl AppState {
             .find(|provider| provider.api_url.eq_ignore_ascii_case(CLAUDE_PROVIDER_URL))
         {
             provider.enabled = false;
-            provider.error = "Signed out of Claude.".to_owned();
+            provider.error = AUTH_SIGNED_OUT_CLAUDE.to_owned();
         }
         inner.ensure_selected_model();
         inner.save_active_session_model_settings()?;
-        inner.status = "Signed out of Claude.".to_owned();
+        inner.status = AUTH_SIGNED_OUT_CLAUDE.to_owned();
         inner.storage.save_claude_auth(&inner.claude_auth)?;
         inner.storage.save_providers(&inner.providers)?;
         inner.storage.save_settings(&inner.settings)?;
@@ -77,7 +78,7 @@ impl AppState {
     pub(super) fn claude_context(&self) -> Result<crate::infra::claude::ClaudeContext> {
         let inner = self.lock()?;
         if !inner.claude_auth.is_signed_in() {
-            return Err(anyhow!("Connect to Claude first."));
+            return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
         }
         Ok(crate::infra::claude::ClaudeContext::from_credential(
             &inner.claude_auth,
@@ -86,10 +87,10 @@ impl AppState {
 
     /// Completes browser login and saves the Claude provider catalog.
     async fn complete_claude_login(&self) -> Result<AppSnapshot> {
-        self.set_status("Launching Chrome for Claude login...");
+        self.set_status(STATUS_LAUNCHING_CHROME_LOGIN);
         let mut extractor = BrowserExtractor::new()?;
         extractor.launch()?;
-        self.set_status("Waiting for you to log into Claude...");
+        self.set_status(STATUS_WAITING_CLAUDE_LOGIN);
         let result = extractor.extract().await?;
         self.store_claude_login_result(result)
     }
@@ -125,7 +126,7 @@ impl AppState {
         } else {
             inner.ensure_selected_model();
         }
-        inner.status = "Connected to Claude.".to_owned();
+        inner.status = AUTH_CONNECTED_CLAUDE.to_owned();
         inner.storage.save_claude_auth(&inner.claude_auth)?;
         inner.storage.save_providers(&inner.providers)?;
         inner.storage.save_settings(&inner.settings)?;
@@ -150,11 +151,11 @@ fn claude_provider_from_models(
 ) -> ProviderConfig {
     for model in &mut models {
         model.provider_id = id.to_owned();
-        model.provider_name = "Claude".to_owned();
+        model.provider_name = PROVIDER_CLAUDE_NAME.to_owned();
     }
     ProviderConfig {
         id: id.to_owned(),
-        name: "Claude".to_owned(),
+        name: PROVIDER_CLAUDE_NAME.to_owned(),
         api_url: CLAUDE_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),

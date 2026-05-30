@@ -1,7 +1,7 @@
 //! Codex provider detection and model refresh state helpers.
 
 use super::super::AppState;
-use crate::domain::{AvailableModel, CODEX_PROVIDER_URL, ProviderConfig};
+use crate::domain::{AvailableModel, ProviderConfig};
 use anyhow::Result;
 
 impl AppState {
@@ -27,10 +27,3 @@ impl AppState {
     }
 }
 
-/// Reports whether a provider uses the Codex ChatGPT backend.
-pub(in crate::app::state) fn is_codex_provider(provider: &ProviderConfig) -> bool {
-    provider
-        .api_url
-        .trim()
-        .eq_ignore_ascii_case(CODEX_PROVIDER_URL)
-}

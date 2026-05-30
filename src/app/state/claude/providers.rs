@@ -1,7 +1,8 @@
 //! Claude provider detection and model refresh state helpers.
 
 use super::super::AppState;
-use crate::domain::{AvailableModel, CLAUDE_PROVIDER_URL, ProviderConfig};
+use crate::domain::{AvailableModel, ProviderConfig};
+use crate::domain::messages::*;
 use crate::infra::{claude, extractor::BrowserExtractor};
 use anyhow::{Result, anyhow};
 
@@ -14,7 +15,7 @@ impl AppState {
         let (ctx, org_id, cookies, plan) = {
             let inner = self.lock()?;
             if !inner.claude_auth.is_signed_in() {
-                return Err(anyhow!("Connect to Claude first."));
+                return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
             }
             (
                 claude::ClaudeContext::from_credential(&inner.claude_auth),
@@ -54,10 +55,3 @@ impl AppState {
     }
 }
 
-/// Reports whether a provider uses the Claude.ai web backend.
-pub(in crate::app::state) fn is_claude_provider(provider: &ProviderConfig) -> bool {
-    provider
-        .api_url
-        .trim()
-        .eq_ignore_ascii_case(CLAUDE_PROVIDER_URL)
-}

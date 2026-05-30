@@ -1,5 +1,5 @@
 // Prepares frontend distribution assets for the Tauri build.
-import { copyFileSync, mkdirSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,5 +8,5 @@ const dist = join(root, "dist");
 
 mkdirSync(dist, { recursive: true });
 copyFileSync(join(root, "index.html"), join(dist, "index.html"));
-copyFileSync(join(root, "styles.css"), join(dist, "styles.css"));
+cpSync(join(root, "styles"), join(dist, "styles"), { recursive: true });
 copyFileSync(join(root, "..", "icons", "icon.png"), join(dist, "icon.png"));

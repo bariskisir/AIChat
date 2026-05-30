@@ -1,11 +1,13 @@
 //! Claude chat submission and streaming state helpers.
 
+use super::super::chat_pipeline;
 use super::super::AppState;
 use crate::app::state::chat::title_prompt;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
 };
+use crate::domain::messages::*;
 use crate::infra::claude;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -39,7 +41,7 @@ impl AppState {
         {
             let inner = self.lock()?;
             if !inner.claude_auth.is_signed_in() {
-                return Err(anyhow!("Connect to Claude first."));
+                return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
             }
         }
         let (work, title_work) = {
@@ -47,26 +49,26 @@ impl AppState {
             let session_id = inner.settings.active_session_id.clone();
             if inner.active_chat_responses.contains_key(&session_id) {
                 return Err(anyhow!(
-                    "Stop the current answer before sending another message."
+                    ERR_VALIDATION_STOP_FIRST
                 ));
             }
             inner.save_active_session_model_settings()?;
             let (_, model) = crate::domain::split_model_key(&inner.settings.model)
-                .ok_or_else(|| anyhow!("Select a provider model first."))?;
+                .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
             let model = model.to_owned();
             let extended_thinking = inner.settings.extended_thinking;
             let effort = claude_effort_for_model(&inner.settings.claude_effort, &model);
             let title_gen_model = inner.settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
-            let conv_id = uuid_v4();
+            let conv_id = uuid::Uuid::new_v4().to_string();
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
-            let should_generate_title = session.title == "New chat" && session.messages.is_empty();
+            let should_generate_title = session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
             let title_work =
                 if should_generate_title && !title_gen_model.trim().eq_ignore_ascii_case("none") {
                     Some(PendingClaudeTitleResponse {
                         session_id: session_id.clone(),
                         fallback_title: fallback_session_title(&user_message),
-                        conv_id: uuid_v4(),
+                        conv_id: uuid::Uuid::new_v4().to_string(),
                         request: claude::ClaudeChatRequest {
                             prompt: title_prompt(&user_message),
                             model: model.clone(),
@@ -79,7 +81,7 @@ impl AppState {
                     None
                 };
             let assistant_message = ChatMessage::assistant_placeholder();
-            if session.title == "New chat" {
+            if session.title == CHAT_DEFAULT_TITLE {
                 session.title = fallback_session_title(&user_message);
             }
             session.updated_at = Utc::now();
@@ -99,53 +101,32 @@ impl AppState {
                     image_data_urls,
                 },
             };
-            inner.status = "Generating answer...".to_owned();
+            inner.status = STATUS_GENERATING_ANSWER.to_owned();
             inner.storage.save_sessions(&inner.sessions)?;
             inner.storage.save_settings(&inner.settings)?;
             (work, title_work)
         };
-        self.spawn_claude_chat_response(work, app_handle.clone());
+        let state_clone = self.clone();
+        let work_clone = work.clone();
+        let app_clone = app_handle.clone();
+        chat_pipeline::spawn_chat_stream(
+            self,
+            work.session_id.clone(),
+            work.assistant_message_id.clone(),
+            app_handle.clone(),
+            async move { state_clone.execute_claude_chat_response(work_clone, app_clone).await },
+        );
         if let Some(title_work) = title_work {
-            self.spawn_claude_title_response(title_work, app_handle);
+            let state_clone = self.clone();
+            chat_pipeline::spawn_title_stream(
+                self,
+                app_handle,
+                async move { state_clone.execute_claude_title_response(title_work).await },
+            );
         }
         self.snapshot()
     }
 
-    /// Spawns a Claude response stream on the background runtime.
-    fn spawn_claude_chat_response(&self, work: PendingClaudeChatResponse, app_handle: AppHandle) {
-        let state = self.clone();
-        let active_session_id = work.session_id.clone();
-        let assistant_message_id = work.assistant_message_id.clone();
-        let abort_handle = self
-            .runtime
-            .spawn(async move {
-                let result = state
-                    .execute_claude_chat_response(work.clone(), app_handle.clone())
-                    .await;
-                match result {
-                    Ok(snapshot) => Self::emit_snapshot_event(&app_handle, snapshot),
-                    Err(error) => {
-                        state.finish_failed_assistant_placeholder(
-                            &work.session_id,
-                            &work.assistant_message_id,
-                        );
-                        state.emit_error_snapshot(&app_handle, error);
-                    }
-                }
-            })
-            .abort_handle();
-        self.register_active_chat_response(active_session_id, assistant_message_id, abort_handle);
-    }
-
-    /// Spawns a hidden Claude title request.
-    fn spawn_claude_title_response(&self, work: PendingClaudeTitleResponse, app_handle: AppHandle) {
-        let state = self.clone();
-        self.runtime.spawn(async move {
-            if let Ok((sid, title)) = state.execute_claude_title_response(work).await {
-                Self::emit_session_title_event(&app_handle, sid, title);
-            }
-        });
-    }
 
     /// Requests a Claude generated title and stores it when the chat still exists.
     async fn execute_claude_title_response(
@@ -171,7 +152,7 @@ impl AppState {
     ) -> Result<AppSnapshot> {
         let ctx = self.claude_context()?;
         if !claude::create_conversation(&ctx, &work.conv_id, &work.request.model).await? {
-            return Err(anyhow!("Failed to create Claude conversation."));
+            return Err(anyhow!(AUTH_FAILED_CREATE_CLAUDE_CONVERSATION));
         }
         let sid = work.session_id.clone();
         let mid = work.assistant_message_id.clone();
@@ -207,9 +188,9 @@ fn build_claude_context_prompt(session: &crate::domain::ChatSession) -> String {
                 ChatRole::Assistant => "Assistant",
             };
             let text = if m.text.trim().is_empty() && !m.image_data_urls.is_empty() {
-                "[Image attached]".to_owned()
+                CHAT_IMAGE_ATTACHED.to_owned()
             } else if !m.image_data_urls.is_empty() {
-                format!("{}\n[Image attached]", m.text)
+                format!("{}\n{}", m.text, CHAT_IMAGE_ATTACHED)
             } else {
                 m.text.clone()
             };
@@ -217,34 +198,6 @@ fn build_claude_context_prompt(session: &crate::domain::ChatSession) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n\n")
-}
-
-/// Generates a UUID v4 string for Claude conversation identifiers.
-fn uuid_v4() -> String {
-    use rand::Rng;
-    let mut bytes = [0u8; 16];
-    rand::rng().fill(&mut bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        bytes[0],
-        bytes[1],
-        bytes[2],
-        bytes[3],
-        bytes[4],
-        bytes[5],
-        bytes[6],
-        bytes[7],
-        bytes[8],
-        bytes[9],
-        bytes[10],
-        bytes[11],
-        bytes[12],
-        bytes[13],
-        bytes[14],
-        bytes[15],
-    )
 }
 
 /// Returns a Claude effort value only for non-Haiku models.

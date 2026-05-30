@@ -1,12 +1,13 @@
 //! Chat message submission, streaming, and title generation.
 
-use super::AppState;
+use super::{chat_pipeline, AppState};
 use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::{
     CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT,
     fallback_session_title, sanitize_session_title, split_model_key,
 };
+use crate::domain::messages::*;
 use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -43,11 +44,7 @@ impl AppState {
         input: SendMessageRequest,
         app_handle: AppHandle,
     ) -> Result<AppSnapshot> {
-        let text = input.text.trim().to_owned();
-        let image_data_urls = input.image_data_urls.clone();
-        if text.is_empty() && image_data_urls.is_empty() {
-            return Err(anyhow!("Enter a message or paste an image first."));
-        }
+        self.validate_can_send(&input)?;
         if self.selected_provider_is_codex()? {
             return self.send_codex_message(input, app_handle);
         }
@@ -56,76 +53,105 @@ impl AppState {
         }
         self.ensure_provider_ready()?;
         let (ctx, selected_model) = self.selected_provider_context()?;
-
-        let (work, title_work) = {
-            let mut inner = self.lock()?;
-            let session_id = inner.settings.active_session_id.clone();
-            if inner.active_chat_responses.contains_key(&session_id) {
-                return Err(anyhow!(
-                    "Stop the current answer before sending another message."
-                ));
-            }
-            inner.save_active_session_model_settings()?;
-            let model_key = inner.settings.model.clone();
-            let reasoning_effort = normalized_reasoning_effort(&inner.settings.reasoning_effort);
-            let title_gen_model = inner.settings.title_gen_model.clone();
-            let title_provider = resolve_title_provider(&title_gen_model, &inner.providers);
-            let session = inner.active_session_mut()?;
-
-            let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
-            let should_generate_title = session.title == "New chat" && session.messages.is_empty();
-            let title_work = if should_generate_title {
-                build_title_response(
-                    &title_gen_model,
-                    title_provider.as_ref(),
-                    &session_id,
-                    &user_message,
-                    &ctx,
-                    &selected_model,
-                )
-            } else {
-                None
-            };
-
-            let assistant_message = ChatMessage::assistant_placeholder();
-            if session.title == "New chat" {
-                session.title = fallback_session_title(&user_message);
-            }
-            session.updated_at = Utc::now();
-            session.messages.push(user_message);
-            let assistant_message_id = assistant_message.id.clone();
-            session.messages.push(assistant_message);
-
-            let messages = build_context_messages(session);
-            let work = PendingChatResponse {
-                session_id,
-                assistant_message_id,
-                ctx,
-                request: OpenAiChatRequest {
-                    model: selected_model,
-                    messages,
-                    reasoning_effort,
-                },
-            };
-            inner.settings.model = model_key;
-            inner.status = "Generating answer...".to_owned();
-            inner.storage.save_sessions(&inner.sessions)?;
-            inner.storage.save_settings(&inner.settings)?;
-            (work, title_work)
-        };
-
-        self.spawn_chat_response(work, app_handle.clone());
+        let (work, title_work) = self.prepare_chat_work(input, &ctx, &selected_model)?;
+        let (chat_state, chat_app_handle) = (self.clone(), app_handle.clone());
+        chat_pipeline::spawn_chat_stream(
+            self,
+            work.session_id.clone(),
+            work.assistant_message_id.clone(),
+            chat_app_handle.clone(),
+            async move {
+                chat_state.execute_chat_response(work, chat_app_handle).await
+            },
+        );
         if let Some(title_work) = title_work {
-            self.spawn_title_response(title_work, app_handle);
+            let title_state = self.clone();
+            chat_pipeline::spawn_title_stream(self, app_handle, async move {
+                title_state.execute_title_response(title_work).await
+            });
         }
         self.snapshot()
+    }
+
+    /// Validates that input is not empty and a message can be sent.
+    fn validate_can_send(&self, input: &SendMessageRequest) -> Result<()> {
+        if input.text.trim().is_empty() && input.image_data_urls.is_empty() {
+            return Err(anyhow!(ERR_VALIDATION_EMPTY_MESSAGE));
+        }
+        Ok(())
+    }
+
+    /// Locks state, validates readiness, builds messages, and returns
+    /// the pending chat response plus an optional title-response task.
+    fn prepare_chat_work(
+        &self,
+        input: SendMessageRequest,
+        ctx: &OpenAiContext,
+        selected_model: &str,
+    ) -> Result<(PendingChatResponse, Option<PendingTitleResponse>)> {
+        let text = input.text.trim().to_owned();
+        let image_data_urls = input.image_data_urls;
+        let mut inner = self.lock()?;
+        let session_id = inner.settings.active_session_id.clone();
+        if inner.active_chat_responses.contains_key(&session_id) {
+            return Err(anyhow!(
+                ERR_VALIDATION_STOP_FIRST
+            ));
+        }
+        inner.save_active_session_model_settings()?;
+        let model_key = inner.settings.model.clone();
+        let reasoning_effort = normalized_reasoning_effort(&inner.settings.reasoning_effort);
+        let title_gen_model = inner.settings.title_gen_model.clone();
+        let title_provider = resolve_title_provider(&title_gen_model, &inner.providers);
+        let session = inner.active_session_mut()?;
+
+        let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
+        let should_generate_title = session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
+        let title_work = if should_generate_title {
+            build_openai_title_work(
+                &title_gen_model,
+                title_provider.as_ref(),
+                &session_id,
+                &user_message,
+                ctx,
+                selected_model,
+            )
+        } else {
+            None
+        };
+
+        let assistant_message = ChatMessage::assistant_placeholder();
+        if session.title == CHAT_DEFAULT_TITLE {
+            session.title = fallback_session_title(&user_message);
+        }
+        session.updated_at = Utc::now();
+        session.messages.push(user_message);
+        let assistant_message_id = assistant_message.id.clone();
+        session.messages.push(assistant_message);
+
+        let messages = build_context_messages(session);
+        let work = PendingChatResponse {
+            session_id,
+            assistant_message_id,
+            ctx: ctx.clone(),
+            request: OpenAiChatRequest {
+                model: selected_model.to_owned(),
+                messages,
+                reasoning_effort,
+            },
+        };
+        inner.settings.model = model_key;
+        inner.status = STATUS_GENERATING_ANSWER.to_owned();
+        inner.storage.save_sessions(&inner.sessions)?;
+        inner.storage.save_settings(&inner.settings)?;
+        Ok((work, title_work))
     }
 
     /// Stops an active response and removes an empty assistant placeholder.
     pub fn stop_chat_response(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         let Some(active) = inner.active_chat_responses.remove(session_id) else {
-            inner.status = "No answer is running.".to_owned();
+            inner.status = STATUS_NO_ANSWER_RUNNING.to_owned();
             return Ok(inner.build_snapshot());
         };
         active.abort_handle.abort();
@@ -141,42 +167,9 @@ impl AppState {
             }
             session.updated_at = Utc::now();
         }
-        inner.status = "Answer stopped.".to_owned();
+        inner.status = STATUS_ANSWER_STOPPED.to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         Ok(inner.build_snapshot())
-    }
-
-    /// Spawns the background task that streams an answer into app state.
-    fn spawn_chat_response(&self, work: PendingChatResponse, app_handle: AppHandle) {
-        let state = self.clone();
-        let active_session_id = work.session_id.clone();
-        let assistant_message_id = work.assistant_message_id.clone();
-        let abort_handle = self
-            .runtime
-            .spawn(async move {
-                let result = state
-                    .execute_chat_response(work.clone(), app_handle.clone())
-                    .await;
-                match result {
-                    Ok(snapshot) => Self::emit_snapshot_event(&app_handle, snapshot),
-                    Err(error) => {
-                        state.finish_failed_chat_response(&work);
-                        state.emit_error_snapshot(&app_handle, error);
-                    }
-                }
-            })
-            .abort_handle();
-        self.register_active_chat_response(active_session_id, assistant_message_id, abort_handle);
-    }
-
-    /// Spawns the background task that generates a short session title.
-    fn spawn_title_response(&self, work: PendingTitleResponse, app_handle: AppHandle) {
-        let state = self.clone();
-        self.runtime.spawn(async move {
-            if let Ok((sid, title)) = state.execute_title_response(work).await {
-                Self::emit_session_title_event(&app_handle, sid, title);
-            }
-        });
     }
 
     /// Requests a generated title and stores it when the chat still exists.
@@ -227,11 +220,6 @@ impl AppState {
             msg.text.push_str(text);
             session.updated_at = Utc::now();
         }
-    }
-
-    /// Cleans up placeholders and running-state bookkeeping after a failed stream.
-    fn finish_failed_chat_response(&self, work: &PendingChatResponse) {
-        self.finish_failed_assistant_placeholder(&work.session_id, &work.assistant_message_id);
     }
 
     /// Registers a running chat response so later stop/failure paths can find it.
@@ -353,7 +341,7 @@ impl AppState {
         {
             inner.active_chat_responses.remove(session_id);
         }
-        inner.status = "Answer ready.".to_owned();
+        inner.status = STATUS_ANSWER_READY.to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         Ok(inner.build_snapshot())
     }
@@ -415,7 +403,7 @@ fn build_context_messages(session: &crate::domain::ChatSession) -> Vec<OpenAiMes
 /// Builds a title-generation prompt.
 pub(in crate::app::state) fn title_prompt(message: &ChatMessage) -> String {
     let text = if message.text.trim().is_empty() {
-        "Image-only first message.".to_string()
+        CHAT_IMAGE_ONLY_MESSAGE.to_string()
     } else {
         message.text.trim().chars().take(2000).collect::<String>()
     };
@@ -451,8 +439,8 @@ fn resolve_title_provider(
     Some((provider, model.to_owned()))
 }
 
-/// Builds a title generation response based on the title_gen_model setting.
-fn build_title_response(
+/// Builds an OpenAI title-generation work item based on the title_gen_model setting.
+fn build_openai_title_work(
     title_gen_model: &str,
     title_provider: Option<&(crate::domain::ProviderConfig, String)>,
     session_id: &str,

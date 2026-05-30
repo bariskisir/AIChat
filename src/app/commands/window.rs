@@ -3,6 +3,8 @@
 use super::CmdResult;
 use crate::app::state::AppState;
 use crate::app::view::AppSnapshot;
+use crate::domain::AppError;
+use crate::domain::messages::*;
 use crate::infra::clipboard;
 use tauri::{AppHandle, Manager, State};
 
@@ -16,7 +18,7 @@ pub fn clipboard_write_text(text: String, app_handle: AppHandle) -> CmdResult<()
     {
         let window = app_handle
             .get_webview_window("main")
-            .ok_or_else(|| "Main window was not found.".to_owned())?;
+            .ok_or(AppError::not_found(ERR_NOT_FOUND_MAIN_WINDOW))?;
         let hwnd = window.hwnd().map_err(|e| e.to_string())?;
         clipboard::write_text(&text, hwnd).map_err(|e| e.to_string())
     }
@@ -38,7 +40,7 @@ pub fn window_set_pinned(
         .map_err(|e| e.to_string())?;
     let window = app_handle
         .get_webview_window("main")
-        .ok_or_else(|| "Main window was not found.".to_owned())?;
+        .ok_or(AppError::not_found(ERR_NOT_FOUND_MAIN_WINDOW))?;
     window
         .set_always_on_top(enabled)
         .map_err(|e| e.to_string())?;

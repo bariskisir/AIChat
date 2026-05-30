@@ -1,146 +1,18 @@
-//! Provider storage and model catalog for AI Chat.
+//! Model catalog storage and available model types for AI Chat.
 
 use super::{
-    CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ThinkingVariantOption, default_input_modalities,
-    default_support_verbosity, default_thinking_variant, default_verbosity,
-    fallback_thinking_variants,
+    DEFAULT_CODEX_CLIENT_VERSION, DEFAULT_CODEX_MODEL, DEFAULT_THINKING_VARIANT,
+    DEFAULT_VERBOSITY, DEFAULT_VERBOSITY_SETTING, default_codex_client_version,
+    default_input_modalities, default_support_verbosity, default_thinking_variant,
+    default_verbosity, fallback_models, fallback_thinking_variants, is_verbosity_level,
 };
-use chrono::Utc;
 use serde::{Deserialize, Serialize};
-
-pub const OPENCODE_PROVIDER_ID: &str = "opencode-zen";
-pub const CODEX_PROVIDER_ID: &str = "codex";
-pub const CLAUDE_PROVIDER_ID: &str = "claude";
-pub const OPENCODE_DEFAULT_MODEL: &str = "deepseek-v4-flash-free";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ProviderStorage {
-    pub providers: Vec<ProviderConfig>,
-}
-
-impl Default for ProviderStorage {
-    /// Starts with the built-in fixed providers configured.
-    fn default() -> Self {
-        Self {
-            providers: vec![opencode_provider(), codex_provider(), claude_provider()],
-        }
-    }
-}
-
-impl ProviderStorage {
-    /// Ensures built-in providers exist and stay marked as built-in.
-    pub fn ensure_builtin_providers(&mut self) {
-        if let Some(provider) = self.provider_mut(OPENCODE_PROVIDER_ID) {
-            provider.built_in = true;
-            if provider.name.trim().is_empty() {
-                provider.name = "OpenCode Zen".to_owned();
-            }
-            if provider.api_url.trim().is_empty() {
-                provider.api_url = "https://opencode.ai/zen/v1".to_owned();
-            }
-            normalize_opencode_provider(provider);
-            ensure_opencode_default_model(provider);
-        } else {
-            self.providers.insert(0, opencode_provider());
-        }
-        ensure_special_builtin_provider(&mut self.providers, CODEX_PROVIDER_URL, codex_provider());
-        ensure_special_builtin_provider(
-            &mut self.providers,
-            CLAUDE_PROVIDER_URL,
-            claude_provider(),
-        );
-    }
-
-    /// Returns every visible model from every saved provider.
-    pub fn all_models(&self) -> Vec<AvailableModel> {
-        self.providers
-            .iter()
-            .filter(|provider| provider.enabled)
-            .flat_map(|provider| {
-                provider.models.iter().cloned().map(|mut model| {
-                    model.provider_id = provider.id.clone();
-                    model.provider_name = provider.name.clone();
-                    model
-                })
-            })
-            .collect()
-    }
-
-    /// Finds a provider by id.
-    pub fn provider(&self, id: &str) -> Option<&ProviderConfig> {
-        self.providers.iter().find(|provider| provider.id == id)
-    }
-
-    /// Finds a mutable provider by id.
-    pub fn provider_mut(&mut self, id: &str) -> Option<&mut ProviderConfig> {
-        self.providers.iter_mut().find(|provider| provider.id == id)
-    }
-
-    /// Inserts a new provider or updates an existing provider.
-    pub fn upsert(&mut self, mut provider: ProviderConfig) -> String {
-        if provider.id.trim().is_empty() {
-            provider.id = new_provider_id();
-        }
-        if provider.id == OPENCODE_PROVIDER_ID {
-            provider.built_in = true;
-            normalize_opencode_provider(&mut provider);
-            ensure_opencode_default_model(&mut provider);
-        }
-        let id = provider.id.clone();
-        if let Some(existing) = self.provider_mut(&id) {
-            if existing.built_in {
-                provider.built_in = true;
-            }
-            provider.models = if provider.models.is_empty() {
-                existing.models.clone()
-            } else {
-                provider.models
-            };
-            *existing = provider;
-        } else {
-            self.providers.push(provider);
-        }
-        id
-    }
-
-    /// Deletes a provider by id and returns whether it existed.
-    pub fn delete(&mut self, id: &str) -> bool {
-        let before = self.providers.len();
-        self.providers
-            .retain(|provider| provider.id != id || provider.built_in);
-        self.providers.len() != before
-    }
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ProviderConfig {
-    #[serde(default)]
-    pub id: String,
-    #[serde(default)]
-    pub name: String,
-    #[serde(default)]
-    pub api_url: String,
-    #[serde(default)]
-    pub api_key: String,
-    #[serde(default)]
-    pub custom_headers: Vec<CustomHeader>,
-    #[serde(default)]
-    pub built_in: bool,
-    #[serde(default = "default_enabled")]
-    pub enabled: bool,
-    #[serde(default)]
-    pub models: Vec<AvailableModel>,
-    #[serde(default)]
-    pub error: String,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CustomHeader {
-    pub name: String,
+pub struct ThinkingVariantOption {
     pub value: String,
+    pub description: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -170,150 +42,99 @@ pub struct AvailableModel {
     pub default_verbosity: String,
 }
 
-/// Builds the persisted model selection key for a provider/model pair.
-pub fn model_key(provider_id: &str, model: &str) -> String {
-    format!("{provider_id}/{model}")
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogStorage {
+    #[serde(default = "fallback_models")]
+    pub available_models: Vec<AvailableModel>,
+    #[serde(default = "default_codex_client_version")]
+    pub codex_client_version: String,
+    #[serde(default)]
+    pub chatgpt_limit_label: String,
 }
 
-/// Splits a persisted model selection key into provider id and model id.
-pub fn split_model_key(value: &str) -> Option<(&str, &str)> {
-    value.split_once('/')
-}
-
-/// Creates a stable local provider id.
-fn new_provider_id() -> String {
-    format!(
-        "provider-{}-{:016x}",
-        Utc::now().timestamp_millis(),
-        rand::random::<u64>()
-    )
-}
-
-/// Builds the built-in OpenCode Zen provider.
-fn opencode_provider() -> ProviderConfig {
-    let mut provider = ProviderConfig {
-        id: OPENCODE_PROVIDER_ID.to_owned(),
-        name: "OpenCode Zen".to_owned(),
-        api_url: "https://opencode.ai/zen/v1".to_owned(),
-        api_key: "public".to_owned(),
-        custom_headers: vec![CustomHeader {
-            name: "x-opencode-session".to_owned(),
-            value: String::new(),
-        }],
-        built_in: true,
-        enabled: true,
-        models: Vec::new(),
-        error: String::new(),
-    };
-    ensure_opencode_default_model(&mut provider);
-    provider
-}
-
-/// Builds the fixed Codex provider shell; models are loaded after ChatGPT sign-in.
-fn codex_provider() -> ProviderConfig {
-    ProviderConfig {
-        id: CODEX_PROVIDER_ID.to_owned(),
-        name: "Codex".to_owned(),
-        api_url: CODEX_PROVIDER_URL.to_owned(),
-        api_key: String::new(),
-        custom_headers: Vec::new(),
-        built_in: true,
-        enabled: false,
-        models: Vec::new(),
-        error: "Sign in with ChatGPT.".to_owned(),
-    }
-}
-
-/// Builds the fixed Claude provider shell; models are loaded after Claude sign-in.
-fn claude_provider() -> ProviderConfig {
-    ProviderConfig {
-        id: CLAUDE_PROVIDER_ID.to_owned(),
-        name: "Claude".to_owned(),
-        api_url: CLAUDE_PROVIDER_URL.to_owned(),
-        api_key: String::new(),
-        custom_headers: Vec::new(),
-        built_in: true,
-        enabled: false,
-        models: Vec::new(),
-        error: "Sign in with Claude.".to_owned(),
-    }
-}
-
-/// Keeps one fixed special provider by API URL while preserving existing ids and models.
-fn ensure_special_builtin_provider(
-    providers: &mut Vec<ProviderConfig>,
-    api_url: &str,
-    fallback: ProviderConfig,
-) {
-    if let Some(index) = providers
-        .iter()
-        .position(|provider| provider.api_url.eq_ignore_ascii_case(api_url))
-    {
-        let provider = &mut providers[index];
-        provider.built_in = true;
-        if provider.name.trim().is_empty() {
-            provider.name = fallback.name.clone();
+impl Default for CatalogStorage {
+    /// Builds the default Codex catalog.
+    fn default() -> Self {
+        Self {
+            available_models: fallback_models(),
+            codex_client_version: DEFAULT_CODEX_CLIENT_VERSION.to_owned(),
+            chatgpt_limit_label: String::new(),
         }
-        if provider.id.trim().is_empty() {
-            provider.id = fallback.id.clone();
+    }
+}
+
+impl CatalogStorage {
+    /// Finds thinking options for a Codex model.
+    pub fn thinking_variants_for(&self, model: &str) -> Vec<ThinkingVariantOption> {
+        self.available_models
+            .iter()
+            .find(|item| item.model == model)
+            .or_else(|| {
+                self.available_models
+                    .iter()
+                    .find(|item| item.model == DEFAULT_CODEX_MODEL)
+            })
+            .or_else(|| self.available_models.first())
+            .map(|item| item.thinking_variants.clone())
+            .filter(|items| !items.is_empty())
+            .unwrap_or_else(fallback_thinking_variants)
+    }
+
+    /// Keeps a thinking selection valid for a Codex model.
+    pub fn normalize_thinking_variant(&self, value: &str, model: &str) -> String {
+        let variants = self.thinking_variants_for(model);
+        if variants.iter().any(|item| item.value == value) {
+            value.to_owned()
+        } else {
+            self.available_models
+                .iter()
+                .find(|item| item.model == model)
+                .map(|item| item.default_thinking_variant.clone())
+                .filter(|item| !item.is_empty())
+                .unwrap_or_else(|| DEFAULT_THINKING_VARIANT.to_owned())
         }
-        provider.api_url = fallback.api_url.clone();
-        let keep_id = provider.id.clone();
-        providers.retain(|provider| {
-            provider.id == keep_id || !provider.api_url.eq_ignore_ascii_case(api_url)
-        });
-        return;
     }
-    let insert_at = providers.len().min(2);
-    providers.insert(insert_at, fallback);
-}
 
-/// Keeps OpenCode's session token in `api_key` while leaving its header value blank in custom headers.
-fn normalize_opencode_provider(provider: &mut ProviderConfig) {
-    let migrated_session = provider
-        .custom_headers
-        .iter()
-        .find(|header| {
-            header.name.eq_ignore_ascii_case("x-opencode-session")
-                && !header.value.trim().is_empty()
-        })
-        .map(|header| header.value.trim().to_owned());
-    if provider.api_key.trim().is_empty() {
-        provider.api_key = migrated_session.unwrap_or_else(|| "public".to_owned());
+    /// Keeps a verbosity value valid for a Codex model.
+    pub fn normalize_verbosity(&self, value: &str, model: &str) -> String {
+        let value = value.trim();
+        if value == DEFAULT_VERBOSITY_SETTING {
+            return DEFAULT_VERBOSITY_SETTING.to_owned();
+        }
+        if self.supports_verbosity(model) && is_verbosity_level(value) {
+            value.to_owned()
+        } else {
+            DEFAULT_VERBOSITY_SETTING.to_owned()
+        }
     }
-    provider
-        .custom_headers
-        .retain(|header| !header.name.eq_ignore_ascii_case("x-opencode-session"));
-    provider.custom_headers.insert(
-        0,
-        CustomHeader {
-            name: "x-opencode-session".to_owned(),
-            value: String::new(),
-        },
-    );
-}
 
-/// Keeps existing persisted providers enabled until a refresh explicitly fails.
-fn default_enabled() -> bool {
-    true
-}
+    /// Resolves the effective Codex verbosity.
+    pub fn resolve_verbosity(&self, value: &str, model: &str) -> String {
+        let normalized = self.normalize_verbosity(value, model);
+        if normalized != DEFAULT_VERBOSITY_SETTING {
+            return normalized;
+        }
+        self.default_verbosity_for(model)
+    }
 
-/// Adds the OpenCode default free model when the model list is empty.
-fn ensure_opencode_default_model(provider: &mut ProviderConfig) {
-    if provider.models.is_empty() {
-        provider.models.push(AvailableModel {
-            provider_id: provider.id.clone(),
-            provider_name: provider.name.clone(),
-            model: OPENCODE_DEFAULT_MODEL.to_owned(),
-            display_name: OPENCODE_DEFAULT_MODEL.to_owned(),
-            description: "OpenCode Zen default free model".to_owned(),
-            hidden: false,
-            is_default: true,
-            input_modalities: vec!["text".to_owned()],
-            default_thinking_variant: default_thinking_variant(),
-            thinking_variants: fallback_thinking_variants(),
-            support_verbosity: false,
-            default_verbosity: default_verbosity(),
-        });
+    /// Reports whether a Codex model supports verbosity.
+    pub fn supports_verbosity(&self, model: &str) -> bool {
+        self.available_models
+            .iter()
+            .find(|item| item.model == model)
+            .map(|item| item.support_verbosity)
+            .unwrap_or(true)
+    }
+
+    /// Returns the Codex model default verbosity.
+    pub fn default_verbosity_for(&self, model: &str) -> String {
+        self.available_models
+            .iter()
+            .find(|item| item.model == model)
+            .map(|item| item.default_verbosity.as_str())
+            .filter(|value| is_verbosity_level(value))
+            .unwrap_or(DEFAULT_VERBOSITY)
+            .to_owned()
     }
 }

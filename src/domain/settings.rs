@@ -20,15 +20,15 @@ pub struct AppSettings {
     pub active_session_id: String,
     #[serde(default)]
     pub compact_mode: bool,
-    #[serde(default = "default_reasoning_effort")]
+    #[serde(default = "super::default_reasoning_effort")]
     pub reasoning_effort: String,
-    #[serde(default = "default_thinking_variant")]
+    #[serde(default = "super::default_thinking_variant")]
     pub thinking_variant: String,
-    #[serde(default = "default_verbosity_setting")]
+    #[serde(default = "super::default_verbosity_setting")]
     pub verbosity: String,
     #[serde(default)]
     pub extended_thinking: bool,
-    #[serde(default = "default_claude_effort")]
+    #[serde(default = "super::default_claude_effort")]
     pub claude_effort: String,
     #[serde(default)]
     pub always_on_top: bool,
@@ -59,11 +59,11 @@ impl Default for AppSettings {
             model: String::new(),
             active_session_id: String::new(),
             compact_mode: false,
-            reasoning_effort: default_reasoning_effort(),
-            thinking_variant: default_thinking_variant(),
-            verbosity: default_verbosity_setting(),
+            reasoning_effort: super::default_reasoning_effort(),
+            thinking_variant: super::default_thinking_variant(),
+            verbosity: super::default_verbosity_setting(),
             extended_thinking: false,
-            claude_effort: default_claude_effort(),
+            claude_effort: super::default_claude_effort(),
             always_on_top: false,
             window_width: DEFAULT_WINDOW_WIDTH,
             window_height: DEFAULT_WINDOW_HEIGHT,
@@ -81,22 +81,6 @@ impl Default for AppSettings {
 /// Keeps legacy settings deserialization from selecting a hardcoded model.
 fn default_model() -> String {
     String::new()
-}
-/// Disables reasoning_effort by default.
-fn default_reasoning_effort() -> String {
-    "none".to_owned()
-}
-/// Supplies the default Codex thinking setting.
-fn default_thinking_variant() -> String {
-    crate::domain::DEFAULT_THINKING_VARIANT.to_owned()
-}
-/// Supplies the default Codex verbosity setting.
-fn default_verbosity_setting() -> String {
-    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
-}
-/// Supplies the default Claude effort setting.
-fn default_claude_effort() -> String {
-    "high".to_owned()
 }
 /// Supplies the initial window width for persisted settings.
 fn default_window_width() -> u32 {

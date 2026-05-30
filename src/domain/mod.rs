@@ -3,13 +3,18 @@
 mod catalog;
 mod claude;
 pub mod codex;
+pub mod error;
+pub mod messages;
+mod providers;
 mod sessions;
 mod settings;
 
 pub use catalog::*;
 pub use claude::*;
 pub use codex::*;
+pub use providers::*;
 pub use sessions::*;
+pub use error::AppError;
 pub use settings::*;
 
 pub const SESSION_LIMIT: usize = 100;
@@ -22,3 +27,33 @@ pub const DEFAULT_VERBOSITY_SETTING: &str = "default";
 pub const DEFAULT_VERBOSITY: &str = "medium";
 pub const DEFAULT_CODEX_CLIENT_VERSION: &str = "0.135.0";
 pub const TITLE_RESPONSE_STYLE: &str = "low";
+
+/// Disables reasoning_effort by default.
+pub fn default_reasoning_effort() -> String {
+    "none".to_owned()
+}
+
+/// Supplies the default Codex verbosity setting.
+pub fn default_verbosity_setting() -> String {
+    DEFAULT_VERBOSITY_SETTING.to_owned()
+}
+
+/// Supplies the default Claude effort setting.
+pub fn default_claude_effort() -> String {
+    "high".to_owned()
+}
+
+/// Returns the model id from a provider/model selection key.
+pub fn active_model_id(model_key: &str) -> String {
+    split_model_key(model_key)
+        .map(|(_, model)| model.to_owned())
+        .unwrap_or_else(|| model_key.to_owned())
+}
+
+/// The kind of AI provider, determined by its API URL.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProviderKind {
+    OpenAi,
+    Codex,
+    Claude,
+}

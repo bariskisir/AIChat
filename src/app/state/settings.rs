@@ -17,11 +17,11 @@ impl AppState {
         inner.settings.reasoning_effort = normalize_reasoning_effort(&input.reasoning_effort);
         inner.settings.thinking_variant = inner.catalog.normalize_thinking_variant(
             &input.thinking_variant,
-            &active_model_id(&inner.settings.model),
+            &crate::domain::active_model_id(&inner.settings.model),
         );
         inner.settings.verbosity = inner
             .catalog
-            .normalize_verbosity(&input.verbosity, &active_model_id(&inner.settings.model));
+            .normalize_verbosity(&input.verbosity, &crate::domain::active_model_id(&inner.settings.model));
         inner.settings.extended_thinking = input.extended_thinking;
         inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
         inner.settings.always_on_top = input.always_on_top;
@@ -95,11 +95,4 @@ fn normalize_claude_effort(value: &str) -> String {
         "low" | "medium" | "high" => value.to_owned(),
         _ => "high".to_owned(),
     }
-}
-
-/// Returns the model id from a provider/model selection key.
-fn active_model_id(model_key: &str) -> String {
-    crate::domain::split_model_key(model_key)
-        .map(|(_, model)| model.to_owned())
-        .unwrap_or_else(|| model_key.to_owned())
 }

@@ -3,6 +3,7 @@
 use super::AppState;
 use crate::app::view::AppSnapshot;
 use crate::domain::ChatSession;
+use crate::domain::messages::*;
 use anyhow::{Result, anyhow};
 
 impl AppState {
@@ -13,7 +14,7 @@ impl AppState {
         let session = ChatSession::with_model(inner.settings.model.clone());
         inner.settings.active_session_id = session.id.clone();
         inner.sessions.push(session);
-        inner.status = "New chat created.".to_owned();
+        inner.status = STATUS_NEW_CHAT_CREATED.to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())
@@ -23,11 +24,11 @@ impl AppState {
     pub fn select_session(&self, session_id: &str) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         if !inner.sessions.iter().any(|s| s.id == session_id) {
-            return Err(anyhow!("Chat session not found."));
+            return Err(anyhow!(ERR_NOT_FOUND_SESSION));
         }
         inner.settings.active_session_id = session_id.to_owned();
         inner.load_active_session_model_settings()?;
-        inner.status = "Chat selected.".to_owned();
+        inner.status = STATUS_CHAT_SELECTED.to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())
@@ -54,7 +55,7 @@ impl AppState {
                 .unwrap_or_default();
             inner.load_active_session_model_settings()?;
         }
-        inner.status = "Chat deleted.".to_owned();
+        inner.status = STATUS_CHAT_DELETED.to_owned();
         inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
         Ok(inner.build_snapshot())

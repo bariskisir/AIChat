@@ -264,18 +264,43 @@ fn parse_sse_line(line: &str) -> Result<Option<String>> {
     Ok((!text.is_empty()).then_some(text))
 }
 
-/// Builds standard headers for provider requests.
+/// Dispatches to the appropriate header builder for the given provider.
 fn headers(ctx: &OpenAiContext) -> Result<HeaderMap> {
-    let mut headers = HeaderMap::new();
     if ctx.is_opencode() {
-        if !ctx.api_key.trim().is_empty() {
-            headers.insert(
-                HeaderName::from_static("x-opencode-session"),
-                HeaderValue::from_str(ctx.api_key.trim())
-                    .context("OpenCode token contains invalid characters")?,
-            );
+        opencode_headers(ctx)
+    } else {
+        standard_headers(ctx)
+    }
+}
+
+/// Builds headers for an OpenCode Zen provider request.
+fn opencode_headers(ctx: &OpenAiContext) -> Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    if !ctx.api_key.trim().is_empty() {
+        headers.insert(
+            HeaderName::from_static("x-opencode-session"),
+            HeaderValue::from_str(ctx.api_key.trim())
+                .context("OpenCode token contains invalid characters")?,
+        );
+    }
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    for (name, value) in &ctx.custom_headers {
+        if name.eq_ignore_ascii_case("x-opencode-session") {
+            continue;
         }
-    } else if !ctx.api_key.trim().is_empty() {
+        let header_name = HeaderName::from_bytes(name.trim().as_bytes())
+            .with_context(|| format!("Invalid custom header name: {name}"))?;
+        let header_value = HeaderValue::from_str(value)
+            .with_context(|| format!("Invalid custom header value for {name}"))?;
+        headers.insert(header_name, header_value);
+    }
+    Ok(headers)
+}
+
+/// Builds headers for a standard OpenAI-compatible provider request.
+fn standard_headers(ctx: &OpenAiContext) -> Result<HeaderMap> {
+    let mut headers = HeaderMap::new();
+    if !ctx.api_key.trim().is_empty() {
         let token = format!("Bearer {}", ctx.api_key.trim());
         headers.insert(
             AUTHORIZATION,
@@ -285,9 +310,6 @@ fn headers(ctx: &OpenAiContext) -> Result<HeaderMap> {
     }
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     for (name, value) in &ctx.custom_headers {
-        if ctx.is_opencode() && name.eq_ignore_ascii_case("x-opencode-session") {
-            continue;
-        }
         let header_name = HeaderName::from_bytes(name.trim().as_bytes())
             .with_context(|| format!("Invalid custom header name: {name}"))?;
         let header_value = HeaderValue::from_str(value)

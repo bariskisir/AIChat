@@ -4,6 +4,7 @@
 /// <reference path="./render.ts" />
 /// <reference path="./api.ts" />
 /// <reference path="./app-context.ts" />
+/// <reference path="./constants.ts" />
 
 namespace Composer {
   let stopInFlight = false;
@@ -37,7 +38,7 @@ namespace Composer {
     }
     const text = refs.inputComposer.value.trim();
     if (!text && model.pendingImageDataUrls.length === 0) {
-      Renderer.renderStatus(refs, "Enter a message or paste an image first.", true);
+      Renderer.renderStatus(refs, Constants.COMPOSER_EMPTY_ERROR, true);
       return;
     }
     await AppContext.saveSettings();
@@ -53,10 +54,10 @@ namespace Composer {
 
   // Sends on Enter and keeps Shift+Enter for multiline input.
   function handleComposerKeydown(event: KeyboardEvent): void {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === Constants.KEY.ENTER && !event.shiftKey) {
       event.preventDefault();
       if (AppContext.model.appState?.isGenerating) {
-        Renderer.renderStatus(AppContext.refs, "Press Esc or click Stop to stop.");
+        Renderer.renderStatus(AppContext.refs, Constants.COMPOSER_ENTER_BLOCKED);
         return;
       }
       AppContext.refs.formComposer.requestSubmit();
@@ -65,7 +66,7 @@ namespace Composer {
 
   // Stops a running answer from the global Escape shortcut.
   function handleGlobalKeydown(event: KeyboardEvent): void {
-    if (event.key !== "Escape" || !AppContext.model.appState?.isGenerating) {
+    if (event.key !== Constants.KEY.ESCAPE || !AppContext.model.appState?.isGenerating) {
       return;
     }
     event.preventDefault();
@@ -80,7 +81,7 @@ namespace Composer {
       return;
     }
     stopInFlight = true;
-    Renderer.renderStatus(AppContext.refs, "Stopping answer...");
+    Renderer.renderStatus(AppContext.refs, Constants.STATUS_STOPPING);
     await AppContext.renderSnapshot(() => Api.stopChat(state.activeSession.id));
     stopInFlight = false;
   }
@@ -122,7 +123,7 @@ namespace Composer {
   function removePendingImage(event: MouseEvent): void {
     const refs = AppContext.refs;
     const model = AppContext.model;
-    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-image-index]");
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>(`[${"data-image-index"}]`);
     const index = Number(button?.dataset.imageIndex);
     if (!Number.isInteger(index)) {
       return;

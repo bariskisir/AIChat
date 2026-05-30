@@ -159,8 +159,8 @@ pub async fn stream_chat_response<F>(
 where
     F: FnMut(String) + Send,
 {
-    let human_uuid = uuid_v4();
-    let assistant_uuid = uuid_v4();
+    let human_uuid = uuid::Uuid::new_v4().to_string();
+    let assistant_uuid = uuid::Uuid::new_v4().to_string();
     let file_ids = upload_image_files(ctx, conv_id, &request.image_data_urls).await?;
 
     let mut payload = serde_json::json!({
@@ -363,30 +363,3 @@ fn parse_sse_line(line: &str) -> Option<String> {
     None
 }
 
-/// Generates a UUID v4 string.
-fn uuid_v4() -> String {
-    use rand::Rng;
-    let mut bytes = [0u8; 16];
-    rand::rng().fill(&mut bytes);
-    bytes[6] = (bytes[6] & 0x0f) | 0x40;
-    bytes[8] = (bytes[8] & 0x3f) | 0x80;
-    format!(
-        "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        bytes[0],
-        bytes[1],
-        bytes[2],
-        bytes[3],
-        bytes[4],
-        bytes[5],
-        bytes[6],
-        bytes[7],
-        bytes[8],
-        bytes[9],
-        bytes[10],
-        bytes[11],
-        bytes[12],
-        bytes[13],
-        bytes[14],
-        bytes[15],
-    )
-}

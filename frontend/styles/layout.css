@@ -1,0 +1,176 @@
+/* Shell, toolbar, sidebar, workspace, and footer layout. */
+
+.ch-shell {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+}
+
+.ch-view--main {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+/* Toolbars */
+
+.ch-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-sm);
+  padding: 0 var(--spacing-md);
+  border-bottom: var(--border-default);
+  background: var(--surface-raised);
+  color: var(--muted);
+  font-weight: var(--font-weight-semibold);
+}
+
+#statusText {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#statusText {
+  flex: 1 1 auto;
+}
+
+.ch-toolbar--model,
+.ch-toolbar--actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--toolbar-gap);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: var(--border-default);
+  background: var(--surface);
+}
+
+.ch-toolbar--actions {
+  justify-content: space-between;
+  padding-top: var(--toolbar-padding-top);
+  padding-bottom: var(--toolbar-padding-bottom);
+  background: var(--surface-raised);
+}
+
+/* Inline groups */
+
+.ch-model-bar,
+.ch-tool-group,
+.ch-composer__controls,
+.ch-composer__preview {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.ch-model-bar {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  column-gap: var(--spacing-xl);
+  row-gap: var(--spacing-xs);
+}
+
+.ch-select-field,
+.ch-toggle-field {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-width: 0;
+  gap: var(--spacing-xs);
+}
+
+.ch-tool-group,
+.ch-composer__controls,
+.ch-composer__preview {
+  gap: var(--spacing-xs);
+}
+
+.ch-select-field span,
+.ch-toggle-field span {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+/* Workspace */
+
+.ch-workspace {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Sidebar */
+
+.ch-sidebar {
+  display: flex;
+  flex: 0 0 auto;
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-min-width);
+  max-width: var(--sidebar-max-width);
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  background: var(--surface-sidebar);
+}
+
+.ch-sidebar__resizer {
+  flex: 0 0 var(--resizer-sidebar-width);
+  width: var(--resizer-sidebar-width);
+  border-right: var(--border-default);
+  border-left: 1px solid transparent;
+  background: var(--surface-raised);
+  cursor: col-resize;
+}
+
+.ch-sidebar__resizer:hover,
+.is-resizing-sidebar .ch-sidebar__resizer {
+  border-left-color: var(--primary-a48);
+  border-right-color: var(--primary-a48);
+  background: var(--primary-a10);
+}
+
+.ch-sidebar__nav {
+  display: grid;
+  align-content: start;
+  gap: var(--sidebar-item-gap);
+  min-height: 0;
+  overflow: auto;
+  padding: var(--spacing-sm);
+}
+
+/* Footer */
+
+.ch-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-sm);
+  padding: var(--footer-padding-top) var(--footer-padding-h) var(--footer-padding-bottom);
+  border-top: var(--border-default);
+  background: var(--surface-raised);
+}
+
+.ch-footer button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.ch-footer button:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
