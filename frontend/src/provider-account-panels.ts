@@ -239,14 +239,44 @@ namespace ProviderAccountPanels {
 
   // Splits the compact ChatGPT usage label into dedicated account fields.
   function codexUsageParts(label: string): CodexUsageParts {
-    const plan = label.split(",")[0]?.trim() || "--";
-    const limitMatch = label.match(/(\d+(?:\.\d+)?)%/);
-    const resetMatch = label.match(/resets\s+([^,]+)/);
+    const windows = codexUsageWindows(label);
+    const firstWindow = windows[0];
+    const plan = firstWindow
+      ? label.slice(0, firstWindow.index).replace(/,\s*$/, "").trim() || "--"
+      : label.split(",")[0]?.trim() || "--";
     return {
       plan,
-      limit: limitMatch ? `${limitMatch[1]}%` : "--",
-      reset: resetMatch?.[1]?.trim() || "--",
+      limit: windows.length ? windows.map((window) => `${window.window}: ${window.percent}%`).join(", ") : "--",
+      reset: windows.length ? windows.map(formatCodexUsageReset).join(", ") : "--",
     };
+  }
+
+  interface CodexUsageWindow {
+    index: number;
+    window: string;
+    percent: string;
+    reset: string;
+  }
+
+  // Extracts all ChatGPT usage windows from the compact backend label.
+  function codexUsageWindows(label: string): CodexUsageWindow[] {
+    const windows: CodexUsageWindow[] = [];
+    const usagePattern = /(?:^|,\s*)(\d+(?:\.\d+)?[mhd]):\s*(\d+(?:\.\d+)?)%(?:\s+resets\s+([^,]+))?/g;
+    let match: RegExpExecArray | null;
+    while ((match = usagePattern.exec(label)) !== null) {
+      windows.push({
+        index: match.index,
+        window: match[1],
+        percent: match[2],
+        reset: match[3]?.trim() || "--",
+      });
+    }
+    return windows;
+  }
+
+  // Formats a usage-window reset value for the Codex account panel.
+  function formatCodexUsageReset(window: CodexUsageWindow): string {
+    return `${window.window}: ${window.reset}`;
   }
 
   // Marks the provider currently loaded in the editor.

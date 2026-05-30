@@ -1213,6 +1213,13 @@ textarea:disabled {
   white-space: nowrap;
 }
 
+#codexAccountLimit,
+#codexAccountReset {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .ch-codex-account__limit {
   display: flex;
   align-items: center;
