@@ -4,6 +4,13 @@ use std::fs;
 use std::path::Path;
 
 const PLACEHOLDER_APP_JS: &str = "console.warn('Run npm install && npm run build in frontend.');";
+const REQUIRED_STYLE_FILES: &[&str] = &[
+    "base.css",
+    "layout.css",
+    "chat.css",
+    "controls.css",
+    "utilities.css",
+];
 
 /// Ensures `cargo run` can compile even when the Tauri CLI did not run
 /// `beforeBuildCommand` first.
@@ -15,7 +22,7 @@ fn main() {
 /// Verifies release assets and creates lightweight dev fallbacks when needed.
 fn ensure_frontend_dist() {
     println!("cargo:rerun-if-changed=frontend/index.html");
-    println!("cargo:rerun-if-changed=frontend/styles.css");
+    println!("cargo:rerun-if-changed=frontend/styles");
     println!("cargo:rerun-if-changed=frontend/scripts/prepare-dist.mjs");
     println!("cargo:rerun-if-changed=frontend/src");
     println!("cargo:rerun-if-changed=frontend/package-lock.json");
@@ -24,7 +31,7 @@ fn ensure_frontend_dist() {
     let dist = Path::new("frontend").join("dist");
     let dist_app = dist.join("app.js");
     let dist_index = dist.join("index.html");
-    let dist_styles = dist.join("styles.css");
+    let dist_styles = dist.join("styles");
     let dist_icon = dist.join("icon.png");
     if frontend_dist_is_complete(&dist) {
         return;
@@ -39,7 +46,7 @@ fn ensure_frontend_dist() {
 
     fs::create_dir_all(&dist).expect("Could not create frontend/dist");
     copy_asset("frontend/index.html", &dist_index);
-    copy_asset("frontend/styles.css", &dist_styles);
+    copy_dir("frontend/styles", &dist_styles);
     copy_asset("icons/icon.png", &dist_icon);
 
     if !dist_app.exists() {
@@ -57,16 +64,25 @@ fn is_release_profile() -> bool {
 fn frontend_dist_is_complete(dist: &Path) -> bool {
     dist.join("app.js").exists()
         && dist.join("index.html").exists()
-        && dist.join("styles.css").exists()
         && dist.join("icon.png").exists()
+        && REQUIRED_STYLE_FILES
+            .iter()
+            .all(|file| dist.join("styles").join(file).exists())
 }
 
 /// Describes why the frontend distribution cannot be packaged.
 fn frontend_dist_problem(dist: &Path) -> String {
-    let missing = ["app.js", "index.html", "styles.css", "icon.png"]
+    let mut missing = ["app.js", "index.html", "icon.png"]
         .into_iter()
         .filter(|file| !dist.join(file).exists())
+        .map(str::to_owned)
         .collect::<Vec<_>>();
+    missing.extend(
+        REQUIRED_STYLE_FILES
+            .iter()
+            .map(|file| format!("styles/{file}"))
+            .filter(|file| !dist.join(file).exists()),
+    );
 
     if missing.is_empty() {
         "unknown frontend build problem".to_owned()
@@ -86,4 +102,40 @@ fn copy_asset(source: impl AsRef<Path>, destination: &Path) {
             error
         )
     });
+}
+
+/// Recursively copies a directory into the frontend distribution directory.
+fn copy_dir(source: impl AsRef<Path>, destination: &Path) {
+    let source = source.as_ref();
+    fs::create_dir_all(destination).unwrap_or_else(|error| {
+        panic!(
+            "Could not create {}: {}. Run `npm install` and `npm run build` in frontend.",
+            destination.display(),
+            error
+        )
+    });
+
+    for entry in fs::read_dir(source).unwrap_or_else(|error| {
+        panic!(
+            "Could not read {}: {}. Run `npm install` and `npm run build` in frontend.",
+            source.display(),
+            error
+        )
+    }) {
+        let entry = entry.unwrap_or_else(|error| {
+            panic!(
+                "Could not read a file in {}: {}. Run `npm install` and `npm run build` in frontend.",
+                source.display(),
+                error
+            )
+        });
+        let source_path = entry.path();
+        let destination_path = destination.join(entry.file_name());
+
+        if source_path.is_dir() {
+            copy_dir(&source_path, &destination_path);
+        } else {
+            copy_asset(&source_path, &destination_path);
+        }
+    }
 }
