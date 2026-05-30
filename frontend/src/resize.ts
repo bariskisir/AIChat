@@ -1,71 +1,70 @@
 /** Drag resize behavior for the sidebar and composer. */
-/// <reference path="./dom.ts" />
-/// <reference path="./app-context.ts" />
 
-namespace ResizeControls {
-  // Connects all resize separators to their drag behavior.
-  export function bind(refs: DomRefs.Refs): void {
-    bindSidebar(refs);
-    bindComposer(refs);
+import * as AppContext from "./app-context.js";
+import { type Refs } from "./dom.js";
+
+// Connects all resize separators to their drag behavior.
+export function bind(refs: Refs): void {
+  bindSidebar(refs);
+  bindComposer(refs);
+}
+
+// Lets the user resize the chat session sidebar by dragging the separator.
+function bindSidebar(refs: Refs): void {
+  let startX = 0;
+  let startWidth = 0;
+  const minWidth = 80;
+  const maxWidth = 360;
+  refs.resizerSidebar.addEventListener("mousedown", (event) => {
+    startX = event.clientX;
+    startWidth = refs.navSessions.closest<HTMLElement>(".ch-sidebar")?.offsetWidth || 115;
+    document.body.classList.add("is-resizing-sidebar");
+    document.addEventListener("mousemove", resizeSidebar);
+    document.addEventListener("mouseup", stopSidebarResize, { once: true });
+  });
+
+  // Applies the sidebar width while dragging the separator.
+  function resizeSidebar(event: MouseEvent): void {
+    const sidebar = refs.navSessions.closest<HTMLElement>(".ch-sidebar");
+    if (!sidebar) {
+      return;
+    }
+    const width = Math.min(maxWidth, Math.max(minWidth, startWidth + event.clientX - startX));
+    sidebar.style.width = `${width}px`;
   }
 
-  // Lets the user resize the chat session sidebar by dragging the separator.
-  function bindSidebar(refs: DomRefs.Refs): void {
-    let startX = 0;
-    let startWidth = 0;
-    const minWidth = 80;
-    const maxWidth = 360;
-    refs.resizerSidebar.addEventListener("mousedown", (event) => {
-      startX = event.clientX;
-      startWidth = refs.navSessions.closest<HTMLElement>(".ch-sidebar")?.offsetWidth || 115;
-      document.body.classList.add("is-resizing-sidebar");
-      document.addEventListener("mousemove", resizeSidebar);
-      document.addEventListener("mouseup", stopSidebarResize, { once: true });
-    });
+  // Clears temporary resize listeners and cursor state.
+  function stopSidebarResize(): void {
+    document.body.classList.remove("is-resizing-sidebar");
+    document.removeEventListener("mousemove", resizeSidebar);
+    void AppContext.saveSettings();
+  }
+}
 
-    // Applies the sidebar width while dragging the separator.
-    function resizeSidebar(event: MouseEvent): void {
-      const sidebar = refs.navSessions.closest<HTMLElement>(".ch-sidebar");
-      if (!sidebar) {
-        return;
-      }
-      const width = Math.min(maxWidth, Math.max(minWidth, startWidth + event.clientX - startX));
-      sidebar.style.width = `${width}px`;
-    }
+// Lets the user resize the message composer by dragging the horizontal separator.
+function bindComposer(refs: Refs): void {
+  let startY = 0;
+  let startHeight = 0;
+  const minHeight = 46;
+  const maxHeight = 220;
+  refs.resizerComposer.addEventListener("mousedown", (event) => {
+    event.preventDefault();
+    startY = event.clientY;
+    startHeight = refs.inputComposer.offsetHeight || 58;
+    document.body.classList.add("is-resizing-composer");
+    document.addEventListener("mousemove", resizeComposer);
+    document.addEventListener("mouseup", stopComposerResize, { once: true });
+  });
 
-    // Clears temporary resize listeners and cursor state.
-    function stopSidebarResize(): void {
-      document.body.classList.remove("is-resizing-sidebar");
-      document.removeEventListener("mousemove", resizeSidebar);
-      void AppContext.saveSettings();
-    }
+  // Applies the composer height while dragging the separator.
+  function resizeComposer(event: MouseEvent): void {
+    const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight - (event.clientY - startY)));
+    refs.inputComposer.style.height = `${nextHeight}px`;
   }
 
-  // Lets the user resize the message composer by dragging the horizontal separator.
-  function bindComposer(refs: DomRefs.Refs): void {
-    let startY = 0;
-    let startHeight = 0;
-    const minHeight = 46;
-    const maxHeight = 220;
-    refs.resizerComposer.addEventListener("mousedown", (event) => {
-      event.preventDefault();
-      startY = event.clientY;
-      startHeight = refs.inputComposer.offsetHeight || 58;
-      document.body.classList.add("is-resizing-composer");
-      document.addEventListener("mousemove", resizeComposer);
-      document.addEventListener("mouseup", stopComposerResize, { once: true });
-    });
-
-    // Applies the composer height while dragging the separator.
-    function resizeComposer(event: MouseEvent): void {
-      const nextHeight = Math.min(maxHeight, Math.max(minHeight, startHeight - (event.clientY - startY)));
-      refs.inputComposer.style.height = `${nextHeight}px`;
-    }
-
-    // Clears temporary composer resize listeners and cursor state.
-    function stopComposerResize(): void {
-      document.body.classList.remove("is-resizing-composer");
-      document.removeEventListener("mousemove", resizeComposer);
-    }
+  // Clears temporary composer resize listeners and cursor state.
+  function stopComposerResize(): void {
+    document.body.classList.remove("is-resizing-composer");
+    document.removeEventListener("mousemove", resizeComposer);
   }
 }

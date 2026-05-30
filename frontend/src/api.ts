@@ -1,95 +1,93 @@
 /** Typed Tauri command wrappers for AI Chat. */
-/// <reference path="./types.d.ts" />
-/// <reference path="./tauri-bridge.ts" />
 
-namespace Api {
-  // Loads the current backend state snapshot.
-  export function getSnapshot(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("app_get_snapshot");
-  }
+import * as TauriBridge from "./tauri-bridge.js";
 
-  // Persists frontend-controlled settings.
-  export function updateSettings(settings: FrontendSettings): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("settings_update", { settings });
-  }
+// Loads the current backend state snapshot.
+export function getSnapshot(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("app_get_snapshot");
+}
 
-  // Starts the ChatGPT OAuth sign-in flow for the Codex provider.
-  export function startLogin(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("auth_start_login");
-  }
+// Persists frontend-controlled settings.
+export function updateSettings(settings: FrontendSettings): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("settings_update", { settings });
+}
 
-  // Signs out of the ChatGPT account used by the Codex provider.
-  export function signOut(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("auth_sign_out");
-  }
+// Starts the ChatGPT OAuth sign-in flow for the Codex provider.
+export function startLogin(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("auth_start_login");
+}
 
-  // Starts the browser-based Claude.ai sign-in flow.
-  export function startClaudeLogin(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_start_login");
-  }
+// Signs out of the ChatGPT account used by the Codex provider.
+export function signOut(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("auth_sign_out");
+}
 
-  // Signs out of the Claude account used by the Claude provider.
-  export function signOutClaude(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_sign_out");
-  }
+// Starts the browser-based Claude.ai sign-in flow.
+export function startClaudeLogin(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_start_login");
+}
 
-  // Saves a provider and refreshes its model list.
-  export function saveProvider(provider: ProviderInput): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("provider_save", { provider });
-  }
+// Signs out of the Claude account used by the Claude provider.
+export function signOutClaude(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("claude_auth_sign_out");
+}
 
-  // Deletes a provider.
-  export function deleteProvider(providerId: string): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("provider_delete", { providerId });
-  }
+// Saves a provider and refreshes its model list.
+export function saveProvider(provider: ProviderInput): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("provider_save", { provider });
+}
 
-  // Refreshes every provider model catalog from the backend.
-  export function refreshModels(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("catalog_refresh_models");
-  }
+// Deletes a provider.
+export function deleteProvider(providerId: string): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("provider_delete", { providerId });
+}
 
-  // Refreshes one provider model catalog from the backend.
-  export function refreshProviderModels(providerId: string): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("provider_refresh_models", { providerId });
-  }
+// Refreshes every provider model catalog from the backend.
+export function refreshModels(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("catalog_refresh_models");
+}
 
-  // Creates and selects a new local chat session.
-  export function createSession(): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("session_create");
-  }
+// Refreshes one provider model catalog from the backend.
+export function refreshProviderModels(providerId: string): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("provider_refresh_models", { providerId });
+}
 
-  // Selects an existing local chat session.
-  export function selectSession(sessionId: string): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("session_select", { sessionId });
-  }
+// Creates and selects a new local chat session.
+export function createSession(): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("session_create");
+}
 
-  // Deletes a local chat session.
-  export function deleteSession(sessionId: string): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("session_delete", { sessionId });
-  }
+// Selects an existing local chat session.
+export function selectSession(sessionId: string): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("session_select", { sessionId });
+}
 
-  // Sends a user message to the selected provider.
-  export function sendChat(input: SendMessageRequest): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("chat_send", { input });
-  }
+// Deletes a local chat session.
+export function deleteSession(sessionId: string): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("session_delete", { sessionId });
+}
 
-  // Stops the active provider response stream.
-  export function stopChat(sessionId: string): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("chat_stop", { sessionId });
-  }
+// Sends a user message to the selected provider.
+export function sendChat(input: SendMessageRequest): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("chat_send", { input });
+}
 
-  // Writes plain text to the system clipboard.
-  export function writeClipboardText(text: string): Promise<void> {
-    return TauriBridge.invokeCommand("clipboard_write_text", { text });
-  }
+// Stops the active provider response stream.
+export function stopChat(sessionId: string): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("chat_stop", { sessionId });
+}
 
-  // Toggles the native always-on-top window flag.
-  export function setWindowPinned(enabled: boolean): Promise<AppSnapshot> {
-    return TauriBridge.invokeCommand<AppSnapshot>("window_set_pinned", { enabled });
-  }
+// Writes plain text to the system clipboard.
+export function writeClipboardText(text: string): Promise<void> {
+  return TauriBridge.invokeCommand("clipboard_write_text", { text });
+}
 
-  // Opens a known external project link.
-  export function openLink(target: LinkTarget): Promise<void> {
-    return TauriBridge.invokeCommand("link_open", { target });
-  }
+// Toggles the native always-on-top window flag.
+export function setWindowPinned(enabled: boolean): Promise<AppSnapshot> {
+  return TauriBridge.invokeCommand<AppSnapshot>("window_set_pinned", { enabled });
+}
+
+// Opens a known external project link.
+export function openLink(target: LinkTarget): Promise<void> {
+  return TauriBridge.invokeCommand("link_open", { target });
 }
