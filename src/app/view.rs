@@ -65,7 +65,7 @@ pub struct SettingsInput {
     pub thinking_variant: String,
     #[serde(default = "default_verbosity_setting")]
     pub verbosity: String,
-    #[serde(default)]
+    #[serde(default = "default_extended_thinking")]
     pub extended_thinking: bool,
     #[serde(default = "default_claude_effort")]
     pub claude_effort: String,
@@ -91,12 +91,17 @@ fn default_thinking_variant() -> String {
 
 /// Returns the fallback Codex verbosity setting for older frontends.
 fn default_verbosity_setting() -> String {
-    crate::domain::DEFAULT_VERBOSITY_SETTING.to_owned()
+    crate::domain::default_verbosity_setting()
+}
+
+/// Returns the fallback Claude extended-thinking setting for older frontends.
+fn default_extended_thinking() -> bool {
+    crate::domain::default_extended_thinking()
 }
 
 /// Returns the fallback Claude effort setting for older frontends.
 fn default_claude_effort() -> String {
-    "high".to_owned()
+    crate::domain::default_claude_effort()
 }
 
 /// Returns the default show-footer setting for older frontends.

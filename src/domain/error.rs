@@ -26,12 +26,24 @@ pub enum AppError {
 
 #[allow(dead_code)]
 impl AppError {
-    pub fn validation(msg: impl Into<String>) -> Self { Self::Validation(msg.into()) }
-    pub fn auth(msg: impl Into<String>) -> Self { Self::Auth(msg.into()) }
-    pub fn lock() -> Self { Self::Lock }
-    pub fn not_found(msg: impl Into<String>) -> Self { Self::NotFound(msg.into()) }
-    pub fn network(msg: impl Into<String>) -> Self { Self::Network(msg.into()) }
-    pub fn provider(msg: impl Into<String>) -> Self { Self::Provider(msg.into()) }
+    pub fn validation(msg: impl Into<String>) -> Self {
+        Self::Validation(msg.into())
+    }
+    pub fn auth(msg: impl Into<String>) -> Self {
+        Self::Auth(msg.into())
+    }
+    pub fn lock() -> Self {
+        Self::Lock
+    }
+    pub fn not_found(msg: impl Into<String>) -> Self {
+        Self::NotFound(msg.into())
+    }
+    pub fn network(msg: impl Into<String>) -> Self {
+        Self::Network(msg.into())
+    }
+    pub fn provider(msg: impl Into<String>) -> Self {
+        Self::Provider(msg.into())
+    }
 }
 
 impl From<AppError> for String {

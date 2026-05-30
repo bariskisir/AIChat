@@ -196,11 +196,32 @@ pub const LABEL_THINKING_MEDIUM: &str = "medium";
 /// Label for the "high" thinking / reasoning effort option.
 pub const LABEL_THINKING_HIGH: &str = "high";
 
+/// Label for the "max" Claude effort option.
+pub const LABEL_THINKING_MAX: &str = "max";
+
 /// Label for the "xhigh" thinking variant shown in Codex providers.
 pub const LABEL_THINKING_XHIGH: &str = "xhigh";
 
 /// Label for the "none" reasoning-effort / disabled value.
 pub const LABEL_NONE: &str = "none";
+
+/// Label for the current title-generation model sentinel.
+pub const LABEL_CURRENT: &str = "current";
+
+/// Default Claude effort setting.
+pub const CLAUDE_EFFORT_DEFAULT: &str = LABEL_THINKING_MAX;
+
+/// Description for low reasoning / thinking depth.
+pub const DESC_THINKING_LOW: &str = "Fast responses with lighter reasoning";
+
+/// Description for medium reasoning / thinking depth.
+pub const DESC_THINKING_MEDIUM: &str = "Balanced reasoning for everyday tasks";
+
+/// Description for high reasoning / thinking depth.
+pub const DESC_THINKING_HIGH: &str = "Greater reasoning depth for complex tasks";
+
+/// Description for extra-high Codex thinking depth.
+pub const DESC_THINKING_XHIGH: &str = "Extra high reasoning depth for complex tasks";
 
 // ---------------------------------------------------------------------------
 // Format templates ─── FMT_ prefix

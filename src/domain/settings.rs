@@ -26,7 +26,7 @@ pub struct AppSettings {
     pub thinking_variant: String,
     #[serde(default = "super::default_verbosity_setting")]
     pub verbosity: String,
-    #[serde(default)]
+    #[serde(default = "default_extended_thinking")]
     pub extended_thinking: bool,
     #[serde(default = "super::default_claude_effort")]
     pub claude_effort: String,
@@ -62,7 +62,7 @@ impl Default for AppSettings {
             reasoning_effort: super::default_reasoning_effort(),
             thinking_variant: super::default_thinking_variant(),
             verbosity: super::default_verbosity_setting(),
-            extended_thinking: false,
+            extended_thinking: default_extended_thinking(),
             claude_effort: super::default_claude_effort(),
             always_on_top: false,
             window_width: DEFAULT_WINDOW_WIDTH,
@@ -82,6 +82,12 @@ impl Default for AppSettings {
 fn default_model() -> String {
     String::new()
 }
+
+/// Enables Claude extended thinking by default.
+pub fn default_extended_thinking() -> bool {
+    true
+}
+
 /// Supplies the initial window width for persisted settings.
 fn default_window_width() -> u32 {
     DEFAULT_WINDOW_WIDTH

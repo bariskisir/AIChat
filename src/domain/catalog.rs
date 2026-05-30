@@ -1,10 +1,10 @@
 //! Model catalog storage and available model types for AI Chat.
 
 use super::{
-    DEFAULT_CODEX_CLIENT_VERSION, DEFAULT_CODEX_MODEL, DEFAULT_THINKING_VARIANT,
-    DEFAULT_VERBOSITY, DEFAULT_VERBOSITY_SETTING, default_codex_client_version,
-    default_input_modalities, default_support_verbosity, default_thinking_variant,
-    default_verbosity, fallback_models, fallback_thinking_variants, is_verbosity_level,
+    DEFAULT_CODEX_CLIENT_VERSION, DEFAULT_CODEX_MODEL, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY,
+    DEFAULT_VERBOSITY_SETTING, default_codex_client_version, default_input_modalities,
+    default_support_verbosity, default_thinking_variant, default_verbosity, fallback_models,
+    fallback_thinking_variants, is_verbosity_level,
 };
 use serde::{Deserialize, Serialize};
 

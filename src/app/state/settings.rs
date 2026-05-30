@@ -5,6 +5,10 @@ use crate::app::view::{AppSnapshot, SettingsInput};
 use crate::domain::{
     MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
     is_minimized_window_position,
+    messages::{
+        CLAUDE_EFFORT_DEFAULT, LABEL_NONE, LABEL_THINKING_HIGH, LABEL_THINKING_LOW,
+        LABEL_THINKING_MAX, LABEL_THINKING_MEDIUM,
+    },
 };
 use anyhow::Result;
 
@@ -19,9 +23,10 @@ impl AppState {
             &input.thinking_variant,
             &crate::domain::active_model_id(&inner.settings.model),
         );
-        inner.settings.verbosity = inner
-            .catalog
-            .normalize_verbosity(&input.verbosity, &crate::domain::active_model_id(&inner.settings.model));
+        inner.settings.verbosity = inner.catalog.normalize_verbosity(
+            &input.verbosity,
+            &crate::domain::active_model_id(&inner.settings.model),
+        );
         inner.settings.extended_thinking = input.extended_thinking;
         inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
         inner.settings.always_on_top = input.always_on_top;
@@ -84,15 +89,17 @@ impl AppState {
 /// Keeps reasoning effort within supported OpenAI-compatible values.
 fn normalize_reasoning_effort(value: &str) -> String {
     match value {
-        "low" | "medium" | "high" => value.to_owned(),
-        _ => "none".to_owned(),
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH => value.to_owned(),
+        _ => LABEL_NONE.to_owned(),
     }
 }
 
 /// Keeps Claude effort within supported values.
 fn normalize_claude_effort(value: &str) -> String {
     match value {
-        "low" | "medium" | "high" => value.to_owned(),
-        _ => "high".to_owned(),
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH | LABEL_THINKING_MAX => {
+            value.to_owned()
+        }
+        _ => CLAUDE_EFFORT_DEFAULT.to_owned(),
     }
 }

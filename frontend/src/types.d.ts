@@ -164,7 +164,7 @@ type EffortLevel = "low" | "medium" | "high";
 type EffortSetting = EffortLevel | "none";
 type VerbosityLevel = "low" | "medium" | "high";
 type VerbositySetting = VerbosityLevel | "default";
-type ClaudeEffort = "low" | "medium" | "high";
+type ClaudeEffort = EffortLevel | "max";
 type EventType = "snapshot" | "assistantDelta" | "sessionTitleUpdated" | "error";
 type ThinkingVariantValue = string;
 type SelectOption<T extends string = string> = { value: T; label: string; title?: string; };

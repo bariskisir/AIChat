@@ -1,10 +1,10 @@
 //! Provider storage and configuration for AI Chat.
 
+use super::messages::*;
 use super::{
     AvailableModel, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ProviderKind,
     default_thinking_variant, default_verbosity, fallback_thinking_variants,
 };
-use super::messages::*;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 

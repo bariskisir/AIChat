@@ -1,13 +1,13 @@
 //! Claude chat submission and streaming state helpers.
 
-use super::super::chat_pipeline;
 use super::super::AppState;
+use super::super::chat_pipeline;
 use crate::app::state::chat::title_prompt;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
+use crate::domain::messages::*;
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title,
 };
-use crate::domain::messages::*;
 use crate::infra::claude;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -48,9 +48,7 @@ impl AppState {
             let mut inner = self.lock()?;
             let session_id = inner.settings.active_session_id.clone();
             if inner.active_chat_responses.contains_key(&session_id) {
-                return Err(anyhow!(
-                    ERR_VALIDATION_STOP_FIRST
-                ));
+                return Err(anyhow!(ERR_VALIDATION_STOP_FIRST));
             }
             inner.save_active_session_model_settings()?;
             let (_, model) = crate::domain::split_model_key(&inner.settings.model)
@@ -62,24 +60,26 @@ impl AppState {
             let session = inner.active_session_mut()?;
             let conv_id = uuid::Uuid::new_v4().to_string();
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
-            let should_generate_title = session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
-            let title_work =
-                if should_generate_title && !title_gen_model.trim().eq_ignore_ascii_case("none") {
-                    Some(PendingClaudeTitleResponse {
-                        session_id: session_id.clone(),
-                        fallback_title: fallback_session_title(&user_message),
-                        conv_id: uuid::Uuid::new_v4().to_string(),
-                        request: claude::ClaudeChatRequest {
-                            prompt: title_prompt(&user_message),
-                            model: model.clone(),
-                            extended_thinking: false,
-                            effort: None,
-                            image_data_urls: Vec::new(),
-                        },
-                    })
-                } else {
-                    None
-                };
+            let should_generate_title =
+                session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
+            let title_work = if should_generate_title
+                && !title_gen_model.trim().eq_ignore_ascii_case(LABEL_NONE)
+            {
+                Some(PendingClaudeTitleResponse {
+                    session_id: session_id.clone(),
+                    fallback_title: fallback_session_title(&user_message),
+                    conv_id: uuid::Uuid::new_v4().to_string(),
+                    request: claude::ClaudeChatRequest {
+                        prompt: title_prompt(&user_message),
+                        model: model.clone(),
+                        extended_thinking: false,
+                        effort: None,
+                        image_data_urls: Vec::new(),
+                    },
+                })
+            } else {
+                None
+            };
             let assistant_message = ChatMessage::assistant_placeholder();
             if session.title == CHAT_DEFAULT_TITLE {
                 session.title = fallback_session_title(&user_message);
@@ -114,19 +114,20 @@ impl AppState {
             work.session_id.clone(),
             work.assistant_message_id.clone(),
             app_handle.clone(),
-            async move { state_clone.execute_claude_chat_response(work_clone, app_clone).await },
+            async move {
+                state_clone
+                    .execute_claude_chat_response(work_clone, app_clone)
+                    .await
+            },
         );
         if let Some(title_work) = title_work {
             let state_clone = self.clone();
-            chat_pipeline::spawn_title_stream(
-                self,
-                app_handle,
-                async move { state_clone.execute_claude_title_response(title_work).await },
-            );
+            chat_pipeline::spawn_title_stream(self, app_handle, async move {
+                state_clone.execute_claude_title_response(title_work).await
+            });
         }
         self.snapshot()
     }
-
 
     /// Requests a Claude generated title and stores it when the chat still exists.
     async fn execute_claude_title_response(
@@ -206,7 +207,9 @@ fn claude_effort_for_model(value: &str, model: &str) -> Option<String> {
         return None;
     }
     match value {
-        "low" | "medium" | "high" => Some(value.to_owned()),
-        _ => Some("high".to_owned()),
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH | LABEL_THINKING_MAX => {
+            Some(value.to_owned())
+        }
+        _ => Some(CLAUDE_EFFORT_DEFAULT.to_owned()),
     }
 }

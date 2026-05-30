@@ -1,13 +1,13 @@
 //! Chat message submission, streaming, and title generation.
 
-use super::{chat_pipeline, AppState};
+use super::{AppState, chat_pipeline};
 use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
+use crate::domain::messages::*;
 use crate::domain::{
     CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT,
     fallback_session_title, sanitize_session_title, split_model_key,
 };
-use crate::domain::messages::*;
 use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -61,7 +61,9 @@ impl AppState {
             work.assistant_message_id.clone(),
             chat_app_handle.clone(),
             async move {
-                chat_state.execute_chat_response(work, chat_app_handle).await
+                chat_state
+                    .execute_chat_response(work, chat_app_handle)
+                    .await
             },
         );
         if let Some(title_work) = title_work {
@@ -94,9 +96,7 @@ impl AppState {
         let mut inner = self.lock()?;
         let session_id = inner.settings.active_session_id.clone();
         if inner.active_chat_responses.contains_key(&session_id) {
-            return Err(anyhow!(
-                ERR_VALIDATION_STOP_FIRST
-            ));
+            return Err(anyhow!(ERR_VALIDATION_STOP_FIRST));
         }
         inner.save_active_session_model_settings()?;
         let model_key = inner.settings.model.clone();
@@ -106,7 +106,8 @@ impl AppState {
         let session = inner.active_session_mut()?;
 
         let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
-        let should_generate_title = session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
+        let should_generate_title =
+            session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
         let title_work = if should_generate_title {
             build_openai_title_work(
                 &title_gen_model,
@@ -417,7 +418,7 @@ pub(in crate::app::state) fn title_prompt(message: &ChatMessage) -> String {
 /// Converts "none" to an omitted reasoning_effort field.
 fn normalized_reasoning_effort(value: &str) -> Option<String> {
     match value {
-        "low" | "medium" | "high" => Some(value.to_owned()),
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH => Some(value.to_owned()),
         _ => None,
     }
 }
@@ -428,7 +429,7 @@ fn resolve_title_provider(
     providers: &crate::domain::ProviderStorage,
 ) -> Option<(crate::domain::ProviderConfig, String)> {
     let normalized = title_gen_model.trim().to_lowercase();
-    if normalized.is_empty() || normalized == "current" || normalized == "none" {
+    if normalized.is_empty() || normalized == LABEL_CURRENT || normalized == LABEL_NONE {
         return None;
     }
     let (provider_id, model) = split_model_key(title_gen_model)?;
@@ -450,7 +451,7 @@ fn build_openai_title_work(
 ) -> Option<PendingTitleResponse> {
     let fallback_title = fallback_session_title(user_message);
     let normalized = title_gen_model.trim().to_lowercase();
-    if normalized == "none" {
+    if normalized == LABEL_NONE {
         return None;
     }
     if let Some((provider, model)) = title_provider {

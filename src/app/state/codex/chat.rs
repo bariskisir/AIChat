@@ -1,14 +1,14 @@
 //! Codex chat submission and streaming state helpers.
 
-use crate::app::state::chat_pipeline;
 use super::super::AppState;
 use crate::app::state::chat::title_prompt;
+use crate::app::state::chat_pipeline;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
+use crate::domain::messages::*;
 use crate::domain::{
     ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT, TITLE_RESPONSE_STYLE, fallback_session_title,
     sanitize_session_title,
 };
-use crate::domain::messages::*;
 use crate::infra::chatgpt;
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -52,9 +52,7 @@ impl AppState {
             let mut inner = self.lock()?;
             let session_id = inner.settings.active_session_id.clone();
             if inner.active_chat_responses.contains_key(&session_id) {
-                return Err(anyhow!(
-                    ERR_VALIDATION_STOP_FIRST
-                ));
+                return Err(anyhow!(ERR_VALIDATION_STOP_FIRST));
             }
             inner.save_active_session_model_settings()?;
             let (_, model) = crate::domain::split_model_key(&inner.settings.model)
@@ -73,21 +71,23 @@ impl AppState {
             let title_gen_model = inner.settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let user_message = ChatMessage::user(text.clone(), image_data_urls);
-            let should_generate_title = session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
-            let title_work =
-                if should_generate_title && !title_gen_model.trim().eq_ignore_ascii_case("none") {
-                    Some(PendingCodexTitleResponse {
-                        session_id: session_id.clone(),
-                        fallback_title: fallback_session_title(&user_message),
-                        request: codex_title_request(
-                            &user_message,
-                            model.clone(),
-                            thinking_variant.clone(),
-                        ),
-                    })
-                } else {
-                    None
-                };
+            let should_generate_title =
+                session.title == CHAT_DEFAULT_TITLE && session.messages.is_empty();
+            let title_work = if should_generate_title
+                && !title_gen_model.trim().eq_ignore_ascii_case(LABEL_NONE)
+            {
+                Some(PendingCodexTitleResponse {
+                    session_id: session_id.clone(),
+                    fallback_title: fallback_session_title(&user_message),
+                    request: codex_title_request(
+                        &user_message,
+                        model.clone(),
+                        thinking_variant.clone(),
+                    ),
+                })
+            } else {
+                None
+            };
             let assistant_message = ChatMessage::assistant_placeholder();
             if session.title == CHAT_DEFAULT_TITLE {
                 session.title = fallback_session_title(&user_message);
@@ -120,15 +120,17 @@ impl AppState {
             work.session_id.clone(),
             work.assistant_message_id.clone(),
             app_handle.clone(),
-            async move { state_clone.execute_codex_chat_response(work_clone, app_clone).await },
+            async move {
+                state_clone
+                    .execute_codex_chat_response(work_clone, app_clone)
+                    .await
+            },
         );
         if let Some(title_work) = title_work {
             let state_clone = self.clone();
-            chat_pipeline::spawn_title_stream(
-                self,
-                app_handle,
-                async move { state_clone.execute_codex_title_response(title_work).await },
-            );
+            chat_pipeline::spawn_title_stream(self, app_handle, async move {
+                state_clone.execute_codex_title_response(title_work).await
+            });
         }
         self.snapshot()
     }

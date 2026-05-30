@@ -64,7 +64,7 @@ pub struct ChatSession {
     pub thinking_variant: String,
     #[serde(default = "super::default_verbosity_setting")]
     pub verbosity: String,
-    #[serde(default)]
+    #[serde(default = "super::default_extended_thinking")]
     pub extended_thinking: bool,
     #[serde(default = "super::default_claude_effort")]
     pub claude_effort: String,
@@ -85,7 +85,7 @@ impl ChatSession {
             reasoning_effort: super::default_reasoning_effort(),
             thinking_variant: super::default_thinking_variant(),
             verbosity: super::default_verbosity_setting(),
-            extended_thinking: false,
+            extended_thinking: super::default_extended_thinking(),
             claude_effort: super::default_claude_effort(),
             created_at: now,
             updated_at: now,
@@ -105,7 +105,6 @@ impl ChatSession {
 fn default_model() -> String {
     String::new()
 }
-
 
 /// Creates a short local fallback title from the first user message.
 pub fn fallback_session_title(message: &ChatMessage) -> String {

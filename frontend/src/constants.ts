@@ -28,22 +28,35 @@ namespace Constants {
   export const COMPOSER_ENTER_BLOCKED: string = "Press Esc or click Stop to stop.";
   export const COMPOSER_EMPTY_ERROR: string = "Enter a message or paste an image first.";
   export const ERROR_LABEL: string = "Error";
+  export const LABEL_NONE_TITLE_CASE: string = "None";
+  export const LABEL_CURRENT: string = "Current";
+  export const LABEL_NO_MATCHES: string = "No matches";
+  export const TITLE_GEN_NONE: string = "none";
+  export const TITLE_GEN_CURRENT: string = "";
 
   // Effort / reasoning levels
   export const EFFORT_LOW: EffortLevel = "low";
   export const EFFORT_MEDIUM: EffortLevel = "medium";
   export const EFFORT_HIGH: EffortLevel = "high";
   export const EFFORT_NONE: EffortSetting = "none";
+  export const CLAUDE_EFFORT_MAX: ClaudeEffort = "max";
   export const EFFORT_LEVELS: readonly EffortLevel[] = [EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH] as const;
   export const EFFORT_DEFAULT: EffortLevel = EFFORT_HIGH;
+  export const CLAUDE_EFFORT_OPTIONS: readonly { value: ClaudeEffort; label: string; title: string }[] = [
+    { value: EFFORT_LOW, label: EFFORT_LOW, title: "Low Claude effort" },
+    { value: EFFORT_MEDIUM, label: EFFORT_MEDIUM, title: "Medium Claude effort" },
+    { value: EFFORT_HIGH, label: EFFORT_HIGH, title: "High Claude effort" },
+    { value: CLAUDE_EFFORT_MAX, label: CLAUDE_EFFORT_MAX, title: "Max Claude effort" },
+  ] as const;
+  export const CLAUDE_EFFORT_DEFAULT: ClaudeEffort = CLAUDE_EFFORT_MAX;
 
   // Verbosity levels
   export const VERBOSITY_OPTIONS: readonly { value: VerbosityLevel; label: string; title: string }[] = [
-    { value: "low", label: "low", title: "Shorter, more direct answers" },
-    { value: "medium", label: "medium", title: "Balanced answer detail" },
-    { value: "high", label: "high", title: "More detailed answers" },
+    { value: EFFORT_LOW, label: EFFORT_LOW, title: "Shorter, more direct answers" },
+    { value: EFFORT_MEDIUM, label: EFFORT_MEDIUM, title: "Balanced answer detail" },
+    { value: EFFORT_HIGH, label: EFFORT_HIGH, title: "More detailed answers" },
   ] as const;
-  export const VERBOSITY_DEFAULT: VerbosityLevel = "medium";
+  export const VERBOSITY_DEFAULT: VerbosityLevel = EFFORT_HIGH;
 
   // Provider URLs
   export const CODEX_API_URL: string = "codex://chatgpt";

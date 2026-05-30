@@ -1,5 +1,9 @@
 //! Codex-specific auth, catalog, thinking, and verbosity models.
 
+use super::messages::{
+    DESC_THINKING_HIGH, DESC_THINKING_LOW, DESC_THINKING_MEDIUM, DESC_THINKING_XHIGH,
+    LABEL_THINKING_HIGH, LABEL_THINKING_LOW, LABEL_THINKING_MEDIUM, LABEL_THINKING_XHIGH,
+};
 use super::{
     AvailableModel, DEFAULT_CODEX_CLIENT_VERSION, DEFAULT_CODEX_MODEL, DEFAULT_THINKING_VARIANT,
     DEFAULT_VERBOSITY, ThinkingVariantOption,
@@ -32,7 +36,6 @@ pub struct PendingOAuth {
     pub verifier: String,
     pub started_at: i64,
 }
-
 
 impl AuthStorage {
     /// Reports whether a ChatGPT token is available.
@@ -95,16 +98,19 @@ pub fn default_verbosity() -> String {
 /// Builds fallback Codex thinking options.
 pub fn fallback_thinking_variants() -> Vec<ThinkingVariantOption> {
     vec![
-        thinking("low", "Fast responses with lighter reasoning"),
-        thinking("medium", "Balanced reasoning for everyday tasks"),
-        thinking("high", "Greater reasoning depth for complex tasks"),
-        thinking("xhigh", "Extra high reasoning depth for complex tasks"),
+        thinking(LABEL_THINKING_LOW, DESC_THINKING_LOW),
+        thinking(LABEL_THINKING_MEDIUM, DESC_THINKING_MEDIUM),
+        thinking(LABEL_THINKING_HIGH, DESC_THINKING_HIGH),
+        thinking(LABEL_THINKING_XHIGH, DESC_THINKING_XHIGH),
     ]
 }
 
 /// Reports whether a value is one of the supported verbosity levels.
 pub(crate) fn is_verbosity_level(value: &str) -> bool {
-    matches!(value, "low" | "medium" | "high")
+    matches!(
+        value,
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH
+    )
 }
 
 /// Creates one thinking option.

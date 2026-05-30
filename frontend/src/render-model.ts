@@ -27,7 +27,7 @@ namespace Renderer {
     }
     renderModelDropdownOptions(refs, filteredOptions);
     renderModelDropdownLabel(refs, allOptions);
-    refs.reasoningSelect.value = state.settings.reasoningEffort || Constants.EFFORT_NONE;
+    refs.reasoningSelect.value = state.settings.reasoningEffort || Constants.EFFORT_DEFAULT;
     renderCodexControls(refs, state);
   }
 
@@ -58,6 +58,7 @@ namespace Renderer {
     refs.claudeExtendedThinkingField.hidden = !isClaude;
     refs.claudeEffortField.hidden = !claudeSupportsEffort;
     refs.claudeExtendedThinking.checked = state.settings.extendedThinking;
+    replaceSelectOptions(refs.claudeEffortSelect, [...Constants.CLAUDE_EFFORT_OPTIONS]);
     refs.claudeEffortSelect.value = visibleClaudeEffortValue(state.settings.claudeEffort);
     if (!isCodex) {
       return;
@@ -186,7 +187,9 @@ namespace Renderer {
 
   // Chooses a visible Claude effort value from persisted settings.
   function visibleClaudeEffortValue(value: string): string {
-    return (Constants.EFFORT_LEVELS as readonly string[]).includes(value) ? value : Constants.EFFORT_DEFAULT;
+    return Constants.CLAUDE_EFFORT_OPTIONS.some((option) => option.value === value)
+      ? value
+      : Constants.CLAUDE_EFFORT_DEFAULT;
   }
 
   // Reports whether a Claude model should hide effort controls.

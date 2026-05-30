@@ -1,14 +1,12 @@
 /** Settings dialog behavior for AI Chat. */
 /// <reference path="./types.d.ts" />
+/// <reference path="./constants.ts" />
 /// <reference path="./dom.ts" />
 /// <reference path="./render.ts" />
 /// <reference path="./app-context.ts" />
 /// <reference path="./searchable-dropdown.ts" />
 
 namespace SettingsControls {
-  const TITLE_GEN_NONE = "none";
-  const TITLE_GEN_CURRENT = "";
-
   // Wires all settings dialog controls.
   export function bind(refs: DomRefs.Refs): void {
     refs.btnSettings.addEventListener("click", () => open(refs));
@@ -38,7 +36,7 @@ namespace SettingsControls {
     refs.settingsShowFooter.checked = state.settings.showFooter;
     refs.settingsShowInfoBar.checked = state.settings.showInfoBar;
     populateTitleGenOptions(refs);
-    refs.settingsTitleGenSelect.value = state.settings.titleGenModel || TITLE_GEN_CURRENT;
+    refs.settingsTitleGenSelect.value = state.settings.titleGenModel || Constants.TITLE_GEN_CURRENT;
     updateTitleGenDropdownLabel(refs);
     refs.settingsTitleGenDropdown.hidden = true;
     refs.settingsDialog.showModal();
@@ -60,12 +58,12 @@ namespace SettingsControls {
     const state = AppContext.model.appState;
     refs.settingsTitleGenSelect.innerHTML = "";
     const noneOption = document.createElement("option");
-    noneOption.value = TITLE_GEN_NONE;
-    noneOption.textContent = "None";
+    noneOption.value = Constants.TITLE_GEN_NONE;
+    noneOption.textContent = Constants.LABEL_NONE_TITLE_CASE;
     refs.settingsTitleGenSelect.appendChild(noneOption);
     const currentOption = document.createElement("option");
-    currentOption.value = TITLE_GEN_CURRENT;
-    currentOption.textContent = "Current";
+    currentOption.value = Constants.TITLE_GEN_CURRENT;
+    currentOption.textContent = Constants.LABEL_CURRENT;
     refs.settingsTitleGenSelect.appendChild(currentOption);
     if (state) {
       const models = state.catalog.models.filter((m) => !m.hidden && !isReasoningModel(m) && !isCodexOrClaudeModel(m, state));
@@ -76,7 +74,7 @@ namespace SettingsControls {
         refs.settingsTitleGenSelect.appendChild(option);
       }
     }
-    const value = state?.settings.titleGenModel || TITLE_GEN_CURRENT;
+    const value = state?.settings.titleGenModel || Constants.TITLE_GEN_CURRENT;
     refs.settingsTitleGenSelect.value = value;
     filterTitleGenOptions(refs);
   }
@@ -91,7 +89,7 @@ namespace SettingsControls {
   function isCodexOrClaudeModel(model: AvailableModel, state: AppSnapshot): boolean {
     const provider = state.providers.providers.find((p) => p.id === model.providerId);
     if (!provider) return false;
-    return provider.apiUrl === "codex://chatgpt" || provider.apiUrl === "claude://claude.ai";
+    return provider.apiUrl === Constants.CODEX_API_URL || provider.apiUrl === Constants.CLAUDE_API_URL;
   }
 
   // Filters the title gen dropdown options by search text.
@@ -115,7 +113,7 @@ namespace SettingsControls {
     if (!options.length) {
       const empty = document.createElement("div");
       empty.className = "ch-model-dropdown__empty";
-      empty.textContent = "No matches";
+      empty.textContent = Constants.LABEL_NO_MATCHES;
       refs.settingsTitleGenOptionList.appendChild(empty);
       return;
     }
@@ -149,8 +147,8 @@ namespace SettingsControls {
   function updateTitleGenDropdownLabel(refs: DomRefs.Refs): void {
     const value = refs.settingsTitleGenSelect.value;
     const option = Array.from(refs.settingsTitleGenSelect.options).find((opt) => opt.value === value);
-    refs.settingsTitleGenDropdownButton.textContent = option?.textContent || "Current";
-    refs.settingsTitleGenDropdownButton.title = option?.textContent || "Current";
+    refs.settingsTitleGenDropdownButton.textContent = option?.textContent || Constants.LABEL_CURRENT;
+    refs.settingsTitleGenDropdownButton.title = option?.textContent || Constants.LABEL_CURRENT;
   }
 
 }

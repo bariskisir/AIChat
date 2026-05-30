@@ -12,9 +12,9 @@ mod settings;
 pub use catalog::*;
 pub use claude::*;
 pub use codex::*;
+pub use error::AppError;
 pub use providers::*;
 pub use sessions::*;
-pub use error::AppError;
 pub use settings::*;
 
 pub const SESSION_LIMIT: usize = 100;
@@ -22,25 +22,25 @@ pub const MESSAGE_CONTEXT_LIMIT: usize = 40;
 pub const CODEX_PROVIDER_URL: &str = "codex://chatgpt";
 pub const CLAUDE_PROVIDER_URL: &str = "claude://claude.ai";
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.5";
-pub const DEFAULT_THINKING_VARIANT: &str = "high";
+pub const DEFAULT_THINKING_VARIANT: &str = messages::LABEL_THINKING_HIGH;
 pub const DEFAULT_VERBOSITY_SETTING: &str = "default";
-pub const DEFAULT_VERBOSITY: &str = "medium";
-pub const DEFAULT_CODEX_CLIENT_VERSION: &str = "0.135.0";
-pub const TITLE_RESPONSE_STYLE: &str = "low";
+pub const DEFAULT_VERBOSITY: &str = messages::LABEL_THINKING_HIGH;
+pub const DEFAULT_CODEX_CLIENT_VERSION: &str = "0.138.0";
+pub const TITLE_RESPONSE_STYLE: &str = messages::LABEL_THINKING_HIGH;
 
-/// Disables reasoning_effort by default.
+/// Uses the highest OpenAI-compatible reasoning effort by default.
 pub fn default_reasoning_effort() -> String {
-    "none".to_owned()
+    messages::LABEL_THINKING_HIGH.to_owned()
 }
 
-/// Supplies the default Codex verbosity setting.
+/// Supplies the highest Codex verbosity setting by default.
 pub fn default_verbosity_setting() -> String {
-    DEFAULT_VERBOSITY_SETTING.to_owned()
+    DEFAULT_VERBOSITY.to_owned()
 }
 
 /// Supplies the default Claude effort setting.
 pub fn default_claude_effort() -> String {
-    "high".to_owned()
+    messages::CLAUDE_EFFORT_DEFAULT.to_owned()
 }
 
 /// Returns the model id from a provider/model selection key.
