@@ -300,6 +300,7 @@ fn ensure_opencode_default_model(provider: &mut ProviderConfig) {
             thinking_variants: fallback_thinking_variants(),
             support_verbosity: false,
             default_verbosity: default_verbosity(),
+            claude_thinking_type: String::new(),
         });
     }
 }

@@ -51,15 +51,23 @@ function renderCodexControls(refs: Refs, state: AppSnapshot): void {
   const isCodex = apiUrl === Constants.CODEX_API_URL;
   const isClaude = apiUrl === Constants.CLAUDE_API_URL;
   const selectedModel = selectedCatalogModel(refs, state);
-  const claudeSupportsEffort = isClaude && !isClaudeHaikuModel(selectedModel);
+  const supportsClaudeEffort = isClaude && claudeSupportsEffort(selectedModel);
+  const claudeThinkingNone = isClaude && selectedModel?.claudeThinkingType === "none";
   refs.reasoningField.hidden = isCodex || isClaude;
   refs.thinkingField.hidden = !isCodex;
   refs.verbosityField.hidden = !isCodex;
-  refs.claudeExtendedThinkingField.hidden = !isClaude;
-  refs.claudeEffortField.hidden = !claudeSupportsEffort;
+  refs.claudeExtendedThinkingField.hidden = !isClaude || claudeThinkingNone;
+  refs.claudeEffortField.hidden = !supportsClaudeEffort;
   refs.claudeExtendedThinking.checked = state.settings.extendedThinking;
-  replaceSelectOptions(refs.claudeEffortSelect, [...Constants.CLAUDE_EFFORT_OPTIONS]);
-  refs.claudeEffortSelect.value = visibleClaudeEffortValue(state.settings.claudeEffort);
+  const claudeEffortOptions = selectedModel?.thinkingVariants?.length
+    ? selectedModel.thinkingVariants.map((item) => ({
+        value: item.value,
+        label: item.value === "xhigh" ? "extra" : item.value,
+        title: item.description,
+      }))
+    : [...Constants.CLAUDE_EFFORT_OPTIONS];
+  replaceSelectOptions(refs.claudeEffortSelect, claudeEffortOptions);
+  refs.claudeEffortSelect.value = visibleClaudeEffortValue(state.settings.claudeEffort, claudeEffortOptions);
   if (!isCodex) {
     return;
   }
@@ -186,16 +194,19 @@ export function cssEscape(value: string): string {
 }
 
 // Chooses a visible Claude effort value from persisted settings.
-function visibleClaudeEffortValue(value: string): string {
-  return Constants.CLAUDE_EFFORT_OPTIONS.some((option) => option.value === value)
+function visibleClaudeEffortValue(value: string, options: Array<{ value: string }>): string {
+  return options.some((option) => option.value === value)
     ? value
-    : Constants.CLAUDE_EFFORT_DEFAULT;
+    : options[0]?.value || Constants.CLAUDE_EFFORT_DEFAULT;
 }
 
-// Reports whether a Claude model should hide effort controls.
-function isClaudeHaikuModel(model: AvailableModel | undefined): boolean {
-  const value = `${model?.model || ""} ${model?.displayName || ""}`.toLocaleLowerCase();
-  return value.includes("haiku");
+// Reports whether a Claude model has effort options at all.
+function claudeSupportsEffort(model: AvailableModel | undefined): boolean {
+  if (!model?.claudeThinkingType) {
+    const value = `${model?.model || ""} ${model?.displayName || ""}`.toLocaleLowerCase();
+    return !value.includes("haiku");
+  }
+  return model.claudeThinkingType === "effort_and_mode";
 }
 
 // Chooses a visible Codex verbosity level when persisted settings contain legacy "default".

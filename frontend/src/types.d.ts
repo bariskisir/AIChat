@@ -34,6 +34,7 @@ interface AvailableModel {
   thinkingVariants: ThinkingVariantOption[];
   supportVerbosity: boolean;
   defaultVerbosity: string;
+  claudeThinkingType: string;
 }
 
 interface ThinkingVariantOption {
@@ -164,7 +165,7 @@ type EffortLevel = "low" | "medium" | "high";
 type EffortSetting = EffortLevel | "none";
 type VerbosityLevel = "low" | "medium" | "high";
 type VerbositySetting = VerbosityLevel | "default";
-type ClaudeEffort = EffortLevel | "max";
+type ClaudeEffort = EffortLevel | "max" | "xhigh";
 type EventType = "snapshot" | "assistantDelta" | "sessionTitleUpdated" | "error";
 type ThinkingVariantValue = string;
 type SelectOption<T extends string = string> = { value: T; label: string; title?: string; };

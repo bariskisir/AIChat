@@ -40,6 +40,8 @@ pub struct AvailableModel {
     pub support_verbosity: bool,
     #[serde(default = "default_verbosity")]
     pub default_verbosity: String,
+    #[serde(default)]
+    pub claude_thinking_type: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

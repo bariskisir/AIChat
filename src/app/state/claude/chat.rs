@@ -55,7 +55,15 @@ impl AppState {
                 .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
             let model = model.to_owned();
             let extended_thinking = inner.settings.extended_thinking;
-            let effort = claude_effort_for_model(&inner.settings.claude_effort, &model);
+            let effort = {
+                let all_models = inner.providers.all_models();
+                let thinking_type = all_models
+                    .iter()
+                    .find(|m| m.model == model)
+                    .map(|m| m.claude_thinking_type.as_str())
+                    .unwrap_or("");
+                claude_effort_for_model(&inner.settings.claude_effort, thinking_type)
+            };
             let title_gen_model = inner.settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let conv_id = uuid::Uuid::new_v4().to_string();
@@ -201,13 +209,14 @@ fn build_claude_context_prompt(session: &crate::domain::ChatSession) -> String {
         .join("\n\n")
 }
 
-/// Returns a Claude effort value only for non-Haiku models.
-fn claude_effort_for_model(value: &str, model: &str) -> Option<String> {
-    if model.to_lowercase().contains("haiku") {
+/// Returns a Claude effort value based on the model's thinking configuration.
+fn claude_effort_for_model(value: &str, thinking_type: &str) -> Option<String> {
+    if thinking_type == "none" || thinking_type == "mode" {
         return None;
     }
     match value {
-        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH | LABEL_THINKING_MAX => {
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH
+        | LABEL_THINKING_XHIGH | LABEL_THINKING_MAX => {
             Some(value.to_owned())
         }
         _ => Some(CLAUDE_EFFORT_DEFAULT.to_owned()),

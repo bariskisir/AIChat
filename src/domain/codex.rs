@@ -72,6 +72,7 @@ fn fallback_model(model: &str, is_default: bool) -> AvailableModel {
         thinking_variants: fallback_thinking_variants(),
         support_verbosity: true,
         default_verbosity: default_verbosity(),
+        claude_thinking_type: String::new(),
     }
 }
 

@@ -7,7 +7,7 @@ use crate::domain::{
     is_minimized_window_position,
     messages::{
         CLAUDE_EFFORT_DEFAULT, LABEL_NONE, LABEL_THINKING_HIGH, LABEL_THINKING_LOW,
-        LABEL_THINKING_MAX, LABEL_THINKING_MEDIUM,
+        LABEL_THINKING_MAX, LABEL_THINKING_MEDIUM, LABEL_THINKING_XHIGH,
     },
 };
 use anyhow::Result;
@@ -97,7 +97,8 @@ fn normalize_reasoning_effort(value: &str) -> String {
 /// Keeps Claude effort within supported values.
 fn normalize_claude_effort(value: &str) -> String {
     match value {
-        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH | LABEL_THINKING_MAX => {
+        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH
+        | LABEL_THINKING_XHIGH | LABEL_THINKING_MAX => {
             value.to_owned()
         }
         _ => CLAUDE_EFFORT_DEFAULT.to_owned(),

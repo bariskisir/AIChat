@@ -35,6 +35,7 @@ export const TITLE_GEN_CURRENT: string = "";
 export const EFFORT_LOW: EffortLevel = "low";
 export const EFFORT_MEDIUM: EffortLevel = "medium";
 export const EFFORT_HIGH: EffortLevel = "high";
+export const EFFORT_XHIGH: EffortLevel = "xhigh" as EffortLevel;
 export const EFFORT_NONE: EffortSetting = "none";
 export const CLAUDE_EFFORT_MAX: ClaudeEffort = "max";
 export const EFFORT_LEVELS: readonly EffortLevel[] = [EFFORT_LOW, EFFORT_MEDIUM, EFFORT_HIGH] as const;
@@ -43,6 +44,7 @@ export const CLAUDE_EFFORT_OPTIONS: readonly { value: ClaudeEffort; label: strin
   { value: EFFORT_LOW, label: EFFORT_LOW, title: "Low Claude effort" },
   { value: EFFORT_MEDIUM, label: EFFORT_MEDIUM, title: "Medium Claude effort" },
   { value: EFFORT_HIGH, label: EFFORT_HIGH, title: "High Claude effort" },
+  { value: EFFORT_XHIGH as ClaudeEffort, label: "extra", title: "Extra Claude effort" },
   { value: CLAUDE_EFFORT_MAX, label: CLAUDE_EFFORT_MAX, title: "Max Claude effort" },
 ] as const;
 export const CLAUDE_EFFORT_DEFAULT: ClaudeEffort = CLAUDE_EFFORT_MAX;

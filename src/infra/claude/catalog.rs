@@ -1,8 +1,8 @@
 //! Claude bootstrap account and model catalog parsing helpers.
 
 use crate::domain::{
-    AvailableModel, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY, default_input_modalities,
-    fallback_thinking_variants,
+    AvailableModel, ThinkingVariantOption, DEFAULT_THINKING_VARIANT, DEFAULT_VERBOSITY,
+    fallback_thinking_variants, default_input_modalities,
 };
 use anyhow::{Result, anyhow};
 use serde_json::Value;
@@ -31,12 +31,16 @@ pub(crate) fn parse_model_response_for_plan(
     let val: Value = serde_json::from_str(json_str)
         .map_err(|e| anyhow!("Could not parse model catalog response: {e}"))?;
 
-    let plan = plan.map(normalize_plan).filter(|p| !p.is_empty());
-    let tier = current_tier(&val, plan.as_deref());
+    let stored_plan = plan.map(normalize_plan).filter(|p| !p.is_empty());
+    let tier = current_tier(&val, stored_plan.as_deref());
     let tier_allowed_models = tier
         .as_deref()
         .map(|tier| collect_tier_allowed_models(&val, tier))
         .filter(|models| !models.is_empty());
+    let tier_gated_models = {
+        let set = collect_all_gated_models(&val);
+        if set.is_empty() { None } else { Some(set) }
+    };
     let mut models = Vec::new();
     collect_model_selector_models(&val, &mut models);
     if models.is_empty() {
@@ -44,7 +48,7 @@ pub(crate) fn parse_model_response_for_plan(
     }
     if models.is_empty() {
         let mut candidates = Vec::new();
-        collect_model_candidates(&val, "", plan.as_deref(), &mut candidates);
+        collect_model_candidates(&val, "", tier.as_deref(), &mut candidates);
         candidates.sort_by(|left, right| right.score.cmp(&left.score));
         models = candidates
             .into_iter()
@@ -52,7 +56,11 @@ pub(crate) fn parse_model_response_for_plan(
             .map(|candidate| candidate.model)
             .collect::<Vec<_>>();
     }
-    apply_tier_allowlist(&mut models, tier_allowed_models.as_ref());
+    apply_tier_gating(
+        &mut models,
+        tier_gated_models.as_ref(),
+        tier_allowed_models.as_ref(),
+    );
     dedupe_models(&mut models);
 
     if models.is_empty() {
@@ -63,6 +71,9 @@ pub(crate) fn parse_model_response_for_plan(
 
 /// Resolves the account tier from bootstrap data or an explicit plan override.
 fn current_tier(value: &Value, plan: Option<&str>) -> Option<String> {
+    if let Some(tier) = tier_from_capabilities(value) {
+        return Some(tier);
+    }
     if let Some(plan) = plan {
         return Some(tier_name(plan));
     }
@@ -75,6 +86,23 @@ fn current_tier(value: &Value, plan: Option<&str>) -> Option<String> {
         if let Some(value) = value.pointer(path).and_then(Value::as_str) {
             let tier = tier_name(value);
             if !tier.is_empty() {
+                return Some(tier);
+            }
+        }
+    }
+    None
+}
+
+/// Extracts the account tier from organization capabilities (e.g. "claude_pro", "claude_max").
+fn tier_from_capabilities(value: &Value) -> Option<String> {
+    let caps = value
+        .pointer("/account/memberships/0/organization/capabilities")?
+        .as_array()?;
+    for cap in caps {
+        let cap = cap.as_str()?;
+        if cap.starts_with("claude_") {
+            let tier = tier_name(cap);
+            if tier != "free" {
                 return Some(tier);
             }
         }
@@ -124,13 +152,51 @@ fn collect_tier_allowed_models_at(value: &Value, current_rank: i32, models: &mut
     }
 }
 
-/// Marks catalog models hidden when they are not allowed for the current tier.
-fn apply_tier_allowlist(models: &mut [AvailableModel], allowed: Option<&HashSet<String>>) {
-    let Some(allowed) = allowed else {
-        return;
-    };
+/// Collects every model_id referenced in any Growthbook minimum_tier entry,
+/// regardless of the user's current tier.
+fn collect_all_gated_models(value: &Value) -> HashSet<String> {
+    let mut models = HashSet::new();
+    collect_all_gated_models_at(value, &mut models);
+    models
+}
+
+fn collect_all_gated_models_at(value: &Value, models: &mut HashSet<String>) {
+    match value {
+        Value::Array(items) => {
+            if items
+                .iter()
+                .any(|item| item.get("minimum_tier").is_some() && item.get("model_id").is_some())
+            {
+                for item in items {
+                    if let Some(model_id) = item.get("model_id").and_then(Value::as_str) {
+                        models.insert(model_id.to_owned());
+                    }
+                }
+            }
+            for item in items {
+                collect_all_gated_models_at(item, models);
+            }
+        }
+        Value::Object(map) => {
+            for item in map.values() {
+                collect_all_gated_models_at(item, models);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Only hides models that are present in Growthbook gating but not allowed
+/// for the current tier. Models not referenced by Growthbook are left untouched.
+fn apply_tier_gating(
+    models: &mut [AvailableModel],
+    gated: Option<&HashSet<String>>,
+    allowed: Option<&HashSet<String>>,
+) {
+    let Some(gated) = gated else { return };
+    let Some(allowed) = allowed else { return };
     for model in models {
-        if !allowed.contains(&model.model) {
+        if gated.contains(&model.model) && !allowed.contains(&model.model) {
             model.hidden = true;
         }
     }
@@ -168,12 +234,16 @@ fn parse_selector_model(value: &Value) -> Option<AvailableModel> {
         .get("section")
         .and_then(Value::as_str)
         .unwrap_or("main");
+    let (think_type, think_variants, default_think) = parse_claude_thinking(value);
     Some(claude_available_model(
         model,
         string_field(value, &["name", "display_name", "displayName"])
             .unwrap_or_else(|| model_display_fallback(value)),
         string_field(value, &["description", "summary", "subtitle"]).unwrap_or_default(),
-        section != "main",
+        section == "deprecated",
+        think_type.as_deref(),
+        think_variants,
+        default_think,
     ))
 }
 
@@ -207,13 +277,16 @@ fn parse_bootstrap_model(value: &Value) -> Option<AvailableModel> {
         return None;
     }
     let inactive = bool_field(value, &["inactive"]) == Some(true);
-    let overflow = bool_field(value, &["overflow"]) == Some(true);
+    let (think_type, think_variants, default_think) = parse_claude_thinking(value);
     Some(claude_available_model(
         model,
         string_field(value, &["name", "display_name", "displayName"])
             .unwrap_or_else(|| model_display_fallback(value)),
         string_field(value, &["description", "summary", "subtitle"]).unwrap_or_default(),
-        inactive || overflow,
+        inactive,
+        think_type.as_deref(),
+        think_variants,
+        default_think,
     ))
 }
 
@@ -268,6 +341,9 @@ fn collect_model_candidates(
                                 key.clone(),
                                 String::new(),
                                 false,
+                                None,
+                                None,
+                                None,
                             ),
                             available: true,
                             score: model_path_score(&child_path),
@@ -302,11 +378,64 @@ fn parse_model_item(value: &Value, path: &str, plan: Option<&str>) -> Option<Mod
         .and_then(Value::as_bool)
         .unwrap_or(false);
 
+    let (think_type, think_variants, default_think) = parse_claude_thinking(value);
     Some(ModelCandidate {
         available: model_is_available(value, plan),
         score: model_path_score(path) + availability_score(value),
-        model: claude_available_model(model, display_name, description, hidden),
+        model: claude_available_model(model, display_name, description, hidden, think_type.as_deref(), think_variants, default_think),
     })
+}
+
+/// Extracts the Claude thinking configuration from a bootstrap model entry.
+fn parse_claude_thinking(value: &Value) -> (Option<String>, Option<Vec<ThinkingVariantOption>>, Option<String>) {
+    let Some(thinking) = value.get("thinking") else {
+        return (None, None, None);
+    };
+    let thinking_type = thinking.get("type").and_then(Value::as_str).unwrap_or("");
+    if thinking_type.is_empty() {
+        return (None, None, None);
+    }
+    let variants = match thinking_type {
+        "effort_and_mode" => {
+            if let Some(options) = thinking.get("effort_options").and_then(Value::as_array) {
+                let v: Vec<_> = options.iter().filter_map(|opt| {
+                    let value = string_field(opt, &["id", "value"])?;
+                    let desc = string_field(opt, &["name", "description", "label"]).unwrap_or_default();
+                    Some(ThinkingVariantOption { value, description: desc })
+                }).collect();
+                if v.is_empty() { None } else { Some(v) }
+            } else {
+                Some(vec![
+                    ThinkingVariantOption { value: "low".to_owned(), description: "Low effort".to_owned() },
+                    ThinkingVariantOption { value: "medium".to_owned(), description: "Medium effort".to_owned() },
+                    ThinkingVariantOption { value: "high".to_owned(), description: "High effort".to_owned() },
+                ])
+            }
+        }
+        "mode" => {
+            if let Some(options) = thinking.get("mode_options").and_then(Value::as_array) {
+                let v: Vec<_> = options.iter().filter_map(|opt| {
+                    let value = string_field(opt, &["id", "value"])?;
+                    let desc = string_field(opt, &["name", "description", "label"]).unwrap_or_default();
+                    Some(ThinkingVariantOption { value, description: desc })
+                }).collect();
+                if v.is_empty() { None } else { Some(v) }
+            } else {
+                Some(vec![ThinkingVariantOption {
+                    value: "extended".to_owned(),
+                    description: "Extended thinking".to_owned(),
+                }])
+            }
+        }
+        "none" => Some(vec![]),
+        _ => None,
+    };
+    let default_thinking = match thinking_type {
+        "effort_and_mode" => thinking.get("effort").and_then(Value::as_str).map(str::to_owned),
+        "mode" => thinking.get("mode").and_then(Value::as_str).map(str::to_owned),
+        _ => None,
+    };
+    (Some(thinking_type.to_owned()), variants, default_thinking)
 }
 
 /// Builds an AIChat catalog model from Claude bootstrap metadata.
@@ -315,6 +444,9 @@ fn claude_available_model(
     display_name: String,
     description: String,
     hidden: bool,
+    thinking_type: Option<&str>,
+    thinking_variants: Option<Vec<ThinkingVariantOption>>,
+    default_thinking: Option<String>,
 ) -> AvailableModel {
     AvailableModel {
         provider_id: String::new(),
@@ -325,10 +457,11 @@ fn claude_available_model(
         hidden,
         is_default: false,
         input_modalities: default_input_modalities(),
-        default_thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
-        thinking_variants: fallback_thinking_variants(),
+        default_thinking_variant: default_thinking.unwrap_or_else(|| DEFAULT_THINKING_VARIANT.to_owned()),
+        thinking_variants: thinking_variants.unwrap_or_else(fallback_thinking_variants),
         support_verbosity: false,
         default_verbosity: DEFAULT_VERBOSITY.to_owned(),
+        claude_thinking_type: thinking_type.unwrap_or("").to_owned(),
     }
 }
 

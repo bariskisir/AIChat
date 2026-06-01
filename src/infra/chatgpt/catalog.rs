@@ -158,5 +158,6 @@ fn normalize_model(value: &Value) -> Option<AvailableModel> {
             .filter(|value| matches!(*value, "low" | "medium" | "high"))
             .unwrap_or(DEFAULT_VERBOSITY)
             .to_owned(),
+        claude_thinking_type: String::new(),
     })
 }
