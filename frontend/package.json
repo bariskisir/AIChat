@@ -1,10 +1,18 @@
 {
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "node scripts/prepare-dist.mjs && tsc",
-    "watch": "node scripts/prepare-dist.mjs && tsc --watch"
+    "dev": "vite",
+    "build": "vite build",
+    "watch": "vite build --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.7",
+    "marked": "^18.0.4"
   },
   "devDependencies": {
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
   }
 }

@@ -3,14 +3,8 @@ use std::env;
 use std::fs;
 use std::path::Path;
 
-const PLACEHOLDER_APP_JS: &str = "console.warn('Run npm install && npm run build in frontend.');";
-const REQUIRED_STYLE_FILES: &[&str] = &[
-    "base.css",
-    "layout.css",
-    "chat.css",
-    "controls.css",
-    "utilities.css",
-];
+/// Minimal page shown when `cargo run` is used before the Vite build has run.
+const PLACEHOLDER_INDEX_HTML: &str = "<!doctype html><html><head><meta charset=\"utf-8\"><title>AI Chat</title></head><body><p>Frontend not built. Run <code>npm install &amp;&amp; npm run build</code> in <code>frontend</code>.</p></body></html>";
 
 /// Ensures `cargo run` can compile even when the Tauri CLI did not run
 /// `beforeBuildCommand` first.
@@ -19,123 +13,33 @@ fn main() {
     tauri_build::build();
 }
 
-/// Verifies release assets and creates lightweight dev fallbacks when needed.
+/// Verifies the Vite build output exists and creates a dev fallback when needed.
 fn ensure_frontend_dist() {
     println!("cargo:rerun-if-changed=frontend/index.html");
     println!("cargo:rerun-if-changed=frontend/styles");
-    println!("cargo:rerun-if-changed=frontend/scripts/prepare-dist.mjs");
     println!("cargo:rerun-if-changed=frontend/src");
+    println!("cargo:rerun-if-changed=frontend/vite.config.mjs");
     println!("cargo:rerun-if-changed=frontend/package-lock.json");
-    println!("cargo:rerun-if-changed=icons/icon.png");
 
     let dist = Path::new("frontend").join("dist");
-    let dist_app = dist.join("app.js");
     let dist_index = dist.join("index.html");
-    let dist_styles = dist.join("styles");
-    let dist_icon = dist.join("icon.png");
-    if frontend_dist_is_complete(&dist) {
+    if dist_index.exists() {
         return;
     }
 
     if is_release_profile() {
         panic!(
-            "Frontend assets are not ready for release packaging: {}. Run `npm install` and `npm run build` in frontend.",
-            frontend_dist_problem(&dist)
+            "Frontend assets are not ready for release packaging: missing frontend/dist/index.html. Run `npm install` and `npm run build` in frontend."
         );
     }
 
+    // Dev fallback: let the desktop window load a notice instead of failing.
     fs::create_dir_all(&dist).expect("Could not create frontend/dist");
-    copy_asset("frontend/index.html", &dist_index);
-    copy_dir("frontend/styles", &dist_styles);
-    copy_asset("icons/icon.png", &dist_icon);
-
-    if !dist_app.exists() {
-        fs::write(&dist_app, PLACEHOLDER_APP_JS)
-            .expect("Could not create placeholder frontend/dist/app.js");
-    }
+    fs::write(&dist_index, PLACEHOLDER_INDEX_HTML)
+        .expect("Could not create placeholder frontend/dist/index.html");
 }
 
 /// Reports whether Cargo is building an optimized release artifact.
 fn is_release_profile() -> bool {
     env::var("PROFILE").is_ok_and(|profile| profile == "release")
-}
-
-/// Checks whether all frontend files referenced by the app shell exist.
-fn frontend_dist_is_complete(dist: &Path) -> bool {
-    dist.join("app.js").exists()
-        && dist.join("index.html").exists()
-        && dist.join("icon.png").exists()
-        && REQUIRED_STYLE_FILES
-            .iter()
-            .all(|file| dist.join("styles").join(file).exists())
-}
-
-/// Describes why the frontend distribution cannot be packaged.
-fn frontend_dist_problem(dist: &Path) -> String {
-    let mut missing = ["app.js", "index.html", "icon.png"]
-        .into_iter()
-        .filter(|file| !dist.join(file).exists())
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    missing.extend(
-        REQUIRED_STYLE_FILES
-            .iter()
-            .map(|file| format!("styles/{file}"))
-            .filter(|file| !dist.join(file).exists()),
-    );
-
-    if missing.is_empty() {
-        "unknown frontend build problem".to_owned()
-    } else {
-        format!("missing {}", missing.join(", "))
-    }
-}
-
-/// Copies a required static asset into the frontend distribution directory.
-fn copy_asset(source: impl AsRef<Path>, destination: &Path) {
-    let source = source.as_ref();
-    fs::copy(source, destination).unwrap_or_else(|error| {
-        panic!(
-            "Could not copy {} to {}: {}. Run `npm install` and `npm run build` in frontend.",
-            source.display(),
-            destination.display(),
-            error
-        )
-    });
-}
-
-/// Recursively copies a directory into the frontend distribution directory.
-fn copy_dir(source: impl AsRef<Path>, destination: &Path) {
-    let source = source.as_ref();
-    fs::create_dir_all(destination).unwrap_or_else(|error| {
-        panic!(
-            "Could not create {}: {}. Run `npm install` and `npm run build` in frontend.",
-            destination.display(),
-            error
-        )
-    });
-
-    for entry in fs::read_dir(source).unwrap_or_else(|error| {
-        panic!(
-            "Could not read {}: {}. Run `npm install` and `npm run build` in frontend.",
-            source.display(),
-            error
-        )
-    }) {
-        let entry = entry.unwrap_or_else(|error| {
-            panic!(
-                "Could not read a file in {}: {}. Run `npm install` and `npm run build` in frontend.",
-                source.display(),
-                error
-            )
-        });
-        let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
-
-        if source_path.is_dir() {
-            copy_dir(&source_path, &destination_path);
-        } else {
-            copy_asset(&source_path, &destination_path);
-        }
-    }
 }

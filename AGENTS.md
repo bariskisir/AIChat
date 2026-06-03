@@ -7,7 +7,7 @@ AI Chat is a Windows-first Tauri 2 desktop application that provides a chat inte
 **Version:** 1.3.0  
 **Rust edition:** 2024  
 **Key dependencies:** Tauri 2, tokio, reqwest, serde, uuid, chrono, rand, anyhow, thiserror  
-**Frontend compiler:** `tsc` with `--outFile` concatenation, namespace merging
+**Frontend bundler:** Vite (ES modules, bundles npm dependencies into `frontend/dist`); `tsc --noEmit` for type-checking only
 
 ---
 
@@ -743,7 +743,7 @@ File-based logger using `simplelog`. Writes to the `app.log` path with `Info` le
 
 ## Frontend TypeScript Files
 
-All frontend code uses **global namespaces** and **triple-slash references** (`/// <reference path="..." />`), *not* ES module imports. The `tsconfig.json` uses `--outFile` for concatenation and `"include": ["src/**/*"]`. Namespace merging allows split files to share the `Renderer` namespace without explicit imports.
+All frontend code uses **standard ES modules** with relative `.js`-extension imports (e.g. `import * as Api from "./api.js";`). **Vite** bundles `src/app.ts` (the entry referenced by `index.html`) together with its npm dependencies and the linked stylesheets into `frontend/dist`. `tsconfig.json` is type-check only (`noEmit`, `moduleResolution: "Bundler"`, `include: ["src"]`).
 
 ### `frontend/src/types.d.ts`
 Shared TypeScript interfaces mirroring Rust DTOs. **Must stay in sync with `src/app/view.rs` and `src/domain/`.**
@@ -811,14 +811,7 @@ Provider dialog list: shows each provider with status, enabled/disabled state, e
 Status bar, button states, image preview rendering, compact mode toggle, sidebar width application, footer/infobar visibility.
 
 ### `frontend/src/markdown.ts`
-Safe DOM-based Markdown renderer (`MarkdownRenderer` namespace). **Never use `innerHTML` for model output.** Supports:
-- Headings (h1-h4 → h3-h6 to preserve message hierarchy)
-- Code blocks (fenced with language)
-- Tables (pipe tables with alignment)
-- Blockquotes
-- Ordered/unordered lists
-- Paragraphs
-- Inline: **bold**, *italic*, `code`, [links](...) (only `https:`/`mailto:` protocols)
+Markdown renderer for assistant messages. Uses the **`marked`** library to parse GitHub Flavored Markdown and **`DOMPurify`** to sanitize the generated HTML before assigning it to `innerHTML` (the only sanctioned `innerHTML` site — never bypass DOMPurify for model output). Exposes `renderInto(container, text)`. `marked` is configured with `gfm: true, breaks: true`; a DOMPurify `afterSanitizeAttributes` hook forces all links to `target="_blank" rel="noreferrer noopener"`. Full GFM support: headings h1–h6, bold/italic/strikethrough, fenced + inline code, pipe tables, blockquotes, nested + task lists, autolinks, images, horizontal rules, and backslash escapes.
 
 ### `frontend/src/model-dropdown.ts`
 Searchable model dropdown behavior. Filters model list as user types. Keyboard navigation (Enter to select, Escape to close).
@@ -864,8 +857,10 @@ TypeScript declarations for `window.__TAURI__` global.
 ## Build Commands
 
 ```bash
-# Frontend only (TypeScript + asset copy)
+# Frontend only (Vite bundle → frontend/dist)
 cd frontend && npm.cmd run build
+# Type-check only (no emit): npm.cmd run typecheck
+# Dev rebuild on change:     npm.cmd run watch  (vite build --watch)
 
 # Rust backend only
 cargo build
@@ -910,13 +905,12 @@ Always build frontend first if `.ts` or CSS files changed. `cargo build` is enou
 
 ### TypeScript
 - **File header:** Every `.ts` file starts with `/** ... */` purpose comment.
-- **No ES modules:** Use global namespaces and `/// <reference path="..." />` exclusively.
+- **ES modules:** Use standard `import`/`export` with relative `.js`-extension specifiers (e.g. `import * as Api from "./api.js";`). Vite bundles everything from the `src/app.ts` entry. Add npm dependencies with `npm install` — Vite bundles them; no manual vendoring.
 - **Frontend state:** `AppContext.model` holds `Renderer.UiModel`. All state changes flow through `renderSnapshot()`.
 - **API calls:** Through `Api` namespace only. No raw `TauriBridge.invokeCommand("string")` in other files.
-- **Markdown:** `MarkdownRenderer.renderInto()` for all assistant messages. Never use `innerHTML` for model output.
+- **Markdown:** `Markdown.renderInto()` (`markdown.ts`) for all assistant messages — it parses with `marked` and sanitizes with `DOMPurify`. Model output must never reach `innerHTML` without passing through DOMPurify.
 - **DOM refs:** Add new element IDs to `ELEMENT_IDS` array in `dom.ts`. Add type overrides in `ElementTypeFor` only if the heuristic fails.
 - **Image data:** Use `imageDataUrls` array field. No legacy single-image field.
-- **Namespace merging:** Split render files share the `Renderer` namespace. Cross-references work without explicit imports because `tsconfig.json` includes all `src/**/*` files and they merge at runtime via `--outFile`.
 
 ### Provider Conventions
 - **OpenCode Zen** is the only built-in provider with model discovery. Cannot be deleted. Defaults to `deepseek-v4-flash-free`.
