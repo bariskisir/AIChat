@@ -37,10 +37,6 @@ pub(crate) fn parse_model_response_for_plan(
         .as_deref()
         .map(|tier| collect_tier_allowed_models(&val, tier))
         .filter(|models| !models.is_empty());
-    let tier_gated_models = {
-        let set = collect_all_gated_models(&val);
-        if set.is_empty() { None } else { Some(set) }
-    };
     let mut models = Vec::new();
     collect_model_selector_models(&val, &mut models);
     if models.is_empty() {
@@ -56,11 +52,7 @@ pub(crate) fn parse_model_response_for_plan(
             .map(|candidate| candidate.model)
             .collect::<Vec<_>>();
     }
-    apply_tier_gating(
-        &mut models,
-        tier_gated_models.as_ref(),
-        tier_allowed_models.as_ref(),
-    );
+    apply_tier_allowlist(&mut models, tier_allowed_models.as_ref());
     dedupe_models(&mut models);
 
     if models.is_empty() {
@@ -152,51 +144,11 @@ fn collect_tier_allowed_models_at(value: &Value, current_rank: i32, models: &mut
     }
 }
 
-/// Collects every model_id referenced in any Growthbook minimum_tier entry,
-/// regardless of the user's current tier.
-fn collect_all_gated_models(value: &Value) -> HashSet<String> {
-    let mut models = HashSet::new();
-    collect_all_gated_models_at(value, &mut models);
-    models
-}
-
-fn collect_all_gated_models_at(value: &Value, models: &mut HashSet<String>) {
-    match value {
-        Value::Array(items) => {
-            if items
-                .iter()
-                .any(|item| item.get("minimum_tier").is_some() && item.get("model_id").is_some())
-            {
-                for item in items {
-                    if let Some(model_id) = item.get("model_id").and_then(Value::as_str) {
-                        models.insert(model_id.to_owned());
-                    }
-                }
-            }
-            for item in items {
-                collect_all_gated_models_at(item, models);
-            }
-        }
-        Value::Object(map) => {
-            for item in map.values() {
-                collect_all_gated_models_at(item, models);
-            }
-        }
-        _ => {}
-    }
-}
-
-/// Only hides models that are present in Growthbook gating but not allowed
-/// for the current tier. Models not referenced by Growthbook are left untouched.
-fn apply_tier_gating(
-    models: &mut [AvailableModel],
-    gated: Option<&HashSet<String>>,
-    allowed: Option<&HashSet<String>>,
-) {
-    let Some(gated) = gated else { return };
+/// Marks catalog models hidden when they are not allowed for the current tier.
+fn apply_tier_allowlist(models: &mut [AvailableModel], allowed: Option<&HashSet<String>>) {
     let Some(allowed) = allowed else { return };
     for model in models {
-        if gated.contains(&model.model) && !allowed.contains(&model.model) {
+        if !allowed.contains(&model.model) {
             model.hidden = true;
         }
     }
@@ -664,7 +616,10 @@ fn tier_name(value: &str) -> String {
         "max".to_owned()
     } else if normalized.contains("pro") {
         "pro".to_owned()
-    } else if normalized.contains("free") || normalized.contains("default") || normalized.is_empty()
+    } else if normalized.contains("free")
+        || normalized.contains("default")
+        || normalized == "autoapievaluation"
+        || normalized.is_empty()
     {
         "free".to_owned()
     } else {
@@ -701,4 +656,68 @@ fn display_plan(tier: &str) -> String {
 fn dedupe_models(models: &mut Vec<AvailableModel>) {
     let mut seen = HashSet::new();
     models.retain(|model| seen.insert(model.model.clone()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_account_info, parse_model_response_for_plan};
+
+    const FREE_BOOTSTRAP: &str = r#"{
+        "account": {
+            "email_address": "free@example.com",
+            "memberships": [{
+                "organization": {
+                    "capabilities": ["claude_auto_api_evaluation"],
+                    "rate_limit_tier": "auto_api_evaluation"
+                }
+            }]
+        },
+        "model_selector_config": [{
+            "id": "chat",
+            "models": [
+                {"id": "claude-free", "name": "Free model"},
+                {"id": "claude-pro", "name": "Pro model"},
+                {"id": "claude-unlisted", "name": "Unlisted model"}
+            ]
+        }],
+        "model_tiers": [
+            {"model_id": "claude-free", "minimum_tier": "free"},
+            {"model_id": "claude-pro", "minimum_tier": "pro"}
+        ]
+    }"#;
+
+    #[test]
+    fn auto_api_evaluation_displays_as_free() {
+        let (_, plan) = parse_account_info(FREE_BOOTSTRAP);
+
+        assert_eq!(plan, "Free");
+    }
+
+    #[test]
+    fn free_plan_only_shows_allowlisted_models() {
+        let models = parse_model_response_for_plan(FREE_BOOTSTRAP, Some("auto_api_evaluation"))
+            .expect("free model catalog should parse");
+
+        assert!(
+            !models
+                .iter()
+                .find(|model| model.model == "claude-free")
+                .unwrap()
+                .hidden
+        );
+        assert!(
+            models
+                .iter()
+                .find(|model| model.model == "claude-pro")
+                .unwrap()
+                .hidden
+        );
+        assert!(
+            models
+                .iter()
+                .find(|model| model.model == "claude-unlisted")
+                .unwrap()
+                .hidden
+        );
+    }
 }

@@ -360,6 +360,7 @@ mod tests {
             thinking_variants: crate::domain::fallback_thinking_variants(),
             support_verbosity: false,
             default_verbosity: DEFAULT_VERBOSITY.to_owned(),
+            claude_thinking_type: String::new(),
         }
     }
 
