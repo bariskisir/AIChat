@@ -60,6 +60,7 @@ export const VERBOSITY_DEFAULT: VerbosityLevel = EFFORT_HIGH;
 // Provider URLs
 export const CODEX_API_URL: string = "codex://chatgpt";
 export const CLAUDE_API_URL: string = "claude://claude.ai";
+export const CLAUDE_CODE_API_URL: string = "claudecode://anthropic";
 
 // Link targets
 export const LINK_DEVELOPER: LinkTarget = "developer" as const;
@@ -117,4 +118,4 @@ export const CSS: { readonly [key: string]: string } = {
 export const ROLE = {
   USER: "user" as ChatRole,
   ASSISTANT: "assistant" as ChatRole,
-} as const;
+} as const;

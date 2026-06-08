@@ -50,10 +50,11 @@ function renderCodexControls(refs: Refs, state: AppSnapshot): void {
   const apiUrl = selectedProvider(refs, state)?.apiUrl || "";
   const isCodex = apiUrl === Constants.CODEX_API_URL;
   const isClaude = apiUrl === Constants.CLAUDE_API_URL;
+  const isClaudeCode = apiUrl === Constants.CLAUDE_CODE_API_URL;
   const selectedModel = selectedCatalogModel(refs, state);
-  const supportsClaudeEffort = isClaude && claudeSupportsEffort(selectedModel);
+  const supportsClaudeEffort = (isClaude || isClaudeCode) && claudeSupportsEffort(selectedModel);
   const claudeThinkingNone = isClaude && selectedModel?.claudeThinkingType === "none";
-  refs.reasoningField.hidden = isCodex || isClaude;
+  refs.reasoningField.hidden = isCodex || isClaude || isClaudeCode;
   refs.thinkingField.hidden = !isCodex;
   refs.verbosityField.hidden = !isCodex;
   refs.claudeExtendedThinkingField.hidden = !isClaude || claudeThinkingNone;

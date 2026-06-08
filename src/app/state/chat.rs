@@ -5,8 +5,8 @@ use crate::app::events::UiEvent;
 use crate::app::view::{AppSnapshot, SendMessageRequest};
 use crate::domain::messages::*;
 use crate::domain::{
-    CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ChatMessage, ChatRole, MESSAGE_CONTEXT_LIMIT,
-    fallback_session_title, sanitize_session_title, split_model_key,
+    CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ChatMessage, ChatRole,
+    MESSAGE_CONTEXT_LIMIT, fallback_session_title, sanitize_session_title, split_model_key,
 };
 use crate::infra::openai::{self, OpenAiChatRequest, OpenAiContext, OpenAiMessage};
 use anyhow::{Result, anyhow};
@@ -50,6 +50,9 @@ impl AppState {
         }
         if self.selected_provider_is_claude()? {
             return self.send_claude_message(input, app_handle);
+        }
+        if self.selected_provider_is_claude_code()? {
+            return self.send_claude_code_message(input, app_handle);
         }
         self.ensure_provider_ready()?;
         let (ctx, selected_model) = self.selected_provider_context()?;
@@ -434,7 +437,10 @@ fn resolve_title_provider(
     }
     let (provider_id, model) = split_model_key(title_gen_model)?;
     let provider = providers.provider(provider_id)?.clone();
-    if provider.api_url == CODEX_PROVIDER_URL || provider.api_url == CLAUDE_PROVIDER_URL {
+    if provider.api_url == CODEX_PROVIDER_URL
+        || provider.api_url == CLAUDE_PROVIDER_URL
+        || provider.api_url == CLAUDE_CODE_PROVIDER_URL
+    {
         return None;
     }
     Some((provider, model.to_owned()))

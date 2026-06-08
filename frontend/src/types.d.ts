@@ -79,6 +79,14 @@ interface ClaudeAccountSnapshot {
   error: string;
 }
 
+interface ClaudeCodeAccountSnapshot {
+  available: boolean;
+  plan: string;
+  fiveHourLabel: string;
+  sevenDayLabel: string;
+  error: string;
+}
+
 interface CatalogSnapshot {
   models: AvailableModel[];
   thinkingVariants: ThinkingVariantOption[];
@@ -114,6 +122,7 @@ interface AppSnapshot {
   status: string;
   account: AccountSnapshot;
   claudeAccount: ClaudeAccountSnapshot;
+  claudeCodeAccount: ClaudeCodeAccountSnapshot;
   providers: ProviderSnapshot;
   catalog: CatalogSnapshot;
   sessions: ChatSession[];

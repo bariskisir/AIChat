@@ -2,7 +2,7 @@
 
 use super::messages::*;
 use super::{
-    AvailableModel, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ProviderKind,
+    AvailableModel, CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ProviderKind,
     default_thinking_variant, default_verbosity, fallback_thinking_variants,
 };
 use chrono::Utc;
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 pub const OPENCODE_PROVIDER_ID: &str = "opencode-zen";
 pub const CODEX_PROVIDER_ID: &str = "codex";
 pub const CLAUDE_PROVIDER_ID: &str = "claude";
+pub const CLAUDE_CODE_PROVIDER_ID: &str = "claude-code";
 pub const OPENCODE_DEFAULT_MODEL: &str = "deepseek-v4-flash-free";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -23,7 +24,12 @@ impl Default for ProviderStorage {
     /// Starts with the built-in fixed providers configured.
     fn default() -> Self {
         Self {
-            providers: vec![opencode_provider(), codex_provider(), claude_provider()],
+            providers: vec![
+                opencode_provider(),
+                codex_provider(),
+                claude_provider(),
+                claude_code_provider(),
+            ],
         }
     }
 }
@@ -49,6 +55,11 @@ impl ProviderStorage {
             &mut self.providers,
             CLAUDE_PROVIDER_URL,
             claude_provider(),
+        );
+        ensure_special_builtin_provider(
+            &mut self.providers,
+            CLAUDE_CODE_PROVIDER_URL,
+            claude_code_provider(),
         );
     }
 
@@ -143,6 +154,8 @@ impl ProviderConfig {
             ProviderKind::Codex
         } else if self.api_url.trim() == CLAUDE_PROVIDER_URL {
             ProviderKind::Claude
+        } else if self.api_url.trim() == CLAUDE_CODE_PROVIDER_URL {
+            ProviderKind::ClaudeCode
         } else {
             ProviderKind::OpenAi
         }
@@ -225,6 +238,21 @@ fn claude_provider() -> ProviderConfig {
     }
 }
 
+/// Builds the fixed Claude Code provider shell; models load from local CLI credentials.
+fn claude_code_provider() -> ProviderConfig {
+    ProviderConfig {
+        id: CLAUDE_CODE_PROVIDER_ID.to_owned(),
+        name: PROVIDER_CLAUDE_CODE_NAME.to_owned(),
+        api_url: CLAUDE_CODE_PROVIDER_URL.to_owned(),
+        api_key: String::new(),
+        custom_headers: Vec::new(),
+        built_in: true,
+        enabled: false,
+        models: Vec::new(),
+        error: AUTH_CLAUDE_CODE_PROMPT.to_owned(),
+    }
+}
+
 /// Keeps one fixed special provider by API URL while preserving existing ids and models.
 fn ensure_special_builtin_provider(
     providers: &mut Vec<ProviderConfig>,
@@ -237,9 +265,8 @@ fn ensure_special_builtin_provider(
     {
         let provider = &mut providers[index];
         provider.built_in = true;
-        if provider.name.trim().is_empty() {
-            provider.name = fallback.name.clone();
-        }
+        // Fixed special providers always use the canonical name (keeps renames in sync).
+        provider.name = fallback.name.clone();
         if provider.id.trim().is_empty() {
             provider.id = fallback.id.clone();
         }

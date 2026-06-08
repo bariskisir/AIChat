@@ -2,6 +2,7 @@
 
 pub mod chatgpt;
 pub mod claude;
+pub mod claudecode;
 pub mod clipboard;
 pub mod extractor;
 pub mod logging;

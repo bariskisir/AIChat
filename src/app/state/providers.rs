@@ -20,6 +20,8 @@ impl AppState {
             self.fetch_codex_models_for_provider(&provider).await?
         } else if provider.kind() == ProviderKind::Claude {
             self.fetch_claude_models_for_provider(&provider).await?
+        } else if provider.kind() == ProviderKind::ClaudeCode {
+            self.fetch_claude_code_models_for_provider(&provider).await?
         } else {
             fetch_models_for_save(&provider).await?
         };
@@ -68,6 +70,7 @@ impl AppState {
             let inner = self.lock()?;
             let codex_signed_in = inner.auth.is_signed_in();
             let claude_signed_in = inner.claude_auth.is_signed_in();
+            let claude_code_available = crate::infra::claudecode::credentials_available();
             inner
                 .providers
                 .providers
@@ -75,6 +78,7 @@ impl AppState {
                 .filter(|provider| {
                     (provider.kind() != ProviderKind::Codex || codex_signed_in)
                         && (provider.kind() != ProviderKind::Claude || claude_signed_in)
+                        && (provider.kind() != ProviderKind::ClaudeCode || claude_code_available)
                 })
                 .map(|provider| provider.id.clone())
                 .collect::<Vec<_>>()
@@ -143,6 +147,8 @@ impl AppState {
             self.fetch_codex_models_for_provider(&provider).await
         } else if provider.kind() == ProviderKind::Claude {
             self.fetch_claude_models_for_provider(&provider).await
+        } else if provider.kind() == ProviderKind::ClaudeCode {
+            self.fetch_claude_code_models_for_provider(&provider).await
         } else {
             openai::fetch_models(&OpenAiContext::from_provider(&provider)).await
         };
@@ -218,6 +224,18 @@ impl AppState {
             .provider(provider_id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SELECTED_PROVIDER))?;
         Ok(provider.kind() == ProviderKind::Claude)
+    }
+
+    /// Returns whether the selected model belongs to the Claude Code provider.
+    pub(super) fn selected_provider_is_claude_code(&self) -> Result<bool> {
+        let inner = self.lock()?;
+        let (provider_id, _) = split_model_key(&inner.settings.model)
+            .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
+        let provider = inner
+            .providers
+            .provider(provider_id)
+            .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SELECTED_PROVIDER))?;
+        Ok(provider.kind() == ProviderKind::ClaudeCode)
     }
 
     /// Ensures commands that require a provider have one.

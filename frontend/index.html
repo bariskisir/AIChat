@@ -199,6 +199,35 @@
                 <button id="btnClaudeSignOut" class="ch-btn--sm" type="button">Sign out</button>
               </section>
             </div>
+            <div id="claudeCodeLoginRow" class="ch-provider-form__auth" hidden>
+              <section id="claudeCodeAccountPanel" class="ch-codex-account">
+                <dl class="ch-codex-account__details">
+                  <div>
+                    <dt>Status</dt>
+                    <dd class="ch-codex-account__limit">
+                      <span id="claudeCodeAccountStatus">--</span>
+                      <button id="btnClaudeCodeRefresh" class="ch-btn--icon" type="button" title="Refresh Claude Code account">&#8635;</button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Plan</dt>
+                    <dd id="claudeCodeAccountPlan">--</dd>
+                  </div>
+                  <div>
+                    <dt>5h Usage</dt>
+                    <dd id="claudeCodeAccountFiveHour">--</dd>
+                  </div>
+                  <div>
+                    <dt>7d Usage</dt>
+                    <dd id="claudeCodeAccountSevenDay">--</dd>
+                  </div>
+                  <div>
+                    <dt>Models</dt>
+                    <dd id="claudeCodeAccountModels">--</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
             <div id="providerActions" class="ch-dialog__actions">
               <button id="btnCancelProvider" class="ch-btn--sm" type="button">Cancel</button>
               <button class="ch-btn--primary" type="submit">Check and Save</button>

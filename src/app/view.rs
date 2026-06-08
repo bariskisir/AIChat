@@ -12,6 +12,7 @@ pub struct AppSnapshot {
     pub status: String,
     pub account: AccountSnapshot,
     pub claude_account: ClaudeAccountSnapshot,
+    pub claude_code_account: ClaudeCodeAccountSnapshot,
     pub providers: ProviderSnapshot,
     pub catalog: CatalogSnapshot,
     pub sessions: Vec<ChatSession>,
@@ -33,6 +34,16 @@ pub struct ClaudeAccountSnapshot {
     pub logged_in: bool,
     pub email: String,
     pub plan: String,
+    pub error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClaudeCodeAccountSnapshot {
+    pub available: bool,
+    pub plan: String,
+    pub five_hour_label: String,
+    pub seven_day_label: String,
     pub error: String,
 }
 

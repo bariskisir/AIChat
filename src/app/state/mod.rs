@@ -3,17 +3,20 @@
 mod chat;
 mod chat_pipeline;
 mod claude;
+mod claudecode;
 mod codex;
 mod providers;
 mod sessions;
 mod settings;
 
 use super::view::{
-    AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot, ProviderSnapshot,
+    AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot,
+    ClaudeCodeAccountSnapshot, ProviderSnapshot,
 };
 use crate::domain::{
-    AppSettings, AuthStorage, CatalogStorage, ChatSession, ClaudeCredential, DEFAULT_WINDOW_HEIGHT,
-    DEFAULT_WINDOW_WIDTH, ProviderStorage, is_minimized_window_position, model_key,
+    AppSettings, AuthStorage, CatalogStorage, ChatSession, ClaudeCodeStatus, ClaudeCredential,
+    DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, ProviderStorage, is_minimized_window_position,
+    model_key,
 };
 use crate::domain::messages::*;
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
@@ -33,6 +36,7 @@ pub(super) struct StateInner {
     pub(super) settings: AppSettings,
     pub(super) auth: AuthStorage,
     pub(super) claude_auth: ClaudeCredential,
+    pub(super) claude_code: ClaudeCodeStatus,
     pub(super) catalog: CatalogStorage,
     pub(super) providers: ProviderStorage,
     pub(super) status: String,
@@ -47,6 +51,7 @@ impl AppState {
         let mut settings = storage.load_settings()?;
         let auth = storage.load_auth()?;
         let claude_auth = storage.load_claude_auth()?;
+        let claude_code = ClaudeCodeStatus::default();
         let catalog = storage.load_catalog()?;
         let mut providers = storage.load_providers()?;
         providers.ensure_builtin_providers();
@@ -61,6 +66,7 @@ impl AppState {
                 settings,
                 auth,
                 claude_auth,
+                claude_code,
                 catalog,
                 providers,
                 status,
@@ -125,6 +131,13 @@ impl StateInner {
                 email: self.claude_auth.email.clone(),
                 plan: self.claude_auth.plan.clone(),
                 error: self.claude_auth.error.clone(),
+            },
+            claude_code_account: ClaudeCodeAccountSnapshot {
+                available: crate::infra::claudecode::credentials_available(),
+                plan: self.claude_code.plan.clone(),
+                five_hour_label: self.claude_code.five_hour_label.clone(),
+                seven_day_label: self.claude_code.seven_day_label.clone(),
+                error: self.claude_code.error.clone(),
             },
             providers: ProviderSnapshot {
                 configured: !self.providers.providers.is_empty(),

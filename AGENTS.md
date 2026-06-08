@@ -102,9 +102,10 @@ Frontend-facing Data Transfer Objects (DTOs). All types use `#[serde(rename_all 
 
 | Type | Purpose | Key fields |
 |------|---------|------------|
-| `AppSnapshot` | Complete app state pushed to frontend | `settings`, `status`, `account`, `claude_account`, `providers`, `catalog`, `sessions`, `active_session`, `is_generating` |
+| `AppSnapshot` | Complete app state pushed to frontend | `settings`, `status`, `account`, `claude_account`, `claude_code_account`, `providers`, `catalog`, `sessions`, `active_session`, `is_generating` |
 | `AccountSnapshot` | ChatGPT/Codex auth status | `logged_in`, `email`, `error` |
-| `ClaudeAccountSnapshot` | Claude.ai auth status | `logged_in`, `email`, `plan`, `error` |
+| `ClaudeAccountSnapshot` | Claude.ai (Claude Web) auth status | `logged_in`, `email`, `plan`, `error` |
+| `ClaudeCodeAccountSnapshot` | Claude Code credential status | `available`, `plan`, `five_hour_label`, `seven_day_label`, `error` |
 | `ProviderSnapshot` | Provider list + first error | `configured`, `providers`, `active_provider_id`, `error` |
 | `CatalogSnapshot` | Model list + thinking/verbosity metadata | `models`, `thinking_variants`, `verbosity_supported`, `default_verbosity`, `limit_label` |
 | `SettingsInput` | Frontend → backend settings payload | `model`, `compact_mode`, `reasoning_effort`, `thinking_variant`, `verbosity`, `extended_thinking`, `claude_effort`, `always_on_top`, window dimensions, `show_footer`, `show_info_bar`, `title_gen_model` |
@@ -190,6 +191,7 @@ Core application state module. Defines `AppState` and `StateInner`.
 - `settings: AppSettings` — current global settings (model selection, window dimensions, UI flags)
 - `auth: AuthStorage` — ChatGPT OAuth tokens and account info
 - `claude_auth: ClaudeCredential` — Claude.ai session key, org_id, cookies
+- `claude_code: ClaudeCodeStatus` — in-memory Claude Code plan + usage labels (not persisted)
 - `catalog: CatalogStorage` — Codex model catalog with thinking/verbosity metadata
 - `providers: ProviderStorage` — all configured providers with their model lists
 - `status: String` — status bar message shown in the UI
@@ -438,6 +440,12 @@ Claude model refresh.
 
 ---
 
+### `src/app/state/claudecode/`
+Claude Code state integrations (no auth flow — credentials are read from disk).
+- `mod.rs` — declares `chat`, `providers`.
+- `providers.rs` — `claude_code_context()` (reads local credentials), `fetch_claude_code_models_for_provider()` (fetches models + usage, stores `claude_code` status), `start_claude_code_bootstrap(app_handle)` (background startup model load when credentials exist), `refresh_claude_code_provider()`.
+- `chat.rs` — `send_claude_code_message()`, `execute_claude_code_chat_response()`, `execute_claude_code_title_response()`; `resolve_effort()` validates the selected `claude_effort` against the model's supported effort levels.
+
 ### `src/domain/mod.rs`
 Domain layer root. Re-exports all types and functions. Key items:
 
@@ -457,7 +465,9 @@ Domain layer root. Re-exports all types and functions. Key items:
 - `default_reasoning_effort()`, `default_verbosity_setting()`, `default_claude_effort()` — used by `#[serde(default = "...")]` in `settings.rs` and `sessions.rs`
 - `active_model_id(model_key)` — extracts model ID from `"provider_id/model_id"` string
 
-**`ProviderKind` enum:** `OpenAi | Codex | Claude` — derived from provider API URL
+**`ProviderKind` enum:** `OpenAi | Codex | Claude | ClaudeCode` — derived from provider API URL
+
+**`CLAUDE_CODE_PROVIDER_URL = "claudecode://anthropic"`** — sentinel URL for the Claude Code provider (Anthropic API via local CLI credentials, no in-app login).
 
 ---
 
@@ -472,7 +482,7 @@ Domain layer root. Re-exports all types and functions. Key items:
 | Validation errors | `ERR_VALIDATION_` | 12 | `ERR_VALIDATION_EMPTY_MESSAGE`, `ERR_VALIDATION_STOP_FIRST`, `ERR_VALIDATION_PROVIDER_NAME_REQUIRED`, `ERR_VALIDATION_SELECT_MODEL_FIRST` |
 | Not-found errors | `ERR_NOT_FOUND_` | 4 | `ERR_NOT_FOUND_PROVIDER`, `ERR_NOT_FOUND_SESSION`, `ERR_NOT_FOUND_SELECTED_PROVIDER`, `ERR_NOT_FOUND_MAIN_WINDOW` |
 | Auth messages | `AUTH_` | 8 | `AUTH_SIGN_IN_CHATGPT_REQUIRED`, `AUTH_CONNECT_CLAUDE_REQUIRED`, `AUTH_SIGNED_IN_CHATGPT`, `AUTH_CONNECTED_CLAUDE` |
-| Provider labels | `PROVIDER_` | 4 | `PROVIDER_OPENCODE_NAME = "OpenCode Zen"`, `PROVIDER_CODEX_NAME = "Codex"`, `PROVIDER_CLAUDE_NAME = "Claude"` |
+| Provider labels | `PROVIDER_` | 5 | `PROVIDER_OPENCODE_NAME = "OpenCode Zen"`, `PROVIDER_CODEX_NAME = "Codex"`, `PROVIDER_CLAUDE_NAME = "Claude Web"`, `PROVIDER_CLAUDE_CODE_NAME = "Claude Code"` |
 | Chat labels | `CHAT_` | 4 | `CHAT_DEFAULT_TITLE = "New chat"`, `CHAT_IMAGE_TITLE = "Image chat"`, `CHAT_IMAGE_ATTACHED = "[Image attached]"` |
 | UI labels | `LABEL_` | 5 | `LABEL_THINKING_LOW = "low"` through `LABEL_THINKING_XHIGH = "xhigh"`, `LABEL_NONE = "none"` |
 | Format templates | `FMT_` | 9 | `FMT_ERROR = "Error: {}"`, `FMT_REFRESH_STATUS`, `FMT_MODELS_REFRESHED`, etc. |
@@ -503,6 +513,7 @@ Provider management types and built-in provider definitions (305 lines, split fr
 - `OPENCODE_PROVIDER_ID = "opencode-zen"`
 - `CODEX_PROVIDER_ID = "codex"`
 - `CLAUDE_PROVIDER_ID = "claude"`
+- `CLAUDE_CODE_PROVIDER_ID = "claude-code"`
 - `OPENCODE_DEFAULT_MODEL = "deepseek-v4-flash-free"`
 
 **Key functions:**
@@ -699,6 +710,13 @@ Claude.ai REST client. Contains:
 Claude model response parser. Extracts models from the Claude bootstrap `edge-api/bootstrap/{org_id}/app_start` JSON structure with plan-aware filtering (`opus_eligible`, `haiku_monthly_eligible`).
 
 ---
+
+### `src/infra/claudecode/`
+Claude Code client — calls the **Anthropic API directly** using the OAuth access token read from the local Claude Code CLI store (`~/.claude/.credentials.json`). There is **no in-app login**; the token is read fresh from disk on each call (the CLI keeps it refreshed).
+- `mod.rs` — `ClaudeCodeContext`, `ClaudeCodeCredentials`, `read_credentials()` (parses `claudeAiOauth.accessToken` / `subscriptionType`), `credentials_available()`, `anthropic_headers()` (Bearer + `anthropic-beta` + `anthropic-version` + Claude Code user-agent), and the required `CLAUDE_CODE_SYSTEM_PROMPT` identity string.
+- `catalog.rs` — `fetch_models()` GET `https://api.anthropic.com/v1/models`; maps `capabilities.effort.*` → `thinking_variants` (low/medium/high/xhigh/max), `claude_thinking_type = "effort_and_mode"` (or `"none"`).
+- `usage.rs` — `fetch_usage()` GET `https://api.anthropic.com/api/oauth/usage`; formats `five_hour` / `seven_day` windows into compact labels.
+- `streaming.rs` — `stream_chat_response()` POST `https://api.anthropic.com/v1/messages?beta=true`; sends the Claude Code `system` identity, content-block messages (text + base64 images), and `thinking:{type:adaptive}` + `output_config:{effort}` when the model supports effort. Parses Anthropic `content_block_delta`/`text_delta` SSE events.
 
 ### `src/infra/extractor.rs`
 Chrome DevTools Protocol integration for Claude browser login (592 lines). Key components:
@@ -916,7 +934,8 @@ Always build frontend first if `.ts` or CSS files changed. `cargo build` is enou
 - **OpenCode Zen** is the only built-in provider with model discovery. Cannot be deleted. Defaults to `deepseek-v4-flash-free`.
 - **OpenCode auth:** API key field is the `x-opencode-session` header value. Empty `x-opencode-session` entry stays in custom headers but is skipped during request building.
 - **Public OpenCode:** When API key is exactly `"public"`, apply free-model filter to `/models` response.
-- **Codex** and **Claude** are built-in provider shells (enabled=false) that require sign-in before use.
+- **Codex** and **Claude Web** are built-in provider shells (enabled=false) that require sign-in before use.
+- **Claude Code** is a built-in provider shell that needs **no in-app login**: it reads the OAuth token from `~/.claude/.credentials.json` (written by the Claude Code CLI) and calls the Anthropic API directly. Models load automatically at startup (`start_claude_code_bootstrap`) and via the account panel's refresh button. Its account panel has no sign-in/sign-out buttons. Usage limits come from `/api/oauth/usage`. The `claude_code` status (`plan`, usage labels) is kept in memory only — never persisted to disk.
 - **Custom headers:** Stored as structured `Vec<CustomHeader>` in Rust, edited as JSON string in the frontend.
 
 ### Persistence

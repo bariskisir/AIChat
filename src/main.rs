@@ -55,6 +55,7 @@ fn main() -> Result<()> {
                         log::warn!("Could not apply always-on-top setting: {error}");
                     }
                 }
+                state.start_claude_code_bootstrap(app.handle().clone());
                 let window_state = state.clone();
                 window.on_window_event(move |event| {
                     if let WindowEvent::Resized(size) = event

@@ -2,6 +2,7 @@
 
 mod catalog;
 mod claude;
+mod claudecode;
 pub mod codex;
 pub mod error;
 pub mod messages;
@@ -11,6 +12,7 @@ mod settings;
 
 pub use catalog::*;
 pub use claude::*;
+pub use claudecode::*;
 pub use codex::*;
 pub use error::AppError;
 pub use providers::*;
@@ -21,6 +23,7 @@ pub const SESSION_LIMIT: usize = 100;
 pub const MESSAGE_CONTEXT_LIMIT: usize = 40;
 pub const CODEX_PROVIDER_URL: &str = "codex://chatgpt";
 pub const CLAUDE_PROVIDER_URL: &str = "claude://claude.ai";
+pub const CLAUDE_CODE_PROVIDER_URL: &str = "claudecode://anthropic";
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.5";
 pub const DEFAULT_THINKING_VARIANT: &str = messages::LABEL_THINKING_HIGH;
 pub const DEFAULT_VERBOSITY_SETTING: &str = "default";
@@ -56,4 +59,5 @@ pub enum ProviderKind {
     OpenAi,
     Codex,
     Claude,
+    ClaudeCode,
 }

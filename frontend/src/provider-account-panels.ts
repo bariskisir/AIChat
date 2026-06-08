@@ -8,6 +8,7 @@ import * as Renderer from "./render.js";
 
 const CODEX_URL = "codex://chatgpt";
 const CLAUDE_URL = "claude://claude.ai";
+const CLAUDE_CODE_URL = "claudecode://anthropic";
 
 // Wires Codex and Claude account buttons to backend auth commands.
 export function bind(refs: Refs, setStatus: (message: string, isError?: boolean) => void): void {
@@ -17,16 +18,17 @@ export function bind(refs: Refs, setStatus: (message: string, isError?: boolean)
   refs.btnClaudeLogin.addEventListener("click", () => startClaudeLogin(refs, setStatus));
   refs.btnClaudeRefresh.addEventListener("click", () => refreshClaudeAccount(refs, setStatus));
   refs.btnClaudeSignOut.addEventListener("click", () => signOutClaude(refs, setStatus));
+  refs.btnClaudeCodeRefresh.addEventListener("click", () => refreshClaudeCodeAccount(refs, setStatus));
 }
 
 // Reports whether the editor currently targets a dedicated account provider.
 export function isSpecialForm(refs: Refs): boolean {
-  return isCodexForm(refs) || isClaudeForm(refs);
+  return isCodexForm(refs) || isClaudeForm(refs) || isClaudeCodeForm(refs);
 }
 
 // Reports whether a template is backed by a dedicated account provider.
 export function isSpecialTemplate(template: ProviderTemplates.Template): boolean {
-  return isCodexTemplate(template) || isClaudeTemplate(template);
+  return isCodexTemplate(template) || isClaudeTemplate(template) || isClaudeCodeTemplate(template);
 }
 
 // Applies fixed editor values for dedicated account provider templates.
@@ -43,10 +45,12 @@ export function applyTemplate(refs: Refs, template: ProviderTemplates.Template):
 export function render(refs: Refs): void {
   const isCodex = isCodexForm(refs);
   const isClaude = isClaudeForm(refs);
-  const isSpecial = isCodex || isClaude;
+  const isClaudeCode = isClaudeCodeForm(refs);
+  const isSpecial = isCodex || isClaude || isClaudeCode;
   refs.providerTemplateField.hidden = isSpecial;
   refs.codexLoginRow.hidden = !isCodex;
   refs.claudeLoginRow.hidden = !isClaude;
+  refs.claudeCodeLoginRow.hidden = !isClaudeCode;
   refs.providerNameField.hidden = isSpecial;
   refs.providerApiUrlField.hidden = isSpecial;
   refs.providerApiKeyField.hidden = isSpecial;
@@ -58,13 +62,14 @@ export function render(refs: Refs): void {
     refs.providerTemplateField.hidden = false;
     return;
   }
-  refs.providerName.value = isCodex ? "Codex" : "Claude";
-  refs.providerApiUrl.value = isCodex ? CODEX_URL : CLAUDE_URL;
+  refs.providerName.value = isCodex ? "Codex" : isClaudeCode ? "Claude Code" : "Claude Web";
+  refs.providerApiUrl.value = isCodex ? CODEX_URL : isClaudeCode ? CLAUDE_CODE_URL : CLAUDE_URL;
   refs.providerApiKey.value = "";
   refs.providerCustomHeaders.value = "";
   syncSpecialProviderId(refs);
   renderCodexAccount(refs, isCodex);
   renderClaudeAccount(refs, isClaude);
+  renderClaudeCodeAccount(refs, isClaudeCode);
 }
 
 // Returns whether the current editor values represent the Codex provider.
@@ -73,10 +78,16 @@ function isCodexForm(refs: Refs): boolean {
     || refs.providerTemplate.value === "Codex";
 }
 
-// Returns whether the current editor values represent the Claude provider.
+// Returns whether the current editor values represent the Claude Web provider.
 function isClaudeForm(refs: Refs): boolean {
   return refs.providerApiUrl.value.trim().toLocaleLowerCase() === CLAUDE_URL
     || refs.providerTemplate.value === "Claude";
+}
+
+// Returns whether the current editor values represent the Claude Code provider.
+function isClaudeCodeForm(refs: Refs): boolean {
+  return refs.providerApiUrl.value.trim().toLocaleLowerCase() === CLAUDE_CODE_URL
+    || refs.providerTemplate.value === "Claude Code";
 }
 
 // Returns whether a template is the dedicated Codex template.
@@ -84,14 +95,23 @@ function isCodexTemplate(template: ProviderTemplates.Template): boolean {
   return template.apiUrl.trim().toLocaleLowerCase() === CODEX_URL;
 }
 
-// Returns whether a template is the dedicated Claude template.
+// Returns whether a template is the dedicated Claude Web template.
 function isClaudeTemplate(template: ProviderTemplates.Template): boolean {
   return template.apiUrl.trim().toLocaleLowerCase() === CLAUDE_URL;
 }
 
+// Returns whether a template is the dedicated Claude Code template.
+function isClaudeCodeTemplate(template: ProviderTemplates.Template): boolean {
+  return template.apiUrl.trim().toLocaleLowerCase() === CLAUDE_CODE_URL;
+}
+
 // Selects the saved special provider row after login creates it.
 function syncSpecialProviderId(refs: Refs): void {
-  const provider = isCodexForm(refs) ? specialProvider(CODEX_URL) : specialProvider(CLAUDE_URL);
+  const provider = isCodexForm(refs)
+    ? specialProvider(CODEX_URL)
+    : isClaudeCodeForm(refs)
+      ? specialProvider(CLAUDE_CODE_URL)
+      : specialProvider(CLAUDE_URL);
   if (provider && !refs.providerId.value) {
     refs.providerId.value = provider.id;
     refs.providerEditorTitle.textContent = "Edit Provider";
@@ -128,6 +148,29 @@ function renderClaudeAccount(refs: Refs, isClaude: boolean): void {
   refs.claudeAccountEmail.textContent = state.claudeAccount.email || "--";
   refs.claudeAccountPlan.textContent = state.claudeAccount.plan || "--";
   refs.claudeAccountModels.textContent = modelList(state, CLAUDE_URL);
+}
+
+// Renders the Claude Code (local CLI credential) account details.
+function renderClaudeCodeAccount(refs: Refs, isClaudeCode: boolean): void {
+  refs.claudeCodeAccountPanel.hidden = !isClaudeCode;
+  if (!isClaudeCode) {
+    return;
+  }
+  const state = AppContext.model.appState;
+  const account = state?.claudeCodeAccount;
+  const available = Boolean(account?.available);
+  refs.claudeCodeAccountStatus.textContent = available
+    ? "Reading ~/.claude/.credentials.json"
+    : "Sign in with the Claude Code CLI.";
+  refs.claudeCodeAccountPlan.textContent = account?.plan || "--";
+  refs.claudeCodeAccountFiveHour.textContent = account?.fiveHourLabel || "--";
+  refs.claudeCodeAccountSevenDay.textContent = account?.sevenDayLabel || "--";
+  refs.claudeCodeAccountModels.textContent = state ? modelList(state, CLAUDE_CODE_URL) : "--";
+}
+
+// Refreshes Claude Code models and usage from local CLI credentials.
+async function refreshClaudeCodeAccount(refs: Refs, setStatus: (message: string, isError?: boolean) => void): Promise<void> {
+  await refreshAccount(refs, setStatus, CLAUDE_CODE_URL, refs.btnClaudeCodeRefresh, "Sign in with the Claude Code CLI first.", "Refreshing Claude Code account...");
 }
 
 // Starts the Codex ChatGPT sign-in flow from the provider editor.

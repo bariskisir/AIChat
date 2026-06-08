@@ -130,6 +130,13 @@ pub const AUTH_SIGN_IN_CHATGPT_REQUIRED: &str = "Please sign in with ChatGPT fir
 /// Shown when Claude chat is attempted without a Claude browser login.
 pub const AUTH_CONNECT_CLAUDE_REQUIRED: &str = "Connect to Claude first.";
 
+/// Shown when Claude Code chat is attempted without local CLI credentials.
+pub const AUTH_CLAUDE_CODE_REQUIRED: &str =
+    "Claude Code credentials were not found. Sign in with the Claude Code CLI first.";
+
+/// Shown as the provider-level prompt when Claude Code credentials are missing.
+pub const AUTH_CLAUDE_CODE_PROMPT: &str = "Sign in with the Claude Code CLI.";
+
 /// Shown as the provider-level prompt to sign into ChatGPT.
 pub const AUTH_SIGN_IN_CHATGPT_PROMPT: &str = "Sign in with ChatGPT.";
 
@@ -161,8 +168,11 @@ pub const PROVIDER_OPENCODE_NAME: &str = "OpenCode Zen";
 /// Display name for the built-in Codex / ChatGPT provider.
 pub const PROVIDER_CODEX_NAME: &str = "Codex";
 
-/// Display name for the built-in Claude provider.
-pub const PROVIDER_CLAUDE_NAME: &str = "Claude";
+/// Display name for the built-in Claude.ai web provider.
+pub const PROVIDER_CLAUDE_NAME: &str = "Claude Web";
+
+/// Display name for the built-in Claude Code (Anthropic API) provider.
+pub const PROVIDER_CLAUDE_CODE_NAME: &str = "Claude Code";
 
 /// Description for the default free model on the OpenCode Zen provider.
 pub const PROVIDER_OPENCODE_DEFAULT_MODEL_DESC: &str = "OpenCode Zen default free model";
