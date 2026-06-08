@@ -70,9 +70,8 @@ struct UsageWindowLabel {
 
 /// Formats one usage-limit window.
 fn format_rate_limit_window(window: &Value) -> Option<UsageWindowLabel> {
-    let used_percent = number_at(window, "used_percent").unwrap_or(0.0).max(0.0);
-    let left_percent = (100.0 - used_percent).max(0.0);
-    let percent = format_percent(left_percent);
+    let used_percent = number_at(window, "used_percent").unwrap_or(0.0).clamp(0.0, 100.0);
+    let percent = format_percent(used_percent);
     let minutes = int_at(window, "limit_window_seconds").map(|v| (v + 59) / 60)?;
     if minutes <= 0 {
         return None;
