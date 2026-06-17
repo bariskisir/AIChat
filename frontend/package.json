@@ -8,7 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "dompurify": "^3.4.7",
+    "dompurify": "^3.4.9",
     "marked": "^18.0.4"
   },
   "devDependencies": {
