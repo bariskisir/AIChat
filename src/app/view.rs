@@ -93,6 +93,8 @@ pub struct SettingsInput {
     pub show_info_bar: bool,
     #[serde(default)]
     pub title_gen_model: String,
+    #[serde(default)]
+    pub favorite_models: Vec<String>,
 }
 
 /// Returns the fallback Codex thinking setting for older frontends.

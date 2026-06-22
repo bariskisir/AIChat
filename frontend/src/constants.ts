@@ -28,6 +28,10 @@ export const ERROR_LABEL: string = "Error";
 export const LABEL_NONE_TITLE_CASE: string = "None";
 export const LABEL_CURRENT: string = "Current";
 export const LABEL_NO_MATCHES: string = "No matches";
+export const FAVORITE_ICON_INACTIVE: string = "♡";
+export const FAVORITE_ICON_ACTIVE: string = "♥";
+export const FAVORITE_ADD_TITLE: string = "Add to favorites";
+export const FAVORITE_REMOVE_TITLE: string = "Remove from favorites";
 export const TITLE_GEN_NONE: string = "none";
 export const TITLE_GEN_CURRENT: string = "";
 
@@ -108,7 +112,9 @@ export const CSS: { readonly [key: string]: string } = {
   CH_SIDEBAR_TITLE: "ch-sidebar__title",
   CH_SIDEBAR_DELETE: "ch-btn--delete ch-sidebar__delete",
   CH_MODEL_DROPDOWN_EMPTY: "ch-model-dropdown__empty",
+  CH_MODEL_DROPDOWN_OPTION_ROW: "ch-model-dropdown__option-row",
   CH_MODEL_DROPDOWN_OPTION: "ch-model-dropdown__option",
+  CH_MODEL_DROPDOWN_FAVORITE: "ch-model-dropdown__favorite",
   CH_COMPOSER_PREVIEW_ITEM: "ch-composer__preview-item",
   CH_COMPOSER_THUMB: "ch-composer__thumb",
   CH_COMPOSER_REMOVE: "ch-btn--icon ch-composer__remove-image",

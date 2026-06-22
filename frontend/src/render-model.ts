@@ -11,10 +11,19 @@ export function populateModelOptions(refs: Refs, state: AppSnapshot | null): voi
     refs.modelDropdownButton.textContent = Constants.PLACEHOLDER_SELECT_MODEL;
     return;
   }
-  const allOptions = state.catalog.models.filter((item) => !item.hidden).sort(compareModels).map((item) => ({
+  const favorites = new Set(state.settings.favoriteModels || []);
+  const allOptions = state.catalog.models.filter((item) => !item.hidden).sort((left, right) => {
+    const leftFavorite = favorites.has(modelValue(left));
+    const rightFavorite = favorites.has(modelValue(right));
+    if (leftFavorite !== rightFavorite) {
+      return leftFavorite ? -1 : 1;
+    }
+    return compareModels(left, right);
+  }).map((item) => ({
     value: `${item.providerId}/${item.model}`,
     label: modelLabel(item),
     title: item.description || modelLabel(item),
+    favorite: favorites.has(modelValue(item)),
   }));
   const terms = searchTerms(refs.modelSearchInput.value);
   const filteredOptions = allOptions.filter((item) => modelMatchesSearch(item, terms));
@@ -84,7 +93,10 @@ function renderCodexControls(refs: Refs, state: AppSnapshot): void {
 }
 
 // Renders the custom dropdown option list.
-function renderModelDropdownOptions(refs: Refs, options: Array<{ value: string; label: string; title?: string }>): void {
+function renderModelDropdownOptions(
+  refs: Refs,
+  options: Array<{ value: string; label: string; title?: string; favorite: boolean }>,
+): void {
   refs.modelOptionList.innerHTML = "";
   if (!options.length) {
     const empty = document.createElement("div");
@@ -94,6 +106,9 @@ function renderModelDropdownOptions(refs: Refs, options: Array<{ value: string; 
     return;
   }
   for (const option of options) {
+    const row = document.createElement("div");
+    row.className = Constants.CSS.CH_MODEL_DROPDOWN_OPTION_ROW;
+
     const button = document.createElement("button");
     button.type = "button";
     button.className = Constants.CSS.CH_MODEL_DROPDOWN_OPTION;
@@ -103,7 +118,20 @@ function renderModelDropdownOptions(refs: Refs, options: Array<{ value: string; 
     button.setAttribute("aria-selected", String(option.value === refs.modelSelect.value));
     button.textContent = option.label;
     button.title = option.title || option.label;
-    refs.modelOptionList.appendChild(button);
+    row.appendChild(button);
+
+    const favoriteButton = document.createElement("button");
+    favoriteButton.type = "button";
+    favoriteButton.className = Constants.CSS.CH_MODEL_DROPDOWN_FAVORITE;
+    favoriteButton.classList.toggle(Constants.CSS.IS_ACTIVE, option.favorite);
+    favoriteButton.dataset.favoriteModelValue = option.value;
+    favoriteButton.textContent = option.favorite ? Constants.FAVORITE_ICON_ACTIVE : Constants.FAVORITE_ICON_INACTIVE;
+    favoriteButton.title = option.favorite ? Constants.FAVORITE_REMOVE_TITLE : Constants.FAVORITE_ADD_TITLE;
+    favoriteButton.setAttribute("aria-label", favoriteButton.title);
+    favoriteButton.setAttribute("aria-pressed", String(option.favorite));
+    row.appendChild(favoriteButton);
+
+    refs.modelOptionList.appendChild(row);
   }
 }
 
@@ -161,6 +189,11 @@ function compareModels(leftModel: AvailableModel, rightModel: AvailableModel): n
 // Formats a model as provider/model for display.
 function modelLabel(model: AvailableModel): string {
   return `${model.providerName || model.providerId}/${model.model}`;
+}
+
+// Returns the stable provider/model key used by selection and favorites.
+function modelValue(model: AvailableModel): string {
+  return `${model.providerId}/${model.model}`;
 }
 
 // Splits a model search into independent terms.

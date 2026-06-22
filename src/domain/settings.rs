@@ -50,6 +50,8 @@ pub struct AppSettings {
     pub show_info_bar: bool,
     #[serde(default)]
     pub title_gen_model: String,
+    #[serde(default)]
+    pub favorite_models: Vec<String>,
 }
 
 impl Default for AppSettings {
@@ -74,6 +76,7 @@ impl Default for AppSettings {
             show_footer: true,
             show_info_bar: true,
             title_gen_model: String::new(),
+            favorite_models: Vec::new(),
         }
     }
 }

@@ -11,6 +11,7 @@ use crate::domain::{
     },
 };
 use anyhow::Result;
+use std::collections::HashSet;
 
 impl AppState {
     /// Applies user-editable settings and persists them with the active session.
@@ -33,6 +34,7 @@ impl AppState {
         inner.settings.show_footer = input.show_footer;
         inner.settings.show_info_bar = input.show_info_bar;
         inner.settings.title_gen_model = input.title_gen_model;
+        inner.settings.favorite_models = normalize_favorite_models(input.favorite_models);
         inner.save_active_session_model_settings()?;
         if let Some(width) = input.window_width {
             inner.settings.window_width = width.max(MIN_WINDOW_WIDTH);
@@ -97,10 +99,38 @@ fn normalize_reasoning_effort(value: &str) -> String {
 /// Keeps Claude effort within supported values.
 fn normalize_claude_effort(value: &str) -> String {
     match value {
-        LABEL_THINKING_LOW | LABEL_THINKING_MEDIUM | LABEL_THINKING_HIGH
-        | LABEL_THINKING_XHIGH | LABEL_THINKING_MAX => {
-            value.to_owned()
-        }
+        LABEL_THINKING_LOW
+        | LABEL_THINKING_MEDIUM
+        | LABEL_THINKING_HIGH
+        | LABEL_THINKING_XHIGH
+        | LABEL_THINKING_MAX => value.to_owned(),
         _ => CLAUDE_EFFORT_DEFAULT.to_owned(),
+    }
+}
+
+/// Removes empty and duplicate persisted model keys while preserving favorite order.
+fn normalize_favorite_models(values: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    values
+        .into_iter()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty() && seen.insert(value.clone()))
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_favorite_models;
+
+    #[test]
+    fn favorite_models_are_trimmed_and_deduplicated() {
+        let favorites = normalize_favorite_models(vec![
+            " provider/model ".to_owned(),
+            String::new(),
+            "provider/model".to_owned(),
+            "other/model".to_owned(),
+        ]);
+
+        assert_eq!(favorites, vec!["provider/model", "other/model"]);
     }
 }

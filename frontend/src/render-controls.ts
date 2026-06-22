@@ -132,6 +132,7 @@ export function collectSettings(refs: Refs): FrontendSettings {
     showFooter: state?.settings.showFooter ?? true,
     showInfoBar: state?.settings.showInfoBar ?? true,
     titleGenModel: state?.settings.titleGenModel ?? "",
+    favoriteModels: state?.settings.favoriteModels ?? [],
   };
 }
 

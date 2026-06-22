@@ -19,6 +19,7 @@ interface AppSettings {
   showFooter: boolean;
   showInfoBar: boolean;
   titleGenModel: string;
+  favoriteModels: string[];
 }
 
 interface AvailableModel {
@@ -145,6 +146,7 @@ interface FrontendSettings {
   showFooter: boolean;
   showInfoBar: boolean;
   titleGenModel: string;
+  favoriteModels: string[];
 }
 
 interface UiEventPayload {
