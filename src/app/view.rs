@@ -70,7 +70,6 @@ pub struct CatalogSnapshot {
 #[serde(rename_all = "camelCase")]
 pub struct SettingsInput {
     pub model: String,
-    pub compact_mode: bool,
     pub reasoning_effort: String,
     #[serde(default = "default_thinking_variant")]
     pub thinking_variant: String,
@@ -80,17 +79,14 @@ pub struct SettingsInput {
     pub extended_thinking: bool,
     #[serde(default = "default_claude_effort")]
     pub claude_effort: String,
-    pub always_on_top: bool,
-    #[serde(default)]
-    pub window_width: Option<u32>,
-    #[serde(default)]
-    pub window_height: Option<u32>,
     #[serde(default)]
     pub sidebar_width: Option<u32>,
     #[serde(default = "default_show_footer")]
     pub show_footer: bool,
     #[serde(default = "default_show_info_bar")]
     pub show_info_bar: bool,
+    #[serde(default = "default_show_model_bar")]
+    pub show_model_bar: bool,
     #[serde(default)]
     pub title_gen_model: String,
     #[serde(default)]
@@ -124,6 +120,11 @@ fn default_show_footer() -> bool {
 
 /// Returns the default show-info-bar setting for older frontends.
 fn default_show_info_bar() -> bool {
+    true
+}
+
+/// Returns the default show-model-bar setting for older frontends.
+fn default_show_model_bar() -> bool {
     true
 }
 

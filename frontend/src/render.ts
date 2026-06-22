@@ -4,10 +4,10 @@ import { type Refs } from "./dom.js";
 import {
   applyShowFooter,
   applyShowInfoBar,
+  applyShowModelBar,
   populateOptions,
   renderImagePreview,
   renderStatus,
-  setCompactMode,
   setSidebarWidth,
   updateButtons,
 } from "./render-controls.js";
@@ -40,10 +40,10 @@ export function renderState(refs: Refs, model: UiModel, state: AppSnapshot): voi
     preservedScrollTop,
     scrollToBottom: !streamScrollPaused,
   });
-  setCompactMode(refs, state.settings.compactMode);
   setSidebarWidth(refs, state.settings.sidebarWidth);
   applyShowFooter(refs, state.settings.showFooter);
   applyShowInfoBar(refs, state.settings.showInfoBar);
+  applyShowModelBar(refs, state.settings.showModelBar);
   renderImagePreview(refs, model);
   updateButtons(refs, model);
 }
@@ -51,12 +51,12 @@ export function renderState(refs: Refs, model: UiModel, state: AppSnapshot): voi
 export {
   applyShowFooter,
   applyShowInfoBar,
+  applyShowModelBar,
   bindScrollTracking,
   collectSettings,
   renderCopyFeedback,
   renderImagePreview,
   renderStatus,
-  setCompactMode,
   updateButtons,
 } from "./render-controls.js";
 export { renderAssistantMessage, renderMessages } from "./render-messages.js";

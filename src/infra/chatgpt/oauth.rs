@@ -9,7 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use chrono::Utc;
-use rand::RngCore;
+use rand::Rng;
 use reqwest::header::CONTENT_TYPE;
 use serde_json::Value;
 use sha2::{Digest, Sha256};

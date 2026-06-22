@@ -3,8 +3,7 @@
 use super::AppState;
 use crate::app::view::{AppSnapshot, SettingsInput};
 use crate::domain::{
-    MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH, MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH,
-    is_minimized_window_position,
+    MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH,
     messages::{
         CLAUDE_EFFORT_DEFAULT, LABEL_NONE, LABEL_THINKING_HIGH, LABEL_THINKING_LOW,
         LABEL_THINKING_MAX, LABEL_THINKING_MEDIUM, LABEL_THINKING_XHIGH,
@@ -18,7 +17,6 @@ impl AppState {
     pub fn update_settings(&self, input: SettingsInput) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         inner.settings.model = input.model;
-        inner.settings.compact_mode = input.compact_mode;
         inner.settings.reasoning_effort = normalize_reasoning_effort(&input.reasoning_effort);
         inner.settings.thinking_variant = inner.catalog.normalize_thinking_variant(
             &input.thinking_variant,
@@ -30,18 +28,12 @@ impl AppState {
         );
         inner.settings.extended_thinking = input.extended_thinking;
         inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
-        inner.settings.always_on_top = input.always_on_top;
         inner.settings.show_footer = input.show_footer;
         inner.settings.show_info_bar = input.show_info_bar;
+        inner.settings.show_model_bar = input.show_model_bar;
         inner.settings.title_gen_model = input.title_gen_model;
         inner.settings.favorite_models = normalize_favorite_models(input.favorite_models);
         inner.save_active_session_model_settings()?;
-        if let Some(width) = input.window_width {
-            inner.settings.window_width = width.max(MIN_WINDOW_WIDTH);
-        }
-        if let Some(height) = input.window_height {
-            inner.settings.window_height = height.max(MIN_WINDOW_HEIGHT);
-        }
         if let Some(width) = input.sidebar_width {
             inner.settings.sidebar_width = width.clamp(MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
         }
@@ -50,41 +42,43 @@ impl AppState {
         Ok(inner.build_snapshot())
     }
 
-    /// Persists the current window size after enforcing minimum dimensions.
-    pub fn save_window_size(&self, width: u32, height: u32) -> Result<()> {
+    /// Persists the native window state without overwriting normal bounds while maximized.
+    pub fn save_window_state(
+        &self,
+        width: u32,
+        height: u32,
+        x: i32,
+        y: i32,
+        maximized: bool,
+        fullscreen: bool,
+    ) -> Result<()> {
         let mut inner = self.lock()?;
-        let w = width.max(MIN_WINDOW_WIDTH);
-        let h = height.max(MIN_WINDOW_HEIGHT);
-        if inner.settings.window_width == w && inner.settings.window_height == h {
-            return Ok(());
-        }
-        inner.settings.window_width = w;
-        inner.settings.window_height = h;
-        inner.storage.save_settings(&inner.settings)?;
-        Ok(())
-    }
+        let mut changed = inner.settings.window_maximized != maximized
+            || inner.settings.window_fullscreen != fullscreen;
 
-    /// Persists the current window position.
-    pub fn save_window_position(&self, x: i32, y: i32) -> Result<()> {
-        if is_minimized_window_position(x, y) {
-            return Ok(());
-        }
-        let mut inner = self.lock()?;
-        if inner.settings.window_x == Some(x) && inner.settings.window_y == Some(y) {
-            return Ok(());
-        }
-        inner.settings.window_x = Some(x);
-        inner.settings.window_y = Some(y);
-        inner.storage.save_settings(&inner.settings)?;
-        Ok(())
-    }
+        inner.settings.window_maximized = maximized;
+        inner.settings.window_fullscreen = fullscreen;
 
-    /// Persists and returns the always-on-top setting.
-    pub fn set_window_pinned(&self, enabled: bool) -> Result<AppSnapshot> {
-        let mut inner = self.lock()?;
-        inner.settings.always_on_top = enabled;
-        inner.storage.save_settings(&inner.settings)?;
-        Ok(inner.build_snapshot())
+        if !maximized
+            && !fullscreen
+            && width > 0
+            && height > 0
+            && !crate::domain::is_minimized_window_position(x, y)
+        {
+            changed |= inner.settings.window_width != Some(width)
+                || inner.settings.window_height != Some(height)
+                || inner.settings.window_x != Some(x)
+                || inner.settings.window_y != Some(y);
+            inner.settings.window_width = Some(width);
+            inner.settings.window_height = Some(height);
+            inner.settings.window_x = Some(x);
+            inner.settings.window_y = Some(y);
+        }
+
+        if changed {
+            inner.storage.save_settings(&inner.settings)?;
+        }
+        Ok(())
     }
 }
 

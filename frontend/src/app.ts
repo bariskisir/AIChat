@@ -38,8 +38,6 @@ function bindSessionEvents(): void {
 }
 
 function bindWindowEvents(): void {
-  refs.btnCompact.addEventListener("click", toggleCompactMode);
-  refs.btnAlwaysOnTop.addEventListener("click", toggleAlwaysOnTop);
   refs.btnCopyChat.addEventListener("click", ClipboardActions.copyLastAssistant);
   refs.btnDeveloper.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink(Constants.LINK_DEVELOPER)));
   refs.btnSource.addEventListener("click", () => AppContext.safeInvoke(() => Api.openLink(Constants.LINK_SOURCE)));
@@ -126,16 +124,4 @@ async function deleteSession(sessionId: string): Promise<void> {
     await AppContext.renderSnapshot(() => Api.deleteSession(sessionId));
     Composer.focus();
   }
-}
-
-// Flips the always-on-top setting.
-async function toggleAlwaysOnTop(): Promise<void> {
-  const enabled = !model.appState?.settings.alwaysOnTop;
-  await AppContext.renderSnapshot(() => Api.setWindowPinned(enabled));
-}
-
-// Flips compact mode and persists the updated layout.
-async function toggleCompactMode(): Promise<void> {
-  Renderer.setCompactMode(refs, !refs.appShell.classList.contains(Constants.CSS.IS_COMPACT));
-  await AppContext.saveSettings();
 }

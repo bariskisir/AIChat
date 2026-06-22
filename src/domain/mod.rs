@@ -14,7 +14,6 @@ pub use catalog::*;
 pub use claude::*;
 pub use claudecode::*;
 pub use codex::*;
-pub use error::AppError;
 pub use providers::*;
 pub use sessions::*;
 pub use settings::*;

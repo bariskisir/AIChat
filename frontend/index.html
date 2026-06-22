@@ -11,13 +11,13 @@
     <link rel="stylesheet" href="styles/utilities.css">
   </head>
   <body>
-    <main id="appShell" class="ch-shell">
+    <main class="ch-shell">
       <section class="ch-view--main">
         <header id="statusRow" class="ch-toolbar">
           <span id="statusText">Ready.</span>
         </header>
 
-        <section class="ch-toolbar--model">
+        <section id="modelToolbar" class="ch-toolbar--model">
           <div class="ch-model-bar">
             <label class="ch-select-field">
               <span>Model</span>
@@ -66,8 +66,6 @@
         <section class="ch-toolbar--actions">
           <div class="ch-tool-group">
             <button id="btnNewSession" class="ch-btn--add" type="button" title="New chat" aria-label="New chat">+</button>
-            <button id="btnCompact" class="ch-btn--sm" type="button">Compact</button>
-            <button id="btnAlwaysOnTop" class="ch-btn--sm" type="button" aria-pressed="false">Always on Top</button>
             <button id="btnProviders" class="ch-btn--sm" type="button">Providers</button>
             <button id="btnSettings" class="ch-btn--sm" type="button">Settings</button>
           </div>
@@ -139,7 +137,7 @@
             </label>
             <label id="providerApiKeyField">
               <span>Token</span>
-              <input id="providerApiKey" type="text" autocomplete="off">
+              <input id="providerApiKey" type="password" autocomplete="off">
             </label>
             <label id="providerCustomHeadersField">
               <span>Custom Headers</span>
@@ -242,12 +240,16 @@
         </div>
         <div class="ch-settings-panel">
           <label class="ch-toggle-field">
-            <span>Show Footer</span>
-            <input id="settingsShowFooter" class="ch-toggle" type="checkbox" checked>
-          </label>
-          <label class="ch-toggle-field">
             <span>Show Information Bar</span>
             <input id="settingsShowInfoBar" class="ch-toggle" type="checkbox" checked>
+          </label>
+          <label class="ch-toggle-field">
+            <span>Show Model Bar</span>
+            <input id="settingsShowModelBar" class="ch-toggle" type="checkbox" checked>
+          </label>
+          <label class="ch-toggle-field">
+            <span>Show Footer</span>
+            <input id="settingsShowFooter" class="ch-toggle" type="checkbox" checked>
           </label>
           <label class="ch-select-field ch-settings-title-gen">
             <span>Title Generation</span>

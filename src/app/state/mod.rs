@@ -13,12 +13,11 @@ use super::view::{
     AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot,
     ClaudeCodeAccountSnapshot, ProviderSnapshot,
 };
+use crate::domain::messages::*;
 use crate::domain::{
     AppSettings, AuthStorage, CatalogStorage, ChatSession, ClaudeCodeStatus, ClaudeCredential,
-    DEFAULT_WINDOW_HEIGHT, DEFAULT_WINDOW_WIDTH, ProviderStorage, is_minimized_window_position,
-    model_key,
+    ProviderStorage, model_key,
 };
-use crate::domain::messages::*;
 use crate::infra::{paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
@@ -57,7 +56,6 @@ impl AppState {
         providers.ensure_builtin_providers();
         storage.save_providers(&providers)?;
         let mut sessions = storage.load_sessions()?;
-        initialize_window_layout(&mut settings, &storage)?;
         repair_session_selection(&mut sessions, &mut settings, &storage)?;
         let status = initialize_status(&providers);
         Ok(Self {
@@ -261,24 +259,6 @@ impl StateInner {
             .find(|s| s.id == id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SESSION))
     }
-}
-
-/// Sets default window dimensions on first launch and repairs minimized-position state.
-fn initialize_window_layout(settings: &mut AppSettings, storage: &Storage) -> Result<()> {
-    if !settings.window_layout_initialized {
-        settings.window_width = DEFAULT_WINDOW_WIDTH;
-        settings.window_height = DEFAULT_WINDOW_HEIGHT;
-        settings.window_layout_initialized = true;
-        storage.save_settings(settings)?;
-    }
-    if let (Some(x), Some(y)) = (settings.window_x, settings.window_y)
-        && is_minimized_window_position(x, y)
-    {
-        settings.window_x = None;
-        settings.window_y = None;
-        storage.save_settings(settings)?;
-    }
-    Ok(())
 }
 
 /// Ensures at least one session exists and the active-session selection is valid,

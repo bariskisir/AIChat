@@ -82,11 +82,6 @@ export function writeClipboardText(text: string): Promise<void> {
   return TauriBridge.invokeCommand("clipboard_write_text", { text });
 }
 
-// Toggles the native always-on-top window flag.
-export function setWindowPinned(enabled: boolean): Promise<AppSnapshot> {
-  return TauriBridge.invokeCommand<AppSnapshot>("window_set_pinned", { enabled });
-}
-
 // Opens a known external project link.
 export function openLink(target: LinkTarget): Promise<void> {
   return TauriBridge.invokeCommand("link_open", { target });

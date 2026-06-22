@@ -1,4 +1,6 @@
 // Ensures frontend assets exist before Tauri packages the desktop application.
+#![forbid(unsafe_code)]
+
 use std::env;
 use std::fs;
 use std::path::Path;

@@ -1,5 +1,6 @@
 //! Starts the Tauri desktop AI Chat application.
 
+#![forbid(unsafe_code)]
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod app;
@@ -11,13 +12,13 @@ use app::{
     AppState, app_get_snapshot, auth_sign_out, auth_start_login, catalog_refresh_models, chat_send,
     chat_stop, claude_auth_sign_out, claude_auth_start_login, clipboard_write_text, link_open,
     provider_delete, provider_refresh_models, provider_save, session_create, session_delete,
-    session_select, settings_update, window_set_pinned,
+    session_select, settings_update,
 };
 use domain::is_minimized_window_position;
 use infra::paths::app_paths;
 use tauri::{Manager, PhysicalPosition, PhysicalSize, Position, Size, WindowEvent};
 
-/// Boots the Tauri application, restores window state, and registers commands.
+/// Boots the Tauri application and registers commands.
 fn main() -> Result<()> {
     let paths = app_paths()?;
     infra::logging::install_logger(paths.log_file.clone())?;
@@ -35,39 +36,60 @@ fn main() -> Result<()> {
             if let Some(window) = app.get_webview_window("main") {
                 window.set_title(&format!("AI Chat - v{app_version}"))?;
                 if let Ok(snapshot) = state.snapshot() {
-                    let size = PhysicalSize::new(
+                    if let (Some(width), Some(height)) = (
                         snapshot.settings.window_width,
                         snapshot.settings.window_height,
-                    );
-                    if let Err(error) = window.set_size(Size::Physical(size)) {
+                    ) && let Err(error) =
+                        window.set_size(Size::Physical(PhysicalSize::new(width, height)))
+                    {
                         log::warn!("Could not restore saved window size: {error}");
                     }
                     if let (Some(x), Some(y)) =
                         (snapshot.settings.window_x, snapshot.settings.window_y)
                         && !is_minimized_window_position(x, y)
+                        && let Err(error) =
+                            window.set_position(Position::Physical(PhysicalPosition::new(x, y)))
                     {
-                        let position = PhysicalPosition::new(x, y);
-                        if let Err(error) = window.set_position(Position::Physical(position)) {
-                            log::warn!("Could not restore saved window position: {error}");
-                        }
+                        log::warn!("Could not restore saved window position: {error}");
                     }
-                    if let Err(error) = window.set_always_on_top(snapshot.settings.always_on_top) {
-                        log::warn!("Could not apply always-on-top setting: {error}");
+                    if snapshot.settings.window_fullscreen {
+                        if let Err(error) = window.set_fullscreen(true) {
+                            log::warn!("Could not restore fullscreen window state: {error}");
+                        }
+                    } else if snapshot.settings.window_maximized
+                        && let Err(error) = window.maximize()
+                    {
+                        log::warn!("Could not restore maximized window state: {error}");
                     }
                 }
                 state.start_claude_code_bootstrap(app.handle().clone());
+
                 let window_state = state.clone();
+                let tracked_window = window.clone();
                 window.on_window_event(move |event| {
-                    if let WindowEvent::Resized(size) = event
-                        && let Err(error) = window_state.save_window_size(size.width, size.height)
-                    {
-                        log::warn!("Could not save resized window size: {error}");
+                    if !matches!(event, WindowEvent::Resized(_) | WindowEvent::Moved(_)) {
+                        return;
                     }
-                    if let WindowEvent::Moved(position) = event
-                        && let Err(error) =
-                            window_state.save_window_position(position.x, position.y)
-                    {
-                        log::warn!("Could not save moved window position: {error}");
+                    if tracked_window.is_minimized().unwrap_or(false) {
+                        return;
+                    }
+                    let Ok(size) = tracked_window.outer_size() else {
+                        return;
+                    };
+                    let Ok(position) = tracked_window.outer_position() else {
+                        return;
+                    };
+                    let maximized = tracked_window.is_maximized().unwrap_or(false);
+                    let fullscreen = tracked_window.is_fullscreen().unwrap_or(false);
+                    if let Err(error) = window_state.save_window_state(
+                        size.width,
+                        size.height,
+                        position.x,
+                        position.y,
+                        maximized,
+                        fullscreen,
+                    ) {
+                        log::warn!("Could not save window state: {error}");
                     }
                 });
             }
@@ -90,7 +112,6 @@ fn main() -> Result<()> {
             chat_send,
             chat_stop,
             clipboard_write_text,
-            window_set_pinned,
             link_open
         ])
         .run(tauri::generate_context!())

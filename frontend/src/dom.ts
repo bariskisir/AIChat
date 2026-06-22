@@ -4,9 +4,9 @@
 // Adding a new element is a one-line change here — getRefs() and
 // the Refs type are generated from this list automatically.
 const ELEMENT_IDS = [
-  "appShell",
   "statusRow",
   "statusText",
+  "modelToolbar",
   "btnRefresh",
   "btnProviders",
   "modelDropdownButton",
@@ -78,8 +78,6 @@ const ELEMENT_IDS = [
   "btnNewSession",
   "navSessions",
   "resizerSidebar",
-  "btnCompact",
-  "btnAlwaysOnTop",
   "chatMessages",
   "resizerComposer",
   "formComposer",
@@ -94,6 +92,7 @@ const ELEMENT_IDS = [
   "btnCloseSettings",
   "settingsShowFooter",
   "settingsShowInfoBar",
+  "settingsShowModelBar",
   "settingsTitleGenDropdownButton",
   "settingsTitleGenDropdown",
   "settingsTitleGenSearchInput",
@@ -125,6 +124,7 @@ type ElementTypeFor<T extends string> =
   T extends "providerCustomHeaders" ? HTMLInputElement :
   T extends "settingsShowFooter" ? HTMLInputElement :
   T extends "settingsShowInfoBar" ? HTMLInputElement :
+  T extends "settingsShowModelBar" ? HTMLInputElement :
   HTMLElement;
 
 // Typed map of every DOM node the app touches, generated from the

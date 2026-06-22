@@ -514,18 +514,22 @@ textarea:disabled {
 }
 
 .ch-settings-title-gen {
-  display: grid;
-  gap: var(--spacing-xs);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  min-height: var(--control-height-sm);
 }
 
 .ch-settings-title-gen > span {
-  color: var(--muted);
-  font-size: var(--font-size-xs);
+  color: var(--text);
+  font-size: var(--font-size-base);
   font-weight: var(--font-weight-bold);
 }
 
 .ch-settings-title-gen .ch-model-dropdown {
-  width: 100%;
+  width: 50%;
+  margin-left: auto;
 }
 
 .ch-settings-title-gen .ch-model-dropdown__panel {

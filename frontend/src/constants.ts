@@ -15,8 +15,6 @@ export const BTN_SEND: string = "Send";
 export const BTN_STOP: string = "Esc to Stop";
 export const BTN_STOP_TITLE: string = "Click or press Esc to stop";
 export const BTN_SEND_TITLE: string = "Send message";
-export const BTN_FULL: string = "Full";
-export const BTN_COMPACT: string = "Compact";
 export const IMAGE_ALT_TEXT: string = "Image";
 export const IMAGE_REMOVE_LABEL: string = "Remove image";
 export const IMAGE_REMOVE_TEXT: string = "X";
@@ -93,7 +91,6 @@ export const KEY: { readonly ENTER: "Enter"; readonly ESCAPE: "Escape"; readonly
 
 // CSS class names
 export const CSS: { readonly [key: string]: string } = {
-  IS_COMPACT: "is-compact",
   IS_ACTIVE: "is-active",
   IS_ERROR: "is-error",
   IS_COPIED: "is-copied",

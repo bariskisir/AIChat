@@ -9,6 +9,6 @@ pub use commands::{
     app_get_snapshot, auth_sign_out, auth_start_login, catalog_refresh_models, chat_send,
     chat_stop, claude_auth_sign_out, claude_auth_start_login, clipboard_write_text, link_open,
     provider_delete, provider_refresh_models, provider_save, session_create, session_delete,
-    session_select, settings_update, window_set_pinned,
+    session_select, settings_update,
 };
 pub use state::AppState;

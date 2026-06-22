@@ -36,14 +36,6 @@ export function updateButtons(refs: Refs, model: UiModel): void {
   refs.btnSend.setAttribute("aria-label", generating ? Constants.BTN_STOP_TITLE : Constants.BTN_SEND_TITLE);
   refs.btnNewSession.disabled = !configured;
   refs.btnCopyChat.disabled = !configured || (state ? !hasCopyableMessages(state.activeSession) : true);
-  refs.btnAlwaysOnTop.classList.toggle(Constants.CSS.IS_ACTIVE, state?.settings.alwaysOnTop ?? false);
-  refs.btnAlwaysOnTop.setAttribute("aria-pressed", String(state?.settings.alwaysOnTop ?? false));
-}
-
-// Applies compact mode CSS and button text.
-export function setCompactMode(refs: Refs, enabled: boolean): void {
-  refs.appShell.classList.toggle(Constants.CSS.IS_COMPACT, enabled);
-  refs.btnCompact.textContent = enabled ? Constants.BTN_FULL : Constants.BTN_COMPACT;
 }
 
 // Applies the persisted sidebar width.
@@ -68,6 +60,11 @@ export function applyShowFooter(refs: Refs, show: boolean): void {
 export function applyShowInfoBar(refs: Refs, show: boolean): void {
   refs.statusRow.style.display = show ? "" : "none";
   refs.statusRow.classList.toggle(Constants.CSS.IS_HIDDEN, !show);
+}
+
+// Shows or hides the model toolbar.
+export function applyShowModelBar(refs: Refs, show: boolean): void {
+  refs.modelToolbar.style.display = show ? "" : "none";
 }
 
 // Renders pending pasted-image thumbnails.
@@ -119,18 +116,15 @@ export function collectSettings(refs: Refs): FrontendSettings {
   const state = AppContext.model.appState;
   return {
     model: refs.modelSelect.value,
-    compactMode: refs.appShell.classList.contains(Constants.CSS.IS_COMPACT),
     reasoningEffort: refs.reasoningSelect.value,
     thinkingVariant: refs.thinkingSelect.value,
     verbosity: refs.verbositySelect.value,
     extendedThinking: refs.claudeExtendedThinking.checked,
     claudeEffort: refs.claudeEffortSelect.value,
-    alwaysOnTop: refs.btnAlwaysOnTop.classList.contains(Constants.CSS.IS_ACTIVE),
-    windowWidth: Math.round(window.outerWidth || window.innerWidth),
-    windowHeight: Math.round(window.outerHeight || window.innerHeight),
     sidebarWidth: currentSidebarWidth(refs),
     showFooter: state?.settings.showFooter ?? true,
     showInfoBar: state?.settings.showInfoBar ?? true,
+    showModelBar: state?.settings.showModelBar ?? true,
     titleGenModel: state?.settings.titleGenModel ?? "",
     favoriteModels: state?.settings.favoriteModels ?? [],
   };

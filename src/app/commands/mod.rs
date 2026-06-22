@@ -10,6 +10,6 @@ pub use providers::{
     provider_save, settings_update,
 };
 pub use sessions::{chat_send, chat_stop, session_create, session_delete, session_select};
-pub use window::{clipboard_write_text, link_open, window_set_pinned};
+pub use window::{clipboard_write_text, link_open};
 
 type CmdResult<T> = std::result::Result<T, String>;

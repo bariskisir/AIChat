@@ -1,4 +1,4 @@
-/* Utility and state classes, compact mode, resize handles, animations. */
+/* Utility and state classes, resize handles, animations. */
 
 .ch-toolbar.is-error {
   color: var(--danger-soft);
@@ -12,22 +12,6 @@
 .is-resizing-composer {
   cursor: row-resize;
   user-select: none;
-}
-
-/* Compact mode */
-
-.ch-shell.is-compact .ch-toolbar--model,
-.ch-shell.is-compact .ch-footer {
-  display: none;
-}
-
-.ch-shell.is-compact .ch-sidebar {
-  width: var(--sidebar-compact-width);
-  min-width: var(--sidebar-compact-min-width);
-}
-
-.ch-shell.is-compact .ch-chat__messages {
-  padding: var(--spacing-md);
 }
 
 /* Animations */

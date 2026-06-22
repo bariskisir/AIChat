@@ -4,20 +4,15 @@ type ChatRole = "user" | "assistant";
 interface AppSettings {
   model: string;
   activeSessionId: string;
-  compactMode: boolean;
   reasoningEffort: EffortSetting;
   thinkingVariant: string;
   verbosity: VerbositySetting;
   extendedThinking: boolean;
   claudeEffort: ClaudeEffort;
-  alwaysOnTop: boolean;
-  windowWidth: number;
-  windowHeight: number;
   sidebarWidth: number;
-  windowX?: number;
-  windowY?: number;
   showFooter: boolean;
   showInfoBar: boolean;
+  showModelBar: boolean;
   titleGenModel: string;
   favoriteModels: string[];
 }
@@ -133,18 +128,15 @@ interface AppSnapshot {
 
 interface FrontendSettings {
   model: string;
-  compactMode: boolean;
   reasoningEffort: string;
   thinkingVariant: string;
   verbosity: string;
   extendedThinking: boolean;
   claudeEffort: string;
-  alwaysOnTop: boolean;
-  windowWidth: number;
-  windowHeight: number;
   sidebarWidth: number;
   showFooter: boolean;
   showInfoBar: boolean;
+  showModelBar: boolean;
   titleGenModel: string;
   favoriteModels: string[];
 }

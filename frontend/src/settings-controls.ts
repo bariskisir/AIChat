@@ -12,6 +12,7 @@ export function bind(refs: Refs): void {
   refs.btnCloseSettings.addEventListener("click", () => refs.settingsDialog.close());
   refs.settingsShowFooter.addEventListener("change", () => applySettings(refs));
   refs.settingsShowInfoBar.addEventListener("change", () => applySettings(refs));
+  refs.settingsShowModelBar.addEventListener("change", () => applySettings(refs));
   SearchableDropdown.bind({
     button: refs.settingsTitleGenDropdownButton,
     panel: refs.settingsTitleGenDropdown,
@@ -34,6 +35,7 @@ function open(refs: Refs): void {
   if (!state) return;
   refs.settingsShowFooter.checked = state.settings.showFooter;
   refs.settingsShowInfoBar.checked = state.settings.showInfoBar;
+  refs.settingsShowModelBar.checked = state.settings.showModelBar;
   populateTitleGenOptions(refs);
   refs.settingsTitleGenSelect.value = state.settings.titleGenModel || Constants.TITLE_GEN_CURRENT;
   updateTitleGenDropdownLabel(refs);
@@ -47,8 +49,10 @@ async function applySettings(refs: Refs): Promise<void> {
   if (!state) return;
   state.settings.showFooter = refs.settingsShowFooter.checked;
   state.settings.showInfoBar = refs.settingsShowInfoBar.checked;
+  state.settings.showModelBar = refs.settingsShowModelBar.checked;
   Renderer.applyShowFooter(refs, state.settings.showFooter);
   Renderer.applyShowInfoBar(refs, state.settings.showInfoBar);
+  Renderer.applyShowModelBar(refs, state.settings.showModelBar);
   await AppContext.saveSettings();
 }
 

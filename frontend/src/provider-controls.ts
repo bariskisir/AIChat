@@ -18,7 +18,10 @@ export function bind(refs: Refs, model: UiModel): void {
   refs.providerList.addEventListener("click", (event) => handleProviderClick(refs, model, event));
   refs.providerForm.addEventListener("submit", saveProvider);
   refs.providerTemplate.addEventListener("change", () => applyTemplate(refs));
-  refs.providerApiUrl.addEventListener("input", () => ProviderAccountPanels.render(refs));
+  refs.providerApiUrl.addEventListener("input", () => {
+    ProviderAccountPanels.render(refs);
+    updateTokenMask(refs);
+  });
   ProviderTemplateDropdown.bind(refs, () => applyTemplate(refs));
   ProviderAccountPanels.bind(refs, (message, isError) => renderProviderStatus(refs, message, isError));
 }
@@ -71,6 +74,7 @@ function openEditor(refs: Refs, model: UiModel, providerId = ""): void {
   ProviderTemplateDropdown.resetSearch(refs);
   ProviderTemplateDropdown.renderLabel(refs);
   ProviderAccountPanels.render(refs);
+  updateTokenMask(refs);
   renderSelectedProvider(refs, provider?.id || "");
   renderProviderStatus(refs, editorStatus(provider));
 }
@@ -89,6 +93,7 @@ function applyTemplate(refs: Refs): void {
   refs.providerApiUrl.value = template.apiUrl;
   ProviderAccountPanels.render(refs);
   applyOpenCodeDefaults(refs, template);
+  updateTokenMask(refs);
 }
 
 // Saves the provider editor form.
@@ -139,6 +144,16 @@ function applyOpenCodeDefaults(refs: Refs, template: ProviderTemplates.Template)
   if (!refs.providerCustomHeaders.value.trim()) {
     refs.providerCustomHeaders.value = JSON.stringify({ "x-opencode-session": "" });
   }
+}
+
+// Masks provider tokens except for OpenCode Zen while retaining normal edit and clipboard behavior.
+function updateTokenMask(refs: Refs): void {
+  const template = ProviderTemplates.byApiUrl(refs.providerApiUrl.value);
+  const isOpenCodeZen =
+    refs.providerId.value === "opencode-zen"
+    || refs.providerTemplate.value === "opencodezen"
+    || template?.name === "opencodezen";
+  refs.providerApiKey.type = isOpenCodeZen ? "text" : "password";
 }
 
 // Finds the saved provider id after creating or updating provider input.
