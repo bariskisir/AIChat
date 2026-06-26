@@ -14,6 +14,7 @@ import * as TauriBridge from "./tauri-bridge.js";
 
 const refs = AppContext.refs;
 const model = AppContext.model;
+let sessionShortcutInFlight = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
   bindEvents();
@@ -35,6 +36,7 @@ function bindModelEvents(): void {
 function bindSessionEvents(): void {
   refs.btnNewSession.addEventListener("click", createSessionAndFocus);
   refs.navSessions.addEventListener("click", selectSession);
+  document.addEventListener("keydown", handleSessionShortcut, true);
 }
 
 function bindWindowEvents(): void {
@@ -110,6 +112,46 @@ function selectSession(event: MouseEvent): void {
   if (sessionId) {
     void AppContext.renderSnapshot(() => Api.selectSession(sessionId));
   }
+}
+
+// Cycles through chats with Ctrl+Tab and Ctrl+Shift+Tab.
+function handleSessionShortcut(event: KeyboardEvent): void {
+  if (!event.ctrlKey || event.key !== Constants.KEY.TAB || event.altKey || event.metaKey) {
+    return;
+  }
+  event.preventDefault();
+  event.stopPropagation();
+  if (sessionShortcutInFlight) {
+    return;
+  }
+  const state = model.appState;
+  if (!state || state.sessions.length <= 1) {
+    return;
+  }
+  const sessions = sortedSessions(state.sessions);
+  const activeIndex = sessions.findIndex((session) => session.id === state.activeSession.id);
+  if (activeIndex < 0) {
+    return;
+  }
+  const direction = event.shiftKey ? -1 : 1;
+  const nextIndex = (activeIndex + direction + sessions.length) % sessions.length;
+  void selectSessionById(sessions[nextIndex].id);
+}
+
+// Selects a session from a keyboard shortcut and restores composer focus.
+async function selectSessionById(sessionId: string): Promise<void> {
+  sessionShortcutInFlight = true;
+  try {
+    await AppContext.renderSnapshot(() => Api.selectSession(sessionId));
+    Composer.focus();
+  } finally {
+    sessionShortcutInFlight = false;
+  }
+}
+
+// Matches the visible sidebar order.
+function sortedSessions(sessions: ChatSession[]): ChatSession[] {
+  return [...sessions].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 // Creates a new session and returns keyboard focus to the composer.

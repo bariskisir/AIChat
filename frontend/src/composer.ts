@@ -12,7 +12,10 @@ let stopInFlight = false;
 // Connects composer controls to message and image actions.
 export function bind(refs: Refs, model: UiModel): void {
   refs.formComposer.addEventListener("submit", submitMessage);
-  refs.inputComposer.addEventListener("input", () => Renderer.updateButtons(refs, model));
+  refs.inputComposer.addEventListener("input", () => {
+    Renderer.saveComposerDraft(refs, model);
+    Renderer.updateButtons(refs, model);
+  });
   refs.inputComposer.addEventListener("keydown", handleComposerKeydown);
   refs.inputComposer.addEventListener("paste", handleImagePaste);
   document.addEventListener("paste", handleImagePaste);
@@ -46,8 +49,13 @@ async function submitMessage(event: Event): Promise<void> {
     Api.sendChat({ text, imageDataUrls: [...model.pendingImageDataUrls] }),
   );
   if (snapshot) {
+    const sessionId = model.appState?.activeSession.id;
     refs.inputComposer.value = "";
-    model.pendingImageDataUrls = [];
+    if (sessionId) {
+      Renderer.clearComposerDraft(model, sessionId);
+    } else {
+      model.pendingImageDataUrls = [];
+    }
     Renderer.renderState(refs, model, snapshot);
   }
 }
@@ -104,6 +112,7 @@ function handleImagePaste(event: ClipboardEvent): void {
   event.preventDefault();
   Promise.all(files.map(readImageFile)).then((imageDataUrls) => {
     model.pendingImageDataUrls = model.pendingImageDataUrls.concat(imageDataUrls.filter(Boolean));
+    Renderer.saveComposerDraft(refs, model);
     Renderer.renderImagePreview(refs, model);
     Renderer.updateButtons(refs, model);
     refs.inputComposer.focus();
@@ -129,6 +138,7 @@ function removePendingImage(event: MouseEvent): void {
     return;
   }
   model.pendingImageDataUrls.splice(index, 1);
+  Renderer.saveComposerDraft(refs, model);
   Renderer.renderImagePreview(refs, model);
   Renderer.updateButtons(refs, model);
 }

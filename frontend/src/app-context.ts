@@ -23,6 +23,7 @@ export const refs = new Proxy({} as Refs, {
 
 export const model: UiModel = {
   appState: null,
+  composerDrafts: {},
   pendingImageDataUrls: [],
   copyResetTimer: 0,
   streamAutoScroll: true,

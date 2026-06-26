@@ -32,6 +32,7 @@ export const FAVORITE_ADD_TITLE: string = "Add to favorites";
 export const FAVORITE_REMOVE_TITLE: string = "Remove from favorites";
 export const TITLE_GEN_NONE: string = "none";
 export const TITLE_GEN_CURRENT: string = "";
+export const DEFAULT_MODEL_FILTER_REGEX: string = "free";
 
 // Effort / reasoning levels
 export const EFFORT_LOW: EffortLevel = "low";
@@ -83,10 +84,11 @@ export const EVENT_ERROR: EventType = "error" as const;
 export const EVENT_APP: string = "app-event" as const;
 
 // Keyboard keys
-export const KEY: { readonly ENTER: "Enter"; readonly ESCAPE: "Escape"; readonly SHIFT: "Shift" } = {
+export const KEY: { readonly ENTER: "Enter"; readonly ESCAPE: "Escape"; readonly SHIFT: "Shift"; readonly TAB: "Tab" } = {
   ENTER: "Enter",
   ESCAPE: "Escape",
   SHIFT: "Shift",
+  TAB: "Tab",
 } as const;
 
 // CSS class names

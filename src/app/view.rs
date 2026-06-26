@@ -147,4 +147,11 @@ pub struct ProviderInput {
     pub api_key: String,
     #[serde(default)]
     pub custom_headers: String,
+    #[serde(default)]
+    pub custom_headers_enabled: bool,
+    #[serde(default)]
+    #[serde(alias = "onlyFreeModels")]
+    pub filter_models: bool,
+    #[serde(default)]
+    pub model_filter_regex: String,
 }

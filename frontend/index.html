@@ -139,10 +139,26 @@
               <span>Token</span>
               <input id="providerApiKey" type="password" autocomplete="off">
             </label>
-            <label id="providerCustomHeadersField">
-              <span>Custom Headers</span>
-              <input id="providerCustomHeaders" class="ch-provider-form__headers" type="text" spellcheck="false" placeholder='{ "x-opencode-session": "" }'>
-            </label>
+            <div id="providerModelFilterField" class="ch-provider-form__filter">
+              <label class="ch-toggle-field">
+                <span>Filter models</span>
+                <input id="providerFilterModels" class="ch-toggle" type="checkbox">
+              </label>
+              <label id="providerModelFilterRegexField">
+                <span>Regex</span>
+                <input id="providerModelFilterRegex" class="ch-provider-form__regex" type="text" spellcheck="false" placeholder="free">
+              </label>
+            </div>
+            <div id="providerCustomHeadersField" class="ch-provider-form__filter">
+              <label class="ch-toggle-field">
+                <span>Custom Headers</span>
+                <input id="providerCustomHeadersEnabled" class="ch-toggle" type="checkbox">
+              </label>
+              <label id="providerCustomHeadersInputField">
+                <span>JSON</span>
+                <input id="providerCustomHeaders" class="ch-provider-form__headers" type="text" spellcheck="false" placeholder='{ "x-opencode-session": "" }'>
+              </label>
+            </div>
             <div id="codexLoginRow" class="ch-provider-form__auth" hidden>
               <button id="btnCodexLogin" class="ch-btn--primary" type="button">Sign in with ChatGPT</button>
               <section id="codexAccountPanel" class="ch-codex-account" hidden>

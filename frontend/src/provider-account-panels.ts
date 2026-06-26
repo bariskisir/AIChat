@@ -55,6 +55,7 @@ export function render(refs: Refs): void {
   refs.providerApiUrlField.hidden = isSpecial;
   refs.providerApiKeyField.hidden = isSpecial;
   refs.providerCustomHeadersField.hidden = isSpecial;
+  refs.providerModelFilterField.hidden = isSpecial;
   refs.providerActions.hidden = isSpecial;
   refs.providerName.required = !isSpecial;
   refs.providerApiUrl.required = !isSpecial;
@@ -66,6 +67,8 @@ export function render(refs: Refs): void {
   refs.providerApiUrl.value = isCodex ? CODEX_URL : isClaudeCode ? CLAUDE_CODE_URL : CLAUDE_URL;
   refs.providerApiKey.value = "";
   refs.providerCustomHeaders.value = "";
+  refs.providerCustomHeadersEnabled.checked = false;
+  refs.providerFilterModels.checked = false;
   syncSpecialProviderId(refs);
   renderCodexAccount(refs, isCodex);
   renderClaudeAccount(refs, isClaude);

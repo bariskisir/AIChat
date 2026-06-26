@@ -45,7 +45,13 @@ const ELEMENT_IDS = [
   "providerApiKeyField",
   "providerApiKey",
   "providerCustomHeadersField",
+  "providerCustomHeadersEnabled",
+  "providerCustomHeadersInputField",
   "providerCustomHeaders",
+  "providerModelFilterField",
+  "providerFilterModels",
+  "providerModelFilterRegexField",
+  "providerModelFilterRegex",
   "codexLoginRow",
   "btnCodexLogin",
   "codexAccountPanel",
@@ -121,7 +127,10 @@ type ElementTypeFor<T extends string> =
   T extends "providerName" ? HTMLInputElement :
   T extends "providerApiUrl" ? HTMLInputElement :
   T extends "providerApiKey" ? HTMLInputElement :
+  T extends "providerCustomHeadersEnabled" ? HTMLInputElement :
   T extends "providerCustomHeaders" ? HTMLInputElement :
+  T extends "providerFilterModels" ? HTMLInputElement :
+  T extends "providerModelFilterRegex" ? HTMLInputElement :
   T extends "settingsShowFooter" ? HTMLInputElement :
   T extends "settingsShowInfoBar" ? HTMLInputElement :
   T extends "settingsShowModelBar" ? HTMLInputElement :

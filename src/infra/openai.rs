@@ -24,22 +24,21 @@ impl OpenAiContext {
             provider_name: provider.name.clone(),
             api_url: provider.api_url.trim().trim_end_matches('/').to_owned(),
             api_key: provider.api_key.clone(),
-            custom_headers: provider
-                .custom_headers
-                .iter()
-                .map(|header| (header.name.clone(), header.value.clone()))
-                .collect(),
+            custom_headers: if provider.custom_headers_enabled {
+                provider
+                    .custom_headers
+                    .iter()
+                    .map(|header| (header.name.clone(), header.value.clone()))
+                    .collect()
+            } else {
+                Vec::new()
+            },
         }
     }
 
     /// Reports whether the context targets the built-in OpenCode provider.
     fn is_opencode(&self) -> bool {
         self.provider_id == crate::domain::OPENCODE_PROVIDER_ID
-    }
-
-    /// Reports whether OpenCode is using the public session.
-    fn is_opencode_public(&self) -> bool {
-        self.is_opencode() && self.api_key.trim().eq_ignore_ascii_case("public")
     }
 }
 
@@ -116,7 +115,6 @@ pub async fn fetch_models(ctx: &OpenAiContext) -> Result<Vec<AvailableModel>> {
     let mut models = parsed
         .data
         .into_iter()
-        .filter(|item| !ctx.is_opencode_public() || item.id.to_lowercase().contains("free"))
         .map(|item| AvailableModel {
             provider_id: ctx.provider_id.clone(),
             provider_name: ctx.provider_name.clone(),

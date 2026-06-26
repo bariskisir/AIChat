@@ -2,6 +2,7 @@
 
 import * as Api from "./api.js";
 import * as AppContext from "./app-context.js";
+import * as Constants from "./constants.js";
 import { type Refs } from "./dom.js";
 import * as ProviderAccountPanels from "./provider-account-panels.js";
 import * as ProviderTemplateDropdown from "./provider-template-dropdown.js";
@@ -18,6 +19,8 @@ export function bind(refs: Refs, model: UiModel): void {
   refs.providerList.addEventListener("click", (event) => handleProviderClick(refs, model, event));
   refs.providerForm.addEventListener("submit", saveProvider);
   refs.providerTemplate.addEventListener("change", () => applyTemplate(refs));
+  refs.providerFilterModels.addEventListener("change", () => updateModelFilter(refs));
+  refs.providerCustomHeadersEnabled.addEventListener("change", () => updateCustomHeaders(refs));
   refs.providerApiUrl.addEventListener("input", () => {
     ProviderAccountPanels.render(refs);
     updateTokenMask(refs);
@@ -70,11 +73,16 @@ function openEditor(refs: Refs, model: UiModel, providerId = ""): void {
   refs.providerApiUrl.value = provider?.apiUrl || "";
   refs.providerApiKey.value = provider?.apiKey || "";
   refs.providerCustomHeaders.value = provider ? headersText(provider.customHeaders) : "";
+  refs.providerCustomHeadersEnabled.checked = Boolean(provider?.customHeadersEnabled);
+  refs.providerFilterModels.checked = Boolean(provider?.filterModels);
+  refs.providerModelFilterRegex.value = provider?.modelFilterRegex || Constants.DEFAULT_MODEL_FILTER_REGEX;
   refs.providerTemplate.value = ProviderTemplates.byApiUrl(provider?.apiUrl || "")?.name || "";
   ProviderTemplateDropdown.resetSearch(refs);
   ProviderTemplateDropdown.renderLabel(refs);
   ProviderAccountPanels.render(refs);
   updateTokenMask(refs);
+  updateModelFilter(refs);
+  updateCustomHeaders(refs);
   renderSelectedProvider(refs, provider?.id || "");
   renderProviderStatus(refs, editorStatus(provider));
 }
@@ -94,6 +102,8 @@ function applyTemplate(refs: Refs): void {
   ProviderAccountPanels.render(refs);
   applyOpenCodeDefaults(refs, template);
   updateTokenMask(refs);
+  updateModelFilter(refs);
+  updateCustomHeaders(refs);
 }
 
 // Saves the provider editor form.
@@ -105,7 +115,10 @@ async function saveProvider(event: SubmitEvent): Promise<void> {
     name: refs.providerName.value,
     apiUrl: refs.providerApiUrl.value,
     apiKey: refs.providerApiKey.value,
-    customHeaders: refs.providerCustomHeaders.value,
+    customHeaders: refs.providerCustomHeadersEnabled.checked ? refs.providerCustomHeaders.value : "",
+    customHeadersEnabled: refs.providerCustomHeadersEnabled.checked,
+    filterModels: refs.providerFilterModels.checked,
+    modelFilterRegex: refs.providerModelFilterRegex.value,
   };
   renderProviderStatus(refs, "Checking provider models...");
   try {
@@ -143,6 +156,28 @@ function applyOpenCodeDefaults(refs: Refs, template: ProviderTemplates.Template)
   }
   if (!refs.providerCustomHeaders.value.trim()) {
     refs.providerCustomHeaders.value = JSON.stringify({ "x-opencode-session": "" });
+  }
+  refs.providerCustomHeadersEnabled.checked = true;
+  refs.providerFilterModels.checked = true;
+  if (!refs.providerModelFilterRegex.value.trim()) {
+    refs.providerModelFilterRegex.value = Constants.DEFAULT_MODEL_FILTER_REGEX;
+  }
+}
+
+// Shows the header JSON field only when custom headers are enabled.
+function updateCustomHeaders(refs: Refs): void {
+  const enabled = refs.providerCustomHeadersEnabled.checked;
+  refs.providerCustomHeadersInputField.hidden = !enabled;
+  refs.providerCustomHeaders.disabled = !enabled;
+}
+
+// Enables the regex field only when model filtering is active.
+function updateModelFilter(refs: Refs): void {
+  const enabled = refs.providerFilterModels.checked;
+  refs.providerModelFilterRegexField.hidden = !enabled;
+  refs.providerModelFilterRegex.disabled = !enabled;
+  if (!refs.providerModelFilterRegex.value.trim()) {
+    refs.providerModelFilterRegex.value = Constants.DEFAULT_MODEL_FILTER_REGEX;
   }
 }
 

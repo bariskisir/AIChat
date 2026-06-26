@@ -1,11 +1,15 @@
 //! Provider configuration and model refresh helpers.
 
-use super::{AppState};
+use super::AppState;
 use crate::app::view::{AppSnapshot, ProviderInput};
-use crate::domain::{CustomHeader, OPENCODE_PROVIDER_ID, ProviderConfig, ProviderKind, split_model_key};
 use crate::domain::messages::*;
+use crate::domain::{
+    AvailableModel, CustomHeader, DEFAULT_MODEL_FILTER_REGEX, OPENCODE_PROVIDER_ID, ProviderConfig,
+    ProviderKind, split_model_key,
+};
 use crate::infra::openai::{self, OpenAiContext};
 use anyhow::{Result, anyhow};
+use regex::Regex;
 
 struct RefreshOutcome {
     snapshot: AppSnapshot,
@@ -21,7 +25,8 @@ impl AppState {
         } else if provider.kind() == ProviderKind::Claude {
             self.fetch_claude_models_for_provider(&provider).await?
         } else if provider.kind() == ProviderKind::ClaudeCode {
-            self.fetch_claude_code_models_for_provider(&provider).await?
+            self.fetch_claude_code_models_for_provider(&provider)
+                .await?
         } else {
             fetch_models_for_save(&provider).await?
         };
@@ -151,7 +156,14 @@ impl AppState {
             self.fetch_claude_code_models_for_provider(&provider).await
         } else {
             openai::fetch_models(&OpenAiContext::from_provider(&provider)).await
-        };
+        }
+        .and_then(|models| {
+            if provider.kind() == ProviderKind::OpenAi {
+                filter_provider_models(&provider, models)
+            } else {
+                Ok(models)
+            }
+        });
         let mut inner = self.lock()?;
         let provider = inner
             .providers
@@ -160,12 +172,7 @@ impl AppState {
         let refreshed = match result {
             Ok(models) => {
                 let provider_name = provider.name.clone();
-                provider.models =
-                    if provider.id == OPENCODE_PROVIDER_ID && opencode_is_public(provider) {
-                        filtered_opencode_models(models)
-                    } else {
-                        models
-                    };
+                provider.models = models;
                 provider.enabled = true;
                 provider.error.clear();
                 inner.status = format!("{provider_name} models refreshed.");
@@ -195,9 +202,7 @@ impl AppState {
             .provider(provider_id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SELECTED_PROVIDER))?;
         if !provider.enabled {
-            return Err(anyhow!(
-                ERR_VALIDATION_PROVIDER_DISABLED
-            ));
+            return Err(anyhow!(ERR_VALIDATION_PROVIDER_DISABLED));
         }
         Ok((OpenAiContext::from_provider(provider), model.to_owned()))
     }
@@ -269,6 +274,9 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
         api_url: api_url.to_owned(),
         api_key: api_key.to_owned(),
         custom_headers,
+        custom_headers_enabled: input.custom_headers_enabled,
+        filter_models: input.filter_models,
+        model_filter_regex: normalize_model_filter_regex(&input.model_filter_regex),
         built_in: false,
         enabled: true,
         models: Vec::new(),
@@ -277,11 +285,9 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
 }
 
 /// Fetches and validates a provider model list before saving user input.
-async fn fetch_models_for_save(
-    provider: &ProviderConfig,
-) -> Result<Vec<crate::domain::AvailableModel>> {
+async fn fetch_models_for_save(provider: &ProviderConfig) -> Result<Vec<AvailableModel>> {
     let ctx = OpenAiContext::from_provider(provider);
-    let models = openai::fetch_models(&ctx).await?;
+    let models = filter_provider_models(provider, openai::fetch_models(&ctx).await?)?;
     if models.is_empty() {
         return Err(anyhow!(
             "{} /models returned an empty model list; provider was not saved.",
@@ -316,44 +322,82 @@ fn parse_custom_headers(value: &str) -> Result<Vec<CustomHeader>> {
         .collect()
 }
 
-/// Reports whether OpenCode is using the public session.
-fn opencode_is_public(provider: &ProviderConfig) -> bool {
-    provider.api_key.trim().eq_ignore_ascii_case("public")
+/// Normalizes an empty regex field to the default model filter.
+fn normalize_model_filter_regex(value: &str) -> String {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        DEFAULT_MODEL_FILTER_REGEX.to_owned()
+    } else {
+        trimmed.to_owned()
+    }
 }
 
-/// Applies the OpenCode free-model restriction and keeps the default model first.
-fn filtered_opencode_models(
-    mut models: Vec<crate::domain::AvailableModel>,
-) -> Vec<crate::domain::AvailableModel> {
-    models.retain(|model| model.model.to_lowercase().contains("free"));
-    if !models
-        .iter()
-        .any(|model| model.model == crate::domain::OPENCODE_DEFAULT_MODEL)
-    {
-        models.push(crate::domain::AvailableModel {
-            provider_id: OPENCODE_PROVIDER_ID.to_owned(),
-            provider_name: PROVIDER_OPENCODE_NAME.to_owned(),
-            model: crate::domain::OPENCODE_DEFAULT_MODEL.to_owned(),
-            display_name: crate::domain::OPENCODE_DEFAULT_MODEL.to_owned(),
-            description: PROVIDER_OPENCODE_DEFAULT_MODEL_DESC.to_owned(),
-            hidden: false,
-            is_default: true,
-            input_modalities: vec!["text".to_owned()],
-            default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
-            thinking_variants: crate::domain::fallback_thinking_variants(),
-            support_verbosity: false,
-            default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
-            claude_thinking_type: String::new(),
-        });
+/// Applies the optional regex filter to a fetched provider model list.
+fn filter_provider_models(
+    provider: &ProviderConfig,
+    models: Vec<AvailableModel>,
+) -> Result<Vec<AvailableModel>> {
+    if !provider.filter_models {
+        return Ok(models);
     }
-    models.sort_by(|left, right| {
+    let regex_text = normalize_model_filter_regex(&provider.model_filter_regex);
+    let regex = Regex::new(&regex_text)
+        .map_err(|error| anyhow!("Model filter regex is invalid: {error}"))?;
+    let mut filtered = models
+        .into_iter()
+        .filter(|model| model_matches_filter(model, &regex))
+        .collect::<Vec<_>>();
+    ensure_opencode_filtered_default(provider, &regex, &mut filtered);
+    if filtered.is_empty() {
+        return Err(anyhow!("{} model filter matched no models.", provider.name));
+    }
+    filtered.sort_by(|left, right| {
         let left_default = left.model == crate::domain::OPENCODE_DEFAULT_MODEL;
         let right_default = right.model == crate::domain::OPENCODE_DEFAULT_MODEL;
         right_default
             .cmp(&left_default)
             .then_with(|| left.model.cmp(&right.model))
     });
-    models
+    Ok(filtered)
+}
+
+/// Checks one model against the configured regex.
+fn model_matches_filter(model: &AvailableModel, regex: &Regex) -> bool {
+    regex.is_match(&model.model)
+        || regex.is_match(&model.display_name)
+        || regex.is_match(&model.description)
+}
+
+/// Keeps OpenCode's default public free model available when it matches the regex.
+fn ensure_opencode_filtered_default(
+    provider: &ProviderConfig,
+    regex: &Regex,
+    models: &mut Vec<AvailableModel>,
+) {
+    if provider.id != OPENCODE_PROVIDER_ID
+        || !provider.api_key.trim().eq_ignore_ascii_case("public")
+        || !regex.is_match(crate::domain::OPENCODE_DEFAULT_MODEL)
+        || models
+            .iter()
+            .any(|model| model.model == crate::domain::OPENCODE_DEFAULT_MODEL)
+    {
+        return;
+    }
+    models.push(crate::domain::AvailableModel {
+        provider_id: OPENCODE_PROVIDER_ID.to_owned(),
+        provider_name: PROVIDER_OPENCODE_NAME.to_owned(),
+        model: crate::domain::OPENCODE_DEFAULT_MODEL.to_owned(),
+        display_name: crate::domain::OPENCODE_DEFAULT_MODEL.to_owned(),
+        description: PROVIDER_OPENCODE_DEFAULT_MODEL_DESC.to_owned(),
+        hidden: false,
+        is_default: true,
+        input_modalities: vec!["text".to_owned()],
+        default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
+        thinking_variants: crate::domain::fallback_thinking_variants(),
+        support_verbosity: false,
+        default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
+        claude_thinking_type: String::new(),
+    });
 }
 
 #[cfg(test)]
@@ -412,10 +456,26 @@ mod tests {
         );
     }
 
-    /// Keeps only free OpenCode models and injects the default free model when absent.
+    /// Applies a provider regex filter and injects OpenCode's default free model when absent.
     #[test]
-    fn filtered_opencode_models_keeps_free_models_with_default_first() {
-        let models = filtered_opencode_models(vec![model("paid-model"), model("alpha-free")]);
+    fn filter_provider_models_keeps_matching_models_with_default_first() {
+        let provider = ProviderConfig {
+            id: OPENCODE_PROVIDER_ID.to_owned(),
+            name: PROVIDER_OPENCODE_NAME.to_owned(),
+            api_url: "https://opencode.ai/zen/v1".to_owned(),
+            api_key: "public".to_owned(),
+            custom_headers: Vec::new(),
+            custom_headers_enabled: false,
+            filter_models: true,
+            model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
+            built_in: true,
+            enabled: true,
+            models: Vec::new(),
+            error: String::new(),
+        };
+        let models =
+            filter_provider_models(&provider, vec![model("paid-model"), model("alpha-free")])
+                .unwrap();
 
         assert!(
             models
@@ -427,5 +487,24 @@ mod tests {
             Some(OPENCODE_DEFAULT_MODEL)
         );
         assert!(models.iter().any(|item| item.model == "alpha-free"));
+    }
+
+    /// Preserves the explicit custom-header toggle instead of inferring it from OpenCode.
+    #[test]
+    fn provider_from_input_preserves_disabled_custom_headers() {
+        let provider = provider_from_input(ProviderInput {
+            id: OPENCODE_PROVIDER_ID.to_owned(),
+            name: PROVIDER_OPENCODE_NAME.to_owned(),
+            api_url: "https://opencode.ai/zen/v1".to_owned(),
+            api_key: "public".to_owned(),
+            custom_headers: String::new(),
+            custom_headers_enabled: false,
+            filter_models: true,
+            model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
+        })
+        .unwrap();
+
+        assert!(!provider.custom_headers_enabled);
+        assert!(provider.custom_headers.is_empty());
     }
 }

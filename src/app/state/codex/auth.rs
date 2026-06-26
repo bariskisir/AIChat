@@ -3,8 +3,8 @@
 use super::super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::AppSnapshot;
-use crate::domain::{AuthStorage, CODEX_PROVIDER_URL, CatalogStorage, ProviderConfig, model_key};
 use crate::domain::messages::*;
+use crate::domain::{AuthStorage, CODEX_PROVIDER_URL, CatalogStorage, ProviderConfig, model_key};
 use crate::infra::{chatgpt, shell};
 use anyhow::{Result, anyhow};
 use chrono::Utc;
@@ -172,6 +172,9 @@ fn codex_provider_from_catalog(id: &str, catalog: &CatalogStorage) -> ProviderCo
         api_url: CODEX_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),
+        custom_headers_enabled: false,
+        filter_models: false,
+        model_filter_regex: crate::domain::DEFAULT_MODEL_FILTER_REGEX.to_owned(),
         built_in: false,
         enabled: true,
         models,

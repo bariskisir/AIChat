@@ -44,6 +44,9 @@ interface ProviderConfig {
   apiUrl: string;
   apiKey: string;
   customHeaders: CustomHeader[];
+  customHeadersEnabled: boolean;
+  filterModels: boolean;
+  modelFilterRegex: string;
   builtIn: boolean;
   enabled: boolean;
   models: AvailableModel[];
@@ -162,6 +165,9 @@ interface ProviderInput {
   apiUrl: string;
   apiKey: string;
   customHeaders: string;
+  customHeadersEnabled: boolean;
+  filterModels: boolean;
+  modelFilterRegex: string;
 }
 
 type EffortLevel = "low" | "medium" | "high";

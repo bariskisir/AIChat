@@ -2,8 +2,8 @@
 
 use super::messages::*;
 use super::{
-    AvailableModel, CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL, ProviderKind,
-    default_thinking_variant, default_verbosity, fallback_thinking_variants,
+    AvailableModel, CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL,
+    ProviderKind, default_thinking_variant, default_verbosity, fallback_thinking_variants,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ pub const CODEX_PROVIDER_ID: &str = "codex";
 pub const CLAUDE_PROVIDER_ID: &str = "claude";
 pub const CLAUDE_CODE_PROVIDER_ID: &str = "claude-code";
 pub const OPENCODE_DEFAULT_MODEL: &str = "deepseek-v4-flash-free";
+pub const DEFAULT_MODEL_FILTER_REGEX: &str = "free";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,6 +38,9 @@ impl Default for ProviderStorage {
 impl ProviderStorage {
     /// Ensures built-in providers exist and stay marked as built-in.
     pub fn ensure_builtin_providers(&mut self) {
+        for provider in &mut self.providers {
+            normalize_custom_header_state(provider);
+        }
         if let Some(provider) = self.provider_mut(OPENCODE_PROVIDER_ID) {
             provider.built_in = true;
             if provider.name.trim().is_empty() {
@@ -138,6 +142,13 @@ pub struct ProviderConfig {
     #[serde(default)]
     pub custom_headers: Vec<CustomHeader>,
     #[serde(default)]
+    pub custom_headers_enabled: bool,
+    #[serde(default)]
+    #[serde(alias = "onlyFreeModels")]
+    pub filter_models: bool,
+    #[serde(default)]
+    pub model_filter_regex: String,
+    #[serde(default)]
     pub built_in: bool,
     #[serde(default = "default_enabled")]
     pub enabled: bool,
@@ -199,6 +210,9 @@ fn opencode_provider() -> ProviderConfig {
             name: "x-opencode-session".to_owned(),
             value: String::new(),
         }],
+        custom_headers_enabled: true,
+        filter_models: true,
+        model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
         built_in: true,
         enabled: true,
         models: Vec::new(),
@@ -216,6 +230,9 @@ fn codex_provider() -> ProviderConfig {
         api_url: CODEX_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),
+        custom_headers_enabled: false,
+        filter_models: false,
+        model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
         built_in: true,
         enabled: false,
         models: Vec::new(),
@@ -231,6 +248,9 @@ fn claude_provider() -> ProviderConfig {
         api_url: CLAUDE_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),
+        custom_headers_enabled: false,
+        filter_models: false,
+        model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
         built_in: true,
         enabled: false,
         models: Vec::new(),
@@ -246,6 +266,9 @@ fn claude_code_provider() -> ProviderConfig {
         api_url: CLAUDE_CODE_PROVIDER_URL.to_owned(),
         api_key: String::new(),
         custom_headers: Vec::new(),
+        custom_headers_enabled: false,
+        filter_models: false,
+        model_filter_regex: DEFAULT_MODEL_FILTER_REGEX.to_owned(),
         built_in: true,
         enabled: false,
         models: Vec::new(),
@@ -294,16 +317,31 @@ fn normalize_opencode_provider(provider: &mut ProviderConfig) {
     if provider.api_key.trim().is_empty() {
         provider.api_key = migrated_session.unwrap_or_else(|| "public".to_owned());
     }
+    if provider.api_key.trim().eq_ignore_ascii_case("public")
+        && provider.model_filter_regex.trim().is_empty()
+    {
+        provider.filter_models = true;
+        provider.model_filter_regex = DEFAULT_MODEL_FILTER_REGEX.to_owned();
+    }
     provider
         .custom_headers
         .retain(|header| !header.name.eq_ignore_ascii_case("x-opencode-session"));
-    provider.custom_headers.insert(
-        0,
-        CustomHeader {
-            name: "x-opencode-session".to_owned(),
-            value: String::new(),
-        },
-    );
+    if provider.custom_headers_enabled {
+        provider.custom_headers.insert(
+            0,
+            CustomHeader {
+                name: "x-opencode-session".to_owned(),
+                value: String::new(),
+            },
+        );
+    }
+}
+
+/// Migrates older provider records that had headers before the explicit toggle existed.
+fn normalize_custom_header_state(provider: &mut ProviderConfig) {
+    if !provider.custom_headers_enabled && !provider.custom_headers.is_empty() {
+        provider.custom_headers_enabled = true;
+    }
 }
 
 /// Keeps existing persisted providers enabled until a refresh explicitly fails.
