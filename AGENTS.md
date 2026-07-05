@@ -2,9 +2,9 @@
 
 ## Project Overview
 
-AI Chat is a Windows-first Tauri 2 desktop application that provides a chat interface for OpenAI-compatible APIs, ChatGPT (Codex), and Claude.ai. The Rust backend manages application state behind a mutex, persists data as JSON files, discovers provider models, streams chat responses via SSE, handles OAuth and browser-based authentication, and exposes typed Tauri commands. The TypeScript frontend renders the UI using global namespaces, triple-slash references, and a shared `Renderer`/`AppContext` pattern with no ES module imports.
+AI Chat is a Windows-first Tauri 2 desktop application that provides a chat interface for OpenAI-compatible APIs, ChatGPT (Codex), Claude.ai, and Antigravity (Gemini Code Assist). The Rust backend manages application state behind a mutex, persists data as JSON files, discovers provider models, streams chat responses via SSE, handles OAuth and browser-based authentication, exposes typed Tauri commands, and integrates with Windows Credential Manager for token storage. The TypeScript frontend renders the UI using global namespaces, triple-slash references, and a shared `Renderer`/`AppContext` pattern with no ES module imports.
 
-**Version:** 1.3.0  
+**Version:** 1.10.0  
 **Rust edition:** 2024  
 **Key dependencies:** Tauri 2, tokio, reqwest, serde, uuid, chrono, rand, anyhow, thiserror  
 **Frontend bundler:** Vite (ES modules, bundles npm dependencies into `frontend/dist`); `tsc --noEmit` for type-checking only
@@ -936,6 +936,7 @@ Always build frontend first if `.ts` or CSS files changed. `cargo build` is enou
 - **Public OpenCode:** When API key is exactly `"public"`, apply free-model filter to `/models` response.
 - **Codex** and **Claude Web** are built-in provider shells (enabled=false) that require sign-in before use.
 - **Claude Code** is a built-in provider shell that needs **no in-app login**: it reads the OAuth token from `~/.claude/.credentials.json` (written by the Claude Code CLI) and calls the Anthropic API directly. Models load automatically at startup (`start_claude_code_bootstrap`) and via the account panel's refresh button. Its account panel has no sign-in/sign-out buttons. Usage limits come from `/api/oauth/usage`. The `claude_code` status (`plan`, usage labels) is kept in memory only — never persisted to disk.
+- **Antigravity (Gemini Code Assist)** is a built-in provider shell that reads OAuth tokens from Windows Credential Manager under the target name `"gemini:antigravity"` (written by the Antigravity CLI). It also falls back to `~/.antigravity/.credentials.json`. The application reads tokens on demand and refreshes them via `https://oauth2.googleapis.com/token` when expired, writing updated tokens back to Credential Manager. Project ID, CLI version, and models are auto-discovered at startup (`start_antigravity_bootstrap`) and via the account panel's refresh button. Email is extracted from the `id_token` JWT. The `antigravity` status (`project_id`, `cli_version`, `plan`, `email`, `limit_label`) is kept in memory only.
 - **Custom headers:** Stored as structured `Vec<CustomHeader>` in Rust, edited as JSON string in the frontend.
 
 ### Persistence
