@@ -142,8 +142,10 @@ impl StateInner {
             .unwrap_or_else(ChatSession::new);
         let is_generating = self.active_chat_responses.contains_key(&active_session.id);
         let version = env!("CARGO_PKG_VERSION").to_owned();
-        let claude_provider = self.providers.providers.iter().find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL);
-        let claude_auth = claude_provider.and_then(|p| p.claude_auth.as_ref());
+        let claude_auth = self
+            .providers
+            .provider(crate::domain::CLAUDE_PROVIDER_ID)
+            .and_then(|p| p.claude_auth.as_ref());
         let all_models = self.providers.all_models();
         let model_id = crate::domain::active_model_id(&self.settings.model);
         let catalog_model = all_models.iter().find(|m| m.model == model_id);
@@ -310,18 +312,14 @@ impl StateInner {
     /// Returns the Claude Web provider's claude_auth reference if signed in.
     pub(super) fn get_claude_auth(&self) -> Option<&crate::domain::ClaudeCredential> {
         self.providers
-            .providers
-            .iter()
-            .find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL)
+            .provider(crate::domain::CLAUDE_PROVIDER_ID)
             .and_then(|p| p.claude_auth.as_ref())
     }
 
     /// Returns the mutable Claude Web provider's claude_auth.
     pub(super) fn get_claude_auth_mut(&mut self) -> Option<&mut crate::domain::ClaudeCredential> {
         self.providers
-            .providers
-            .iter_mut()
-            .find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL)
+            .provider_mut(crate::domain::CLAUDE_PROVIDER_ID)
             .and_then(|p| p.claude_auth.as_mut())
     }
 

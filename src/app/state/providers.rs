@@ -306,6 +306,13 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
     if api_url.is_empty() {
         return Err(anyhow!(ERR_VALIDATION_API_URL_REQUIRED));
     }
+    let is_opencode = input.id.trim() == crate::domain::OPENCODE_PROVIDER_ID
+        || api_url.eq_ignore_ascii_case("https://opencode.ai/zen/v1");
+    let model_filter_regex = if is_opencode && input.model_filter_regex.trim().is_empty() {
+        DEFAULT_MODEL_FILTER_REGEX.to_owned()
+    } else {
+        normalize_model_filter_regex(&input.model_filter_regex)
+    };
     Ok(ProviderConfig {
         id: input.id.trim().to_owned(),
         name: name.to_owned(),
@@ -314,7 +321,7 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
         custom_headers,
         custom_headers_enabled: input.custom_headers_enabled,
         filter_models: input.filter_models,
-        model_filter_regex: normalize_model_filter_regex(&input.model_filter_regex),
+        model_filter_regex,
         built_in: false,
         is_env: false,
         env_var: String::new(),
@@ -386,14 +393,9 @@ fn parse_custom_headers(value: &str) -> Result<Vec<CustomHeader>> {
         .collect()
 }
 
-/// Normalizes an empty regex field to the default model filter.
+/// Trims the model filter regex value.
 fn normalize_model_filter_regex(value: &str) -> String {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        DEFAULT_MODEL_FILTER_REGEX.to_owned()
-    } else {
-        trimmed.to_owned()
-    }
+    value.trim().to_owned()
 }
 
 /// Applies the optional regex filter to a fetched provider model list.

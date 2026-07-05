@@ -122,6 +122,9 @@ impl ProviderStorage {
             } else {
                 provider.models
             };
+            if provider.claude_auth.is_none() {
+                provider.claude_auth = existing.claude_auth.clone();
+            }
             *existing = provider;
         } else {
             self.providers.push(provider);

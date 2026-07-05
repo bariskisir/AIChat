@@ -4,7 +4,7 @@ use super::super::AppState;
 use crate::app::events::UiEvent;
 use crate::app::view::AppSnapshot;
 use crate::domain::messages::*;
-use crate::domain::{CLAUDE_PROVIDER_URL, ClaudeCredential, ProviderConfig, model_key};
+use crate::domain::{CLAUDE_PROVIDER_ID, CLAUDE_PROVIDER_URL, ClaudeCredential, ProviderConfig, model_key};
 use crate::infra::extractor::{BrowserExtractor, LoginResult};
 use anyhow::{Result, anyhow};
 use tauri::{AppHandle, Emitter};
@@ -60,9 +60,7 @@ impl AppState {
             }
             if let Some(provider) = inner
                 .providers
-                .providers
-                .iter_mut()
-                .find(|provider| provider.api_url.eq_ignore_ascii_case(CLAUDE_PROVIDER_URL))
+                .provider_mut(CLAUDE_PROVIDER_ID)
             {
                 provider.claude_auth = Some(ClaudeCredential::default());
                 provider.enabled = false;
@@ -103,14 +101,7 @@ impl AppState {
     /// Stores Claude browser credentials and upserts the dedicated provider.
     fn store_claude_login_result(&self, result: LoginResult) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        let existing_id = inner
-            .providers
-            .providers
-            .iter()
-            .find(|provider| provider.api_url.eq_ignore_ascii_case(CLAUDE_PROVIDER_URL))
-            .map(|provider| provider.id.clone())
-            .unwrap_or_default();
-        let is_new_provider = existing_id.is_empty();
+        let existing_id = CLAUDE_PROVIDER_ID.to_owned();
         let provider_config = claude_provider_from_models(&existing_id, result.models.clone());
         let provider_id = inner.providers.upsert(provider_config);
         if let Some(provider) = inner.providers.provider_mut(&provider_id) {
@@ -120,11 +111,10 @@ impl AppState {
                 model.provider_name = provider.name.clone();
             }
         }
-        if is_new_provider
-            && let Some(default_model) = inner
-                .providers
-                .provider(&provider_id)
-                .and_then(|provider| provider.models.iter().find(|model| !model.hidden))
+        if let Some(default_model) = inner
+            .providers
+            .provider(&provider_id)
+            .and_then(|provider| provider.models.iter().find(|model| !model.hidden))
         {
             inner.settings.model = model_key(&provider_id, &default_model.model);
             inner.save_active_session_model_settings()?;

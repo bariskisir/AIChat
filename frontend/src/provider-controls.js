@@ -82,7 +82,7 @@ function openEditor(refs, model, providerId = "") {
     refs.providerCustomHeaders.value = provider ? headersText(provider.customHeaders) : "";
     refs.providerCustomHeadersEnabled.checked = Boolean(provider?.customHeadersEnabled);
     refs.providerFilterModels.checked = Boolean(provider?.filterModels);
-    refs.providerModelFilterRegex.value = provider?.modelFilterRegex || snapshotDefaultRegex();
+    refs.providerModelFilterRegex.value = provider?.modelFilterRegex || (refs.providerId.value === "opencode-zen" ? snapshotDefaultRegex() : "");
     refs.providerEnabled.checked = provider?.enabled !== false;
     refs.providerTemplate.value = templateByApiUrl(provider?.apiUrl || "")?.name || "";
     resetTemplateSearch(refs);
