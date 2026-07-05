@@ -8,9 +8,7 @@ pub struct ClaudeCodeStatus {
     #[serde(default)]
     pub plan: String,
     #[serde(default)]
-    pub five_hour_label: String,
-    #[serde(default)]
-    pub seven_day_label: String,
+    pub limit_label: String,
     #[serde(default)]
     pub error: String,
 }

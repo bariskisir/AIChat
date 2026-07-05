@@ -9,8 +9,8 @@ mod infra;
 
 use anyhow::Result;
 use app::{
-    AppState, app_get_snapshot, auth_sign_out, auth_start_login, catalog_refresh_models, chat_send,
-    chat_stop, claude_auth_sign_out, claude_auth_start_login, clipboard_write_text, link_open,
+    AppState, app_get_snapshot, catalog_refresh_models, chat_send, chat_stop,
+    check_update, claude_auth_sign_out, claude_auth_start_login, clipboard_write_text, link_open,
     provider_delete, provider_refresh_models, provider_save, session_create, session_delete,
     session_select, settings_update,
 };
@@ -30,6 +30,7 @@ fn main() -> Result<()> {
     let managed_state = state.clone();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .manage(managed_state)
         .setup(move |app| {
             let app_version = app.package_info().version.to_string();
@@ -37,32 +38,37 @@ fn main() -> Result<()> {
                 window.set_title(&format!("AI Chat - v{app_version}"))?;
                 if let Ok(snapshot) = state.snapshot() {
                     if let (Some(width), Some(height)) = (
-                        snapshot.settings.window_width,
-                        snapshot.settings.window_height,
+                        snapshot.settings.window.width,
+                        snapshot.settings.window.height,
                     ) && let Err(error) =
                         window.set_size(Size::Physical(PhysicalSize::new(width, height)))
                     {
                         log::warn!("Could not restore saved window size: {error}");
                     }
                     if let (Some(x), Some(y)) =
-                        (snapshot.settings.window_x, snapshot.settings.window_y)
+                        (snapshot.settings.window.x, snapshot.settings.window.y)
                         && !is_minimized_window_position(x, y)
                         && let Err(error) =
                             window.set_position(Position::Physical(PhysicalPosition::new(x, y)))
                     {
                         log::warn!("Could not restore saved window position: {error}");
                     }
-                    if snapshot.settings.window_fullscreen {
+                    if snapshot.settings.window.fullscreen {
                         if let Err(error) = window.set_fullscreen(true) {
                             log::warn!("Could not restore fullscreen window state: {error}");
                         }
-                    } else if snapshot.settings.window_maximized
+                    } else if snapshot.settings.window.maximized
                         && let Err(error) = window.maximize()
                     {
                         log::warn!("Could not restore maximized window state: {error}");
                     }
                 }
                 state.start_claude_code_bootstrap(app.handle().clone());
+                state.start_codex_bootstrap(app.handle().clone());
+
+                if state.check_updates_on_startup() {
+                    state.spawn_update_check(app.handle().clone());
+                }
 
                 let window_state = state.clone();
                 let tracked_window = window.clone();
@@ -98,8 +104,6 @@ fn main() -> Result<()> {
         .invoke_handler(tauri::generate_handler![
             app_get_snapshot,
             settings_update,
-            auth_start_login,
-            auth_sign_out,
             claude_auth_start_login,
             claude_auth_sign_out,
             provider_save,
@@ -112,7 +116,8 @@ fn main() -> Result<()> {
             chat_send,
             chat_stop,
             clipboard_write_text,
-            link_open
+            link_open,
+            check_update
         ])
         .run(tauri::generate_context!())
         .map_err(|error| anyhow::anyhow!(error.to_string()))?;

@@ -14,6 +14,19 @@ pub struct AppSettings {
     pub model: String,
     #[serde(default)]
     pub active_session_id: String,
+    #[serde(default)]
+    pub model_settings: ModelSettings,
+    #[serde(default)]
+    pub visual: VisualSettings,
+    #[serde(default)]
+    pub updates: UpdateSettings,
+    #[serde(default)]
+    pub window: WindowState,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelSettings {
     #[serde(default = "super::default_reasoning_effort")]
     pub reasoning_effort: String,
     #[serde(default = "super::default_thinking_variant")]
@@ -24,30 +37,93 @@ pub struct AppSettings {
     pub extended_thinking: bool,
     #[serde(default = "super::default_claude_effort")]
     pub claude_effort: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub window_width: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub window_height: Option<u32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub window_x: Option<i32>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub window_y: Option<i32>,
-    #[serde(default)]
-    pub window_maximized: bool,
-    #[serde(default)]
-    pub window_fullscreen: bool,
-    #[serde(default = "default_sidebar_width")]
-    pub sidebar_width: u32,
-    #[serde(default = "default_show_footer")]
-    pub show_footer: bool,
-    #[serde(default = "default_show_info_bar")]
-    pub show_info_bar: bool,
-    #[serde(default = "default_show_model_bar")]
-    pub show_model_bar: bool,
     #[serde(default)]
     pub title_gen_model: String,
     #[serde(default)]
     pub favorite_models: Vec<String>,
+}
+
+impl Default for ModelSettings {
+    fn default() -> Self {
+        Self {
+            reasoning_effort: super::default_reasoning_effort(),
+            thinking_variant: super::default_thinking_variant(),
+            verbosity: super::default_verbosity_setting(),
+            extended_thinking: default_extended_thinking(),
+            claude_effort: super::default_claude_effort(),
+            title_gen_model: String::new(),
+            favorite_models: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VisualSettings {
+    #[serde(default = "default_sidebar_width")]
+    pub sidebar_width: u32,
+    #[serde(default = "default_show_info_bar")]
+    pub show_info_bar: bool,
+    #[serde(default = "default_show_model_bar")]
+    pub show_model_bar: bool,
+    #[serde(default = "default_markdown_enabled")]
+    pub markdown_enabled: bool,
+}
+
+impl Default for VisualSettings {
+    fn default() -> Self {
+        Self {
+            sidebar_width: DEFAULT_SIDEBAR_WIDTH,
+            show_info_bar: true,
+            show_model_bar: true,
+            markdown_enabled: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateSettings {
+    #[serde(default = "default_check_on_startup")]
+    pub check_on_startup: bool,
+}
+
+impl Default for UpdateSettings {
+    fn default() -> Self {
+        Self {
+            check_on_startup: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowState {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub width: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub height: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub y: Option<i32>,
+    #[serde(default)]
+    pub maximized: bool,
+    #[serde(default)]
+    pub fullscreen: bool,
+}
+
+impl Default for WindowState {
+    fn default() -> Self {
+        Self {
+            width: None,
+            height: None,
+            x: None,
+            y: None,
+            maximized: false,
+            fullscreen: false,
+        }
+    }
 }
 
 impl Default for AppSettings {
@@ -56,23 +132,10 @@ impl Default for AppSettings {
         Self {
             model: String::new(),
             active_session_id: String::new(),
-            reasoning_effort: super::default_reasoning_effort(),
-            thinking_variant: super::default_thinking_variant(),
-            verbosity: super::default_verbosity_setting(),
-            extended_thinking: default_extended_thinking(),
-            claude_effort: super::default_claude_effort(),
-            window_width: None,
-            window_height: None,
-            window_x: None,
-            window_y: None,
-            window_maximized: false,
-            window_fullscreen: false,
-            sidebar_width: DEFAULT_SIDEBAR_WIDTH,
-            show_footer: true,
-            show_info_bar: true,
-            show_model_bar: true,
-            title_gen_model: String::new(),
-            favorite_models: Vec::new(),
+            model_settings: ModelSettings::default(),
+            visual: VisualSettings::default(),
+            updates: UpdateSettings::default(),
+            window: WindowState::default(),
         }
     }
 }
@@ -92,11 +155,6 @@ fn default_sidebar_width() -> u32 {
     DEFAULT_SIDEBAR_WIDTH
 }
 
-/// Supplies the default show-footer setting.
-fn default_show_footer() -> bool {
-    true
-}
-
 /// Supplies the default show-info-bar setting.
 fn default_show_info_bar() -> bool {
     true
@@ -104,6 +162,15 @@ fn default_show_info_bar() -> bool {
 
 /// Shows the model toolbar by default.
 fn default_show_model_bar() -> bool {
+    true
+}
+
+/// Enables update check on startup by default.
+fn default_check_on_startup() -> bool {
+    true
+}
+
+fn default_markdown_enabled() -> bool {
     true
 }
 

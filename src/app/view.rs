@@ -10,9 +10,11 @@ use serde::{Deserialize, Serialize};
 pub struct AppSnapshot {
     pub settings: AppSettings,
     pub status: String,
+    pub version: String,
     pub account: AccountSnapshot,
     pub claude_account: ClaudeAccountSnapshot,
     pub claude_code_account: ClaudeCodeAccountSnapshot,
+    pub codex_account: CodexAccountSnapshot,
     pub providers: ProviderSnapshot,
     pub catalog: CatalogSnapshot,
     pub sessions: Vec<ChatSession>,
@@ -42,8 +44,17 @@ pub struct ClaudeAccountSnapshot {
 pub struct ClaudeCodeAccountSnapshot {
     pub available: bool,
     pub plan: String,
-    pub five_hour_label: String,
-    pub seven_day_label: String,
+    pub limit_label: String,
+    pub error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CodexAccountSnapshot {
+    pub available: bool,
+    pub email: String,
+    pub plan: String,
+    pub limit_label: String,
     pub error: String,
 }
 
@@ -53,6 +64,11 @@ pub struct ProviderSnapshot {
     pub configured: bool,
     pub providers: Vec<ProviderConfig>,
     pub active_provider_id: String,
+    pub templates: Vec<crate::domain::ProviderTemplate>,
+    pub codex_url: String,
+    pub claude_url: String,
+    pub claude_code_url: String,
+    pub default_model_filter_regex: String,
     pub error: String,
 }
 
@@ -81,16 +97,18 @@ pub struct SettingsInput {
     pub claude_effort: String,
     #[serde(default)]
     pub sidebar_width: Option<u32>,
-    #[serde(default = "default_show_footer")]
-    pub show_footer: bool,
     #[serde(default = "default_show_info_bar")]
     pub show_info_bar: bool,
     #[serde(default = "default_show_model_bar")]
     pub show_model_bar: bool,
+    #[serde(default = "default_markdown_enabled")]
+    pub markdown_enabled: bool,
     #[serde(default)]
     pub title_gen_model: String,
     #[serde(default)]
     pub favorite_models: Vec<String>,
+    #[serde(default = "default_check_on_startup")]
+    pub check_on_startup: bool,
 }
 
 /// Returns the fallback Codex thinking setting for older frontends.
@@ -113,11 +131,6 @@ fn default_claude_effort() -> String {
     crate::domain::default_claude_effort()
 }
 
-/// Returns the default show-footer setting for older frontends.
-fn default_show_footer() -> bool {
-    true
-}
-
 /// Returns the default show-info-bar setting for older frontends.
 fn default_show_info_bar() -> bool {
     true
@@ -125,6 +138,25 @@ fn default_show_info_bar() -> bool {
 
 /// Returns the default show-model-bar setting for older frontends.
 fn default_show_model_bar() -> bool {
+    true
+}
+
+/// Returns the default check-on-startup setting for older frontends.
+fn default_check_on_startup() -> bool {
+    true
+}
+
+fn default_markdown_enabled() -> bool {
+    true
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// No longer used, kept for older frontend compatibility.
+#[allow(dead_code)]
+fn default_show_footer() -> bool {
     true
 }
 
@@ -154,4 +186,6 @@ pub struct ProviderInput {
     pub filter_models: bool,
     #[serde(default)]
     pub model_filter_regex: String,
+    #[serde(default = "default_true")]
+    pub enabled: bool,
 }

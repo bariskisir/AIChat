@@ -19,11 +19,16 @@ pub struct OpenAiContext {
 impl OpenAiContext {
     /// Builds a request context from a saved provider.
     pub fn from_provider(provider: &ProviderConfig) -> Self {
+        let api_key = if provider.is_env && !provider.env_var.is_empty() {
+            std::env::var(&provider.env_var).unwrap_or_default()
+        } else {
+            provider.api_key.clone()
+        };
         Self {
             provider_id: provider.id.clone(),
             provider_name: provider.name.clone(),
             api_url: provider.api_url.trim().trim_end_matches('/').to_owned(),
-            api_key: provider.api_key.clone(),
+            api_key,
             custom_headers: if provider.custom_headers_enabled {
                 provider
                     .custom_headers
@@ -125,7 +130,7 @@ pub async fn fetch_models(ctx: &OpenAiContext) -> Result<Vec<AvailableModel>> {
             is_default: false,
             input_modalities: vec!["text".to_owned()],
             default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
-            thinking_variants: crate::domain::fallback_thinking_variants(),
+            thinking_variants: Vec::new(),
             support_verbosity: false,
             default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
             claude_thinking_type: String::new(),

@@ -14,14 +14,17 @@ impl AppState {
     ) -> Result<Vec<AvailableModel>> {
         let (ctx, org_id, cookies, plan) = {
             let inner = self.lock()?;
-            if !inner.claude_auth.is_signed_in() {
-                return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
+            let auth = inner
+                .get_claude_auth()
+                .ok_or_else(|| anyhow!(AUTH_CONNECT_CLAUDE_WEB_REQUIRED))?;
+            if !auth.is_signed_in() {
+                return Err(anyhow!(AUTH_CONNECT_CLAUDE_WEB_REQUIRED));
             }
             (
-                claude::ClaudeContext::from_credential(&inner.claude_auth),
-                inner.claude_auth.org_id.clone(),
-                inner.claude_auth.cookies.clone(),
-                inner.claude_auth.plan.clone(),
+                claude::ClaudeContext::from_credential(auth),
+                auth.org_id.clone(),
+                auth.cookies.clone(),
+                auth.plan.clone(),
             )
         };
         let (mut models, account_info) = match claude::fetch_bootstrap_json(&ctx).await {
@@ -44,13 +47,14 @@ impl AppState {
             model.provider_name = provider.name.clone();
         }
         let mut inner = self.lock()?;
-        if !account_info.0.is_empty() {
-            inner.claude_auth.email = account_info.0;
+        if let Some(auth) = inner.get_claude_auth_mut() {
+            if !account_info.0.is_empty() {
+                auth.email = account_info.0;
+            }
+            if !account_info.1.is_empty() {
+                auth.plan = account_info.1;
+            }
         }
-        if !account_info.1.is_empty() {
-            inner.claude_auth.plan = account_info.1;
-        }
-        inner.storage.save_claude_auth(&inner.claude_auth)?;
         Ok(models)
     }
 }

@@ -40,8 +40,9 @@ impl AppState {
         let image_data_urls = input.image_data_urls.clone();
         {
             let inner = self.lock()?;
-            if !inner.claude_auth.is_signed_in() {
-                return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
+            match inner.get_claude_auth() {
+                Some(auth) if auth.is_signed_in() => (),
+                _ => return Err(anyhow!(AUTH_CONNECT_CLAUDE_WEB_REQUIRED)),
             }
         }
         let (work, title_work) = {
@@ -54,7 +55,7 @@ impl AppState {
             let (_, model) = crate::domain::split_model_key(&inner.settings.model)
                 .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
             let model = model.to_owned();
-            let extended_thinking = inner.settings.extended_thinking;
+            let extended_thinking = inner.settings.model_settings.extended_thinking;
             let effort = {
                 let all_models = inner.providers.all_models();
                 let thinking_type = all_models
@@ -62,9 +63,9 @@ impl AppState {
                     .find(|m| m.model == model)
                     .map(|m| m.claude_thinking_type.as_str())
                     .unwrap_or("");
-                claude_effort_for_model(&inner.settings.claude_effort, thinking_type)
+                claude_effort_for_model(&inner.settings.model_settings.claude_effort, thinking_type)
             };
-            let title_gen_model = inner.settings.title_gen_model.clone();
+            let title_gen_model = inner.settings.model_settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let conv_id = uuid::Uuid::new_v4().to_string();
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());

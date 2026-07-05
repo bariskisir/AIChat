@@ -11,17 +11,19 @@ mod settings;
 
 use super::view::{
     AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot,
-    ClaudeCodeAccountSnapshot, ProviderSnapshot,
+    ClaudeCodeAccountSnapshot, CodexAccountSnapshot, ProviderSnapshot,
 };
 use crate::domain::messages::*;
 use crate::domain::{
-    AppSettings, AuthStorage, CatalogStorage, ChatSession, ClaudeCodeStatus, ClaudeCredential,
+    AppSettings, ChatSession, ClaudeCodeStatus, CodexStatus,
     ProviderStorage, model_key,
 };
-use crate::infra::{paths::AppPaths, shell, storage::Storage};
+use crate::infra::{codex_credentials, paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
+use tauri::Manager;
+use tauri_plugin_notification::NotificationExt;
 use tokio::runtime::Runtime;
 
 #[derive(Clone)]
@@ -33,10 +35,8 @@ pub struct AppState {
 pub(super) struct StateInner {
     pub(super) storage: Storage,
     pub(super) settings: AppSettings,
-    pub(super) auth: AuthStorage,
-    pub(super) claude_auth: ClaudeCredential,
     pub(super) claude_code: ClaudeCodeStatus,
-    pub(super) catalog: CatalogStorage,
+    pub(super) codex: CodexStatus,
     pub(super) providers: ProviderStorage,
     pub(super) status: String,
     pub(super) sessions: Vec<ChatSession>,
@@ -48,10 +48,8 @@ impl AppState {
     pub fn new(paths: AppPaths) -> Result<Self> {
         let storage = Storage::new(&paths)?;
         let mut settings = storage.load_settings()?;
-        let auth = storage.load_auth()?;
-        let claude_auth = storage.load_claude_auth()?;
         let claude_code = ClaudeCodeStatus::default();
-        let catalog = storage.load_catalog()?;
+        let codex = CodexStatus::default();
         let mut providers = storage.load_providers()?;
         providers.ensure_builtin_providers();
         storage.save_providers(&providers)?;
@@ -62,10 +60,8 @@ impl AppState {
             inner: Arc::new(Mutex::new(StateInner {
                 storage,
                 settings,
-                auth,
-                claude_auth,
                 claude_code,
-                catalog,
+                codex,
                 providers,
                 status,
                 sessions,
@@ -88,6 +84,46 @@ impl AppState {
             LINK_TARGET_SOURCE => shell::open_url(LINK_URL_SOURCE),
             _ => Err(anyhow!(ERR_VALIDATION_UNKNOWN_LINK_TARGET)),
         }
+    }
+
+    /// Checks for updates and returns a version string.
+    pub fn app_version(&self) -> String {
+        env!("CARGO_PKG_VERSION").to_owned()
+    }
+
+    /// Returns whether update check on startup is enabled.
+    pub fn check_updates_on_startup(&self) -> bool {
+        self.lock()
+            .map(|inner| inner.settings.updates.check_on_startup)
+            .unwrap_or(false)
+    }
+
+    /// Spawns a background task for startup update checking.
+    pub fn spawn_update_check(&self, app_handle: tauri::AppHandle) {
+        let version = self.app_version();
+        let _state = self.clone();
+        self.runtime.spawn(async move {
+            let result = crate::infra::update::check_for_update(&version).await;
+            if result.has_update {
+                let message = format!(
+                    "AI Chat {} is available — click to download",
+                    result.latest_version
+                );
+                if let Some(window) = app_handle.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+                let _ = app_handle
+                    .notification()
+                    .builder()
+                    .title("AI Chat Update Available")
+                    .body(&message)
+                    .show();
+            }
+            if !result.error_message.is_empty() {
+                log::warn!("Update check failed: {}", result.error_message);
+            }
+        });
     }
 
     /// Updates the current status message without failing the caller.
@@ -116,31 +152,49 @@ impl StateInner {
             .or_else(|| self.sessions.first().cloned())
             .unwrap_or_else(ChatSession::new);
         let is_generating = self.active_chat_responses.contains_key(&active_session.id);
+        let version = env!("CARGO_PKG_VERSION").to_owned();
+        let claude_provider = self.providers.providers.iter().find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL);
+        let claude_auth = claude_provider.and_then(|p| p.claude_auth.as_ref());
+        let all_models = self.providers.all_models();
+        let model_id = crate::domain::active_model_id(&self.settings.model);
+        let catalog_model = all_models.iter().find(|m| m.model == model_id);
         AppSnapshot {
             settings: self.settings.clone(),
             status: self.status.clone(),
+            version,
             account: AccountSnapshot {
-                logged_in: self.auth.is_signed_in(),
-                email: self.auth.account_email.clone(),
-                error: self.auth.error.clone(),
+                logged_in: false,
+                email: String::new(),
+                error: String::new(),
             },
             claude_account: ClaudeAccountSnapshot {
-                logged_in: self.claude_auth.is_signed_in(),
-                email: self.claude_auth.email.clone(),
-                plan: self.claude_auth.plan.clone(),
-                error: self.claude_auth.error.clone(),
+                logged_in: claude_auth.map(|a| a.is_signed_in()).unwrap_or(false),
+                email: claude_auth.map(|a| a.email.clone()).unwrap_or_default(),
+                plan: claude_auth.map(|a| a.plan.clone()).unwrap_or_default(),
+                error: claude_auth.map(|a| a.error.clone()).unwrap_or_default(),
             },
             claude_code_account: ClaudeCodeAccountSnapshot {
                 available: crate::infra::claudecode::credentials_available(),
                 plan: self.claude_code.plan.clone(),
-                five_hour_label: self.claude_code.five_hour_label.clone(),
-                seven_day_label: self.claude_code.seven_day_label.clone(),
+                limit_label: self.claude_code.limit_label.clone(),
                 error: self.claude_code.error.clone(),
+            },
+            codex_account: CodexAccountSnapshot {
+                available: codex_credentials::credentials_available(),
+                email: self.codex.email.clone(),
+                plan: self.codex.plan.clone(),
+                limit_label: self.codex.limit_label.clone(),
+                error: self.codex.error.clone(),
             },
             providers: ProviderSnapshot {
                 configured: !self.providers.providers.is_empty(),
                 providers: self.providers.providers.clone(),
                 active_provider_id: self.active_provider_id(),
+                templates: crate::domain::provider_templates().to_vec(),
+                codex_url: crate::domain::CODEX_PROVIDER_URL.to_owned(),
+                claude_url: crate::domain::CLAUDE_PROVIDER_URL.to_owned(),
+                claude_code_url: crate::domain::CLAUDE_CODE_PROVIDER_URL.to_owned(),
+                default_model_filter_regex: crate::domain::DEFAULT_MODEL_FILTER_REGEX.to_owned(),
                 error: self
                     .providers
                     .providers
@@ -151,17 +205,11 @@ impl StateInner {
                     .unwrap_or_default(),
             },
             catalog: CatalogSnapshot {
-                models: self.providers.all_models(),
-                thinking_variants: self
-                    .catalog
-                    .thinking_variants_for(&crate::domain::active_model_id(&self.settings.model)),
-                verbosity_supported: self
-                    .catalog
-                    .supports_verbosity(&crate::domain::active_model_id(&self.settings.model)),
-                default_verbosity: self
-                    .catalog
-                    .default_verbosity_for(&crate::domain::active_model_id(&self.settings.model)),
-                limit_label: self.catalog.chatgpt_limit_label.clone(),
+                models: all_models.clone(),
+                thinking_variants: crate::domain::thinking_variants_for(&all_models, &model_id),
+                verbosity_supported: catalog_model.map(|m| m.support_verbosity).unwrap_or(false),
+                default_verbosity: catalog_model.map(|m| m.default_verbosity.clone()).unwrap_or_else(|| crate::domain::DEFAULT_VERBOSITY.to_owned()),
+                limit_label: self.codex.limit_label.clone(),
             },
             sessions: self.sessions.clone(),
             active_session,
@@ -177,11 +225,11 @@ impl StateInner {
             .find(|s| s.id == self.settings.active_session_id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SESSION))?;
         self.settings.model = session.model.clone();
-        self.settings.reasoning_effort = session.reasoning_effort.clone();
-        self.settings.thinking_variant = session.thinking_variant.clone();
-        self.settings.verbosity = session.verbosity.clone();
-        self.settings.extended_thinking = session.extended_thinking;
-        self.settings.claude_effort = session.claude_effort.clone();
+        self.settings.model_settings.reasoning_effort = session.reasoning_effort.clone();
+        self.settings.model_settings.thinking_variant = session.thinking_variant.clone();
+        self.settings.model_settings.verbosity = session.verbosity.clone();
+        self.settings.model_settings.extended_thinking = session.extended_thinking;
+        self.settings.model_settings.claude_effort = session.claude_effort.clone();
         self.ensure_selected_model();
         self.save_active_session_model_settings()?;
         Ok(())
@@ -190,11 +238,11 @@ impl StateInner {
     /// Copies global model and thinking settings back into the active session.
     pub(super) fn save_active_session_model_settings(&mut self) -> Result<()> {
         let model = self.settings.model.clone();
-        let reasoning_effort = self.settings.reasoning_effort.clone();
-        let thinking_variant = self.settings.thinking_variant.clone();
-        let verbosity = self.settings.verbosity.clone();
-        let extended_thinking = self.settings.extended_thinking;
-        let claude_effort = self.settings.claude_effort.clone();
+        let reasoning_effort = self.settings.model_settings.reasoning_effort.clone();
+        let thinking_variant = self.settings.model_settings.thinking_variant.clone();
+        let verbosity = self.settings.model_settings.verbosity.clone();
+        let extended_thinking = self.settings.model_settings.extended_thinking;
+        let claude_effort = self.settings.model_settings.claude_effort.clone();
         let session = self.active_session_mut()?;
         session.model = model;
         session.reasoning_effort = reasoning_effort;
@@ -258,6 +306,32 @@ impl StateInner {
             .iter_mut()
             .find(|s| s.id == id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SESSION))
+    }
+
+    /// Returns the Claude Web provider's claude_auth reference if signed in.
+    pub(super) fn get_claude_auth(&self) -> Option<&crate::domain::ClaudeCredential> {
+        self.providers
+            .providers
+            .iter()
+            .find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL)
+            .and_then(|p| p.claude_auth.as_ref())
+    }
+
+    /// Returns the mutable Claude Web provider's claude_auth.
+    pub(super) fn get_claude_auth_mut(&mut self) -> Option<&mut crate::domain::ClaudeCredential> {
+        self.providers
+            .providers
+            .iter_mut()
+            .find(|p| p.api_url.trim() == crate::domain::CLAUDE_PROVIDER_URL)
+            .and_then(|p| p.claude_auth.as_mut())
+    }
+
+    /// Persists providers, settings, and sessions after a mutation.
+    pub(super) fn persist_state(&mut self) -> Result<()> {
+        self.storage.save_providers(&self.providers)?;
+        self.storage.save_settings(&self.settings)?;
+        self.storage.save_sessions(&self.sessions)?;
+        Ok(())
     }
 }
 

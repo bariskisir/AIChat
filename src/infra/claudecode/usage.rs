@@ -8,8 +8,7 @@ use serde_json::Value;
 /// Parsed Claude Code usage limits for the account.
 #[derive(Clone, Debug, Default)]
 pub struct ClaudeCodeUsage {
-    pub five_hour_label: String,
-    pub seven_day_label: String,
+    pub limit_label: String,
 }
 
 /// Fetches the current Claude Code usage limits.
@@ -38,17 +37,38 @@ pub async fn fetch_usage(ctx: &ClaudeCodeContext) -> Result<ClaudeCodeUsage> {
         .json()
         .await
         .context("Could not parse Anthropic usage response")?;
+    let Some(root) = value.as_object() else {
+        return Ok(ClaudeCodeUsage::default());
+    };
+    let windows: Vec<(&str, String)> = root
+        .iter()
+        .filter_map(|(key, val)| {
+            if val.is_null() {
+                return None;
+            }
+            Some((key.as_str(), window_label(val)))
+        })
+        .filter(|(_, label)| !label.is_empty())
+        .collect();
+    let single = windows.len() <= 1;
+    let parts: Vec<String> = windows
+        .into_iter()
+        .map(|(key, label)| {
+            let name = if single {
+                "session"
+            } else {
+                window_name(key)
+            };
+            format!("{name}: {label}")
+        })
+        .collect();
     Ok(ClaudeCodeUsage {
-        five_hour_label: window_label(value.get("five_hour")),
-        seven_day_label: window_label(value.get("seven_day")),
+        limit_label: parts.join(", "),
     })
 }
 
-/// Formats one usage window (`{utilization, resets_at}`) into a compact label.
-fn window_label(window: Option<&Value>) -> String {
-    let Some(window) = window.filter(|value| !value.is_null()) else {
-        return String::new();
-    };
+/// Formats one usage window value into a compact string.
+fn window_label(window: &Value) -> String {
     let utilization = window
         .get("utilization")
         .and_then(Value::as_f64)
@@ -61,7 +81,17 @@ fn window_label(window: Option<&Value>) -> String {
     if resets.is_empty() {
         format!("{utilization:.0}%")
     } else {
-        format!("{utilization:.0}% · resets {resets}")
+        format!("{utilization:.0}% resets {resets}")
+    }
+}
+
+/// Maps an Anthropic usage API window key to a friendly label.
+fn window_name(key: &str) -> &str {
+    match key {
+        "five_hour" => "session",
+        "seven_day" => "weekly",
+        "thirty_day" => "monthly",
+        _ => key,
     }
 }
 

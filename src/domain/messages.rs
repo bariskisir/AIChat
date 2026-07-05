@@ -33,14 +33,11 @@ pub const STATUS_ANSWER_STOPPED: &str = "Answer stopped.";
 /// Shown when the user tries to stop a response but none is running.
 pub const STATUS_NO_ANSWER_RUNNING: &str = "No answer is running.";
 
-/// Shown while the ChatGPT OAuth browser tab is opening.
-pub const STATUS_OPENING_CHATGPT_SIGNIN: &str = "Opening ChatGPT sign-in...";
+/// Shown while launching Chrome for Claude Web browser login.
+pub const STATUS_LAUNCHING_CHROME_LOGIN: &str = "Launching Chrome for Claude Web login...";
 
-/// Shown while launching Chrome for Claude browser login.
-pub const STATUS_LAUNCHING_CHROME_LOGIN: &str = "Launching Chrome for Claude login...";
-
-/// Shown while waiting for the user to complete Claude browser login.
-pub const STATUS_WAITING_CLAUDE_LOGIN: &str = "Waiting for you to log into Claude...";
+/// Shown while waiting for the user to complete Claude Web browser login.
+pub const STATUS_WAITING_CLAUDE_LOGIN: &str = "Waiting for you to log into Claude Web...";
 
 /// Shown after creating a new chat session.
 pub const STATUS_NEW_CHAT_CREATED: &str = "New chat created.";
@@ -54,13 +51,9 @@ pub const STATUS_CHAT_DELETED: &str = "Chat deleted.";
 /// Shown after a non-built-in provider is deleted.
 pub const STATUS_PROVIDER_DELETED: &str = "Provider deleted.";
 
-/// Shown after a ChatGPT-authenticated provider is deleted.
-pub const STATUS_PROVIDER_DELETED_AND_SIGNED_OUT_CHATGPT: &str =
-    "Provider deleted and signed out of ChatGPT.";
-
-/// Shown after a Claude-authenticated provider is deleted.
+/// Shown after a Claude Web-authenticated provider is deleted.
 pub const STATUS_PROVIDER_DELETED_AND_SIGNED_OUT_CLAUDE: &str =
-    "Provider deleted and signed out of Claude.";
+    "Provider deleted and signed out of Claude Web.";
 
 // ---------------------------------------------------------------------------
 // Validation errors ─── ERR_VALIDATION_ prefix
@@ -124,11 +117,8 @@ pub const ERR_NOT_FOUND_MAIN_WINDOW: &str = "Main window was not found.";
 // Auth / sign-in messages ─── AUTH_ prefix
 // ---------------------------------------------------------------------------
 
-/// Shown when Codex chat is attempted without a ChatGPT sign-in.
-pub const AUTH_SIGN_IN_CHATGPT_REQUIRED: &str = "Please sign in with ChatGPT first.";
-
-/// Shown when Claude chat is attempted without a Claude browser login.
-pub const AUTH_CONNECT_CLAUDE_REQUIRED: &str = "Connect to Claude first.";
+/// Shown when Claude Web chat is attempted without a browser sign-in.
+pub const AUTH_CONNECT_CLAUDE_WEB_REQUIRED: &str = "Connect to Claude Web first.";
 
 /// Shown when Claude Code chat is attempted without local CLI credentials.
 pub const AUTH_CLAUDE_CODE_REQUIRED: &str =
@@ -137,42 +127,40 @@ pub const AUTH_CLAUDE_CODE_REQUIRED: &str =
 /// Shown as the provider-level prompt when Claude Code credentials are missing.
 pub const AUTH_CLAUDE_CODE_PROMPT: &str = "Sign in with the Claude Code CLI.";
 
-/// Shown as the provider-level prompt to sign into ChatGPT.
-pub const AUTH_SIGN_IN_CHATGPT_PROMPT: &str = "Sign in with ChatGPT.";
+/// Shown as the provider-level prompt when Codex credentials are missing.
+pub const AUTH_CODEX_CREDENTIALS_PROMPT: &str = "Sign in with Codex CLI.";
 
-/// Shown as the provider-level prompt to sign into Claude.
-pub const AUTH_SIGN_IN_CLAUDE_PROMPT: &str = "Sign in with Claude.";
+/// Shown as the provider-level prompt to sign into Claude Web.
+pub const AUTH_SIGN_IN_CLAUDE_WEB_PROMPT: &str = "Sign in with Claude Web. Free accounts supported.";
 
-/// Shown when the Claude API fails to create a new conversation.
-pub const AUTH_FAILED_CREATE_CLAUDE_CONVERSATION: &str = "Failed to create Claude conversation.";
+/// Shown as a warning on the Claude Web provider tab about Anthropic policy.
+pub const AUTH_CLAUDE_WEB_DISCLAIMER: &str =
+    "Anthropic prohibits third-party tool usage. Use at your own risk.";
 
-/// Shown as status and provider error after signing out of ChatGPT.
-pub const AUTH_SIGNED_OUT_CHATGPT: &str = "Signed out of ChatGPT.";
+/// Shown when the Claude Web API fails to create a new conversation.
+pub const AUTH_FAILED_CREATE_CLAUDE_CONVERSATION: &str = "Failed to create Claude Web conversation.";
 
-/// Shown as status and provider error after signing out of Claude.
-pub const AUTH_SIGNED_OUT_CLAUDE: &str = "Signed out of Claude.";
+/// Shown as status and provider error after signing out of Claude Web.
+pub const AUTH_SIGNED_OUT_CLAUDE_WEB: &str = "Signed out of Claude Web.";
 
-/// Shown after a successful ChatGPT sign-in completes.
-pub const AUTH_SIGNED_IN_CHATGPT: &str = "Signed in with ChatGPT.";
-
-/// Shown after a successful Claude browser login completes.
-pub const AUTH_CONNECTED_CLAUDE: &str = "Connected to Claude.";
+/// Shown after a successful Claude Web browser login completes.
+pub const AUTH_CONNECTED_CLAUDE_WEB: &str = "Connected to Claude Web.";
 
 // ---------------------------------------------------------------------------
 // Provider messages ─── PROVIDER_ prefix
 // ---------------------------------------------------------------------------
 
-/// Display name for the built-in OpenCode Zen provider.
-pub const PROVIDER_OPENCODE_NAME: &str = "OpenCode Zen";
+/// Display name for the built-in OpenCode provider.
+pub const PROVIDER_OPENCODE_NAME: &str = "OpenCode";
 
 /// Display name for the built-in Codex / ChatGPT provider.
 pub const PROVIDER_CODEX_NAME: &str = "Codex";
 
 /// Display name for the built-in Claude.ai web provider.
-pub const PROVIDER_CLAUDE_NAME: &str = "Claude Web";
+pub const PROVIDER_CLAUDE_NAME: &str = "ClaudeWeb";
 
 /// Display name for the built-in Claude Code (Anthropic API) provider.
-pub const PROVIDER_CLAUDE_CODE_NAME: &str = "Claude Code";
+pub const PROVIDER_CLAUDE_CODE_NAME: &str = "ClaudeCode";
 
 /// Description for the default free model on the OpenCode Zen provider.
 pub const PROVIDER_OPENCODE_DEFAULT_MODEL_DESC: &str = "OpenCode Zen default free model";
@@ -243,11 +231,8 @@ pub const FMT_ERROR: &str = "Error: {}";
 /// Provider-level error template: `"Provider error: <message>"`.
 pub const FMT_PROVIDER_ERROR: &str = "Provider error: {}";
 
-/// ChatGPT sign-in failure status template: `"ChatGPT sign-in failed: <message>"`.
-pub const FMT_CHATGPT_SIGNIN_FAILED: &str = "ChatGPT sign-in failed: {}";
-
-/// Claude sign-in failure status template: `"Claude sign-in failed: <message>"`.
-pub const FMT_CLAUDE_SIGNIN_FAILED: &str = "Claude sign-in failed: {}";
+/// Claude Web sign-in failure status template: `"Claude Web sign-in failed: <message>"`.
+pub const FMT_CLAUDE_SIGNIN_FAILED: &str = "Claude Web sign-in failed: {}";
 
 /// Provider save confirmation template: `"<name> checked and saved."`.
 pub const FMT_PROVIDER_CHECKED_SAVED: &str = "{} checked and saved.";

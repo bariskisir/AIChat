@@ -17,25 +17,34 @@ impl AppState {
     pub fn update_settings(&self, input: SettingsInput) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
         inner.settings.model = input.model;
-        inner.settings.reasoning_effort = normalize_reasoning_effort(&input.reasoning_effort);
-        inner.settings.thinking_variant = inner.catalog.normalize_thinking_variant(
+        inner.settings.model_settings.reasoning_effort =
+            normalize_reasoning_effort(&input.reasoning_effort);
+        let model_id = crate::domain::active_model_id(&inner.settings.model);
+        let all_models = inner.providers.all_models();
+        inner.settings.model_settings.thinking_variant = crate::domain::normalize_thinking_variant(
+            &all_models,
             &input.thinking_variant,
-            &crate::domain::active_model_id(&inner.settings.model),
+            &model_id,
         );
-        inner.settings.verbosity = inner.catalog.normalize_verbosity(
+        inner.settings.model_settings.verbosity = crate::domain::normalize_verbosity(
+            &all_models,
             &input.verbosity,
-            &crate::domain::active_model_id(&inner.settings.model),
+            &model_id,
         );
-        inner.settings.extended_thinking = input.extended_thinking;
-        inner.settings.claude_effort = normalize_claude_effort(&input.claude_effort);
-        inner.settings.show_footer = input.show_footer;
-        inner.settings.show_info_bar = input.show_info_bar;
-        inner.settings.show_model_bar = input.show_model_bar;
-        inner.settings.title_gen_model = input.title_gen_model;
-        inner.settings.favorite_models = normalize_favorite_models(input.favorite_models);
+        inner.settings.model_settings.extended_thinking = input.extended_thinking;
+        inner.settings.model_settings.claude_effort =
+            normalize_claude_effort(&input.claude_effort);
+        inner.settings.visual.show_info_bar = input.show_info_bar;
+        inner.settings.visual.show_model_bar = input.show_model_bar;
+        inner.settings.visual.markdown_enabled = input.markdown_enabled;
+        inner.settings.model_settings.title_gen_model = input.title_gen_model;
+        inner.settings.model_settings.favorite_models =
+            normalize_favorite_models(input.favorite_models);
+        inner.settings.updates.check_on_startup = input.check_on_startup;
         inner.save_active_session_model_settings()?;
         if let Some(width) = input.sidebar_width {
-            inner.settings.sidebar_width = width.clamp(MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
+            inner.settings.visual.sidebar_width =
+                width.clamp(MIN_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH);
         }
         inner.storage.save_sessions(&inner.sessions)?;
         inner.storage.save_settings(&inner.settings)?;
@@ -53,11 +62,11 @@ impl AppState {
         fullscreen: bool,
     ) -> Result<()> {
         let mut inner = self.lock()?;
-        let mut changed = inner.settings.window_maximized != maximized
-            || inner.settings.window_fullscreen != fullscreen;
+        let mut changed = inner.settings.window.maximized != maximized
+            || inner.settings.window.fullscreen != fullscreen;
 
-        inner.settings.window_maximized = maximized;
-        inner.settings.window_fullscreen = fullscreen;
+        inner.settings.window.maximized = maximized;
+        inner.settings.window.fullscreen = fullscreen;
 
         if !maximized
             && !fullscreen
@@ -65,14 +74,14 @@ impl AppState {
             && height > 0
             && !crate::domain::is_minimized_window_position(x, y)
         {
-            changed |= inner.settings.window_width != Some(width)
-                || inner.settings.window_height != Some(height)
-                || inner.settings.window_x != Some(x)
-                || inner.settings.window_y != Some(y);
-            inner.settings.window_width = Some(width);
-            inner.settings.window_height = Some(height);
-            inner.settings.window_x = Some(x);
-            inner.settings.window_y = Some(y);
+            changed |= inner.settings.window.width != Some(width)
+                || inner.settings.window.height != Some(height)
+                || inner.settings.window.x != Some(x)
+                || inner.settings.window.y != Some(y);
+            inner.settings.window.width = Some(width);
+            inner.settings.window.height = Some(height);
+            inner.settings.window.x = Some(x);
+            inner.settings.window.y = Some(y);
         }
 
         if changed {

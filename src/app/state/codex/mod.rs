@@ -1,5 +1,4 @@
-//! Codex-specific state integrations for auth, chat, and model refresh.
+//! Codex state integrations for credential reading and chat.
 
-mod auth;
 mod chat;
 mod providers;

@@ -29,8 +29,7 @@ impl AppState {
         let usage = claudecode::fetch_usage(&ctx).await.unwrap_or_default();
         let mut inner = self.lock()?;
         inner.claude_code.plan = credentials.plan;
-        inner.claude_code.five_hour_label = usage.five_hour_label;
-        inner.claude_code.seven_day_label = usage.seven_day_label;
+        inner.claude_code.limit_label = usage.limit_label;
         inner.claude_code.error.clear();
         Ok(models)
     }

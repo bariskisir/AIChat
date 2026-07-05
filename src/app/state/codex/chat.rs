@@ -42,11 +42,8 @@ impl AppState {
             .map(|value| value.trim().to_owned())
             .filter(|value| !value.is_empty())
             .collect::<Vec<_>>();
-        {
-            let inner = self.lock()?;
-            if !inner.auth.is_signed_in() {
-                return Err(anyhow!(AUTH_SIGN_IN_CHATGPT_REQUIRED));
-            }
+        if !crate::infra::codex_credentials::credentials_available() {
+            return Err(anyhow!(AUTH_CODEX_CREDENTIALS_PROMPT));
         }
         let (work, title_work) = {
             let mut inner = self.lock()?;
@@ -58,17 +55,24 @@ impl AppState {
             let (_, model) = crate::domain::split_model_key(&inner.settings.model)
                 .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
             let model = model.to_owned();
-            let thinking_variant = inner
-                .catalog
-                .normalize_thinking_variant(&inner.settings.thinking_variant, &model);
-            let verbosity = inner
-                .catalog
-                .resolve_verbosity(&inner.settings.verbosity, &model);
-            inner.settings.thinking_variant = thinking_variant.clone();
-            inner.settings.verbosity = inner
-                .catalog
-                .normalize_verbosity(&inner.settings.verbosity, &model);
-            let title_gen_model = inner.settings.title_gen_model.clone();
+            let all_models = inner.providers.all_models();
+            let thinking_variant = crate::domain::normalize_thinking_variant(
+                &all_models,
+                &inner.settings.model_settings.thinking_variant,
+                &model,
+            );
+            let verbosity = crate::domain::resolve_verbosity(
+                &all_models,
+                &inner.settings.model_settings.verbosity,
+                &model,
+            );
+            inner.settings.model_settings.thinking_variant = thinking_variant.clone();
+            inner.settings.model_settings.verbosity = crate::domain::normalize_verbosity(
+                &all_models,
+                &inner.settings.model_settings.verbosity,
+                &model,
+            );
+            let title_gen_model = inner.settings.model_settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let user_message = ChatMessage::user(text.clone(), image_data_urls);
             let should_generate_title =
@@ -135,12 +139,21 @@ impl AppState {
         self.snapshot()
     }
 
+    /// Returns a Codex access context from local credentials.
+    fn codex_access(&self) -> Result<chatgpt::AccessContext> {
+        let credentials = crate::infra::codex_credentials::read_credentials()?;
+        Ok(chatgpt::AccessContext {
+            access_token: credentials.access_token,
+            chatgpt_account_id: credentials.account_id,
+        })
+    }
+
     /// Requests a Codex generated title and stores it when the chat still exists.
     async fn execute_codex_title_response(
         &self,
         work: PendingCodexTitleResponse,
     ) -> Result<(String, String)> {
-        let access = self.codex_access_context().await?;
+        let access = self.codex_access()?;
         let raw = chatgpt::stream_chat_response(&access, work.request, |_| {}).await?;
         let title = sanitize_session_title(&raw).unwrap_or(work.fallback_title);
         self.save_generated_session_title(&work.session_id, &title)?;
@@ -153,7 +166,7 @@ impl AppState {
         work: PendingCodexChatResponse,
         app_handle: AppHandle,
     ) -> Result<AppSnapshot> {
-        let access = self.codex_access_context().await?;
+        let access = self.codex_access()?;
         let sid = work.session_id.clone();
         let mid = work.assistant_message_id.clone();
         let stream_state = self.clone();

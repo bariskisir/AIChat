@@ -56,9 +56,9 @@ impl AppState {
             let model = model.to_owned();
             let effort = {
                 let all_models = inner.providers.all_models();
-                resolve_effort(&inner.settings.claude_effort, &model, &all_models)
+                resolve_effort(&inner.settings.model_settings.claude_effort, &model, &all_models)
             };
-            let title_gen_model = inner.settings.title_gen_model.clone();
+            let title_gen_model = inner.settings.model_settings.title_gen_model.clone();
             let session = inner.active_session_mut()?;
             let user_message = ChatMessage::user(text.clone(), image_data_urls.clone());
             let should_generate_title =

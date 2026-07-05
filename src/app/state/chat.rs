@@ -103,8 +103,9 @@ impl AppState {
         }
         inner.save_active_session_model_settings()?;
         let model_key = inner.settings.model.clone();
-        let reasoning_effort = normalized_reasoning_effort(&inner.settings.reasoning_effort);
-        let title_gen_model = inner.settings.title_gen_model.clone();
+        let reasoning_effort =
+            normalized_reasoning_effort(&inner.settings.model_settings.reasoning_effort);
+        let title_gen_model = inner.settings.model_settings.title_gen_model.clone();
         let title_provider = resolve_title_provider(&title_gen_model, &inner.providers);
         let session = inner.active_session_mut()?;
 

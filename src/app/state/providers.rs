@@ -19,7 +19,20 @@ struct RefreshOutcome {
 impl AppState {
     /// Saves a provider only after its `/models` endpoint returns at least one model.
     pub async fn save_provider(&self, input: ProviderInput) -> Result<AppSnapshot> {
-        let mut provider = provider_from_input(input)?;
+        let existing = {
+            let inner = self.lock()?;
+            if !input.id.trim().is_empty() {
+                inner.providers.provider(input.id.trim()).cloned()
+            } else {
+                None
+            }
+        };
+        let is_env = existing.as_ref().is_some_and(|p| p.is_env);
+        let mut provider = if is_env {
+            env_provider_from_input(&input, existing.as_ref().unwrap())
+        } else {
+            provider_from_input(input)?
+        };
         provider.models = if provider.kind() == ProviderKind::Codex {
             self.fetch_codex_models_for_provider(&provider).await?
         } else if provider.kind() == ProviderKind::Claude {
@@ -50,18 +63,14 @@ impl AppState {
         if provider.built_in {
             return Err(anyhow!(ERR_VALIDATION_BUILTIN_DELETE));
         }
+        if provider.is_env {
+            return Err(anyhow!("Environment-based providers cannot be deleted."));
+        }
         if !inner.providers.delete(provider_id) {
             return Err(anyhow!(ERR_NOT_FOUND_PROVIDER));
         }
         inner.status = match provider.kind() {
-            ProviderKind::Codex => {
-                inner.auth = crate::domain::AuthStorage::default();
-                inner.storage.save_auth(&inner.auth)?;
-                STATUS_PROVIDER_DELETED_AND_SIGNED_OUT_CHATGPT.to_owned()
-            }
             ProviderKind::Claude => {
-                inner.claude_auth = crate::domain::ClaudeCredential::default();
-                inner.storage.save_claude_auth(&inner.claude_auth)?;
                 STATUS_PROVIDER_DELETED_AND_SIGNED_OUT_CLAUDE.to_owned()
             }
             _ => STATUS_PROVIDER_DELETED.to_owned(),
@@ -73,15 +82,16 @@ impl AppState {
     pub async fn refresh_all_models(&self) -> Result<AppSnapshot> {
         let provider_ids = {
             let inner = self.lock()?;
-            let codex_signed_in = inner.auth.is_signed_in();
-            let claude_signed_in = inner.claude_auth.is_signed_in();
+            let codex_available = crate::infra::codex_credentials::credentials_available();
+            let claude_signed_in = inner.get_claude_auth().map(|a| a.is_signed_in()).unwrap_or(false);
             let claude_code_available = crate::infra::claudecode::credentials_available();
             inner
                 .providers
                 .providers
                 .iter()
                 .filter(|provider| {
-                    (provider.kind() != ProviderKind::Codex || codex_signed_in)
+                    provider.enabled
+                        && (provider.kind() != ProviderKind::Codex || codex_available)
                         && (provider.kind() != ProviderKind::Claude || claude_signed_in)
                         && (provider.kind() != ProviderKind::ClaudeCode || claude_code_available)
                 })
@@ -278,10 +288,36 @@ fn provider_from_input(input: ProviderInput) -> Result<ProviderConfig> {
         filter_models: input.filter_models,
         model_filter_regex: normalize_model_filter_regex(&input.model_filter_regex),
         built_in: false,
-        enabled: true,
+        is_env: false,
+        env_var: String::new(),
+        enabled: input.enabled,
         models: Vec::new(),
         error: String::new(),
+        claude_auth: None,
     })
+}
+
+/// Builds a provider config from an env-based provider, only allowing filter and header changes.
+fn env_provider_from_input(input: &ProviderInput, existing: &ProviderConfig) -> ProviderConfig {
+    let custom_headers = parse_custom_headers(&input.custom_headers)
+        .unwrap_or_else(|_| existing.custom_headers.clone());
+    ProviderConfig {
+        id: existing.id.clone(),
+        name: existing.name.clone(),
+        api_url: existing.api_url.clone(),
+        api_key: String::new(),
+        custom_headers,
+        custom_headers_enabled: input.custom_headers_enabled,
+        filter_models: input.filter_models,
+        model_filter_regex: normalize_model_filter_regex(&input.model_filter_regex),
+        built_in: true,
+        is_env: true,
+        env_var: existing.env_var.clone(),
+        enabled: input.enabled,
+        models: existing.models.clone(),
+        error: String::new(),
+        claude_auth: None,
+    }
 }
 
 /// Fetches and validates a provider model list before saving user input.
@@ -393,7 +429,7 @@ fn ensure_opencode_filtered_default(
         is_default: true,
         input_modalities: vec!["text".to_owned()],
         default_thinking_variant: crate::domain::DEFAULT_THINKING_VARIANT.to_owned(),
-        thinking_variants: crate::domain::fallback_thinking_variants(),
+            thinking_variants: Vec::new(),
         support_verbosity: false,
         default_verbosity: crate::domain::DEFAULT_VERBOSITY.to_owned(),
         claude_thinking_type: String::new(),
@@ -419,7 +455,7 @@ mod tests {
             is_default: false,
             input_modalities: vec!["text".to_owned()],
             default_thinking_variant: DEFAULT_THINKING_VARIANT.to_owned(),
-            thinking_variants: crate::domain::fallback_thinking_variants(),
+        thinking_variants: Vec::new(),
             support_verbosity: false,
             default_verbosity: DEFAULT_VERBOSITY.to_owned(),
             claude_thinking_type: String::new(),
@@ -472,6 +508,9 @@ mod tests {
             enabled: true,
             models: Vec::new(),
             error: String::new(),
+            is_env: false,
+            env_var: String::new(),
+            claude_auth: None,
         };
         let models =
             filter_provider_models(&provider, vec![model("paid-model"), model("alpha-free")])

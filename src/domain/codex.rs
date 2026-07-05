@@ -8,40 +8,21 @@ use super::{
     AvailableModel, DEFAULT_CODEX_CLIENT_VERSION, DEFAULT_CODEX_MODEL, DEFAULT_THINKING_VARIANT,
     DEFAULT_VERBOSITY, ThinkingVariantOption,
 };
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AuthStorage {
-    #[serde(default)]
+#[derive(Clone, Debug, Default)]
+pub struct CodexCredentials {
     pub access_token: String,
-    #[serde(default)]
-    pub refresh_token: String,
-    #[serde(default)]
-    pub expires_at: i64,
-    #[serde(default)]
-    pub account_email: String,
-    #[serde(default)]
-    pub chatgpt_account_id: String,
-    #[serde(default)]
-    pub pending_oauth: Option<PendingOAuth>,
-    #[serde(default)]
+    pub account_id: String,
+    pub plan: String,
+    pub email: String,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct CodexStatus {
+    pub plan: String,
+    pub limit_label: String,
+    pub email: String,
     pub error: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PendingOAuth {
-    pub state: String,
-    pub verifier: String,
-    pub started_at: i64,
-}
-
-impl AuthStorage {
-    /// Reports whether a ChatGPT token is available.
-    pub fn is_signed_in(&self) -> bool {
-        !self.access_token.is_empty() || !self.refresh_token.is_empty()
-    }
 }
 
 /// Returns the pinned fallback Codex client version.

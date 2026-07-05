@@ -7,9 +7,6 @@ use std::path::PathBuf;
 pub struct AppPaths {
     pub data_dir: PathBuf,
     pub settings: PathBuf,
-    pub auth: PathBuf,
-    pub catalog: PathBuf,
-    pub claude_auth: PathBuf,
     pub providers: PathBuf,
     pub sessions: PathBuf,
     pub log_file: PathBuf,
@@ -24,9 +21,6 @@ pub fn app_paths() -> Result<AppPaths> {
     std::fs::create_dir_all(&data_dir).context("Could not create app data directory")?;
     Ok(AppPaths {
         settings: data_dir.join("settings.json"),
-        auth: data_dir.join("codex-auth.json"),
-        catalog: data_dir.join("codex-catalog.json"),
-        claude_auth: data_dir.join("claude-auth.json"),
         providers: data_dir.join("providers.json"),
         sessions: data_dir.join("sessions.json"),
         log_file: data_dir.join("app.log"),

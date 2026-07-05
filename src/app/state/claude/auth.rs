@@ -53,35 +53,40 @@ impl AppState {
 
     /// Clears Claude authentication and disables the saved Claude provider.
     pub fn sign_out_claude(&self) -> Result<AppSnapshot> {
-        let mut inner = self.lock()?;
-        inner.claude_auth = ClaudeCredential::default();
-        if let Some(provider) = inner
-            .providers
-            .providers
-            .iter_mut()
-            .find(|provider| provider.api_url.eq_ignore_ascii_case(CLAUDE_PROVIDER_URL))
         {
-            provider.enabled = false;
-            provider.error = AUTH_SIGNED_OUT_CLAUDE.to_owned();
+            let mut inner = self.lock()?;
+            if let Some(auth) = inner.get_claude_auth_mut() {
+                *auth = ClaudeCredential::default();
+            }
+            if let Some(provider) = inner
+                .providers
+                .providers
+                .iter_mut()
+                .find(|provider| provider.api_url.eq_ignore_ascii_case(CLAUDE_PROVIDER_URL))
+            {
+                provider.claude_auth = Some(ClaudeCredential::default());
+                provider.enabled = false;
+                provider.error = AUTH_SIGNED_OUT_CLAUDE_WEB.to_owned();
+            }
+            inner.ensure_selected_model();
+            inner.save_active_session_model_settings()?;
+            inner.status = AUTH_SIGNED_OUT_CLAUDE_WEB.to_owned();
+            inner.persist_state()?;
+            Ok(inner.build_snapshot())
         }
-        inner.ensure_selected_model();
-        inner.save_active_session_model_settings()?;
-        inner.status = AUTH_SIGNED_OUT_CLAUDE.to_owned();
-        inner.storage.save_claude_auth(&inner.claude_auth)?;
-        inner.storage.save_providers(&inner.providers)?;
-        inner.storage.save_settings(&inner.settings)?;
-        inner.storage.save_sessions(&inner.sessions)?;
-        Ok(inner.build_snapshot())
     }
 
     /// Builds a Claude API context from stored credentials.
     pub(super) fn claude_context(&self) -> Result<crate::infra::claude::ClaudeContext> {
         let inner = self.lock()?;
-        if !inner.claude_auth.is_signed_in() {
-            return Err(anyhow!(AUTH_CONNECT_CLAUDE_REQUIRED));
+        let claude_auth = inner
+            .get_claude_auth()
+            .ok_or_else(|| anyhow!(AUTH_CONNECT_CLAUDE_WEB_REQUIRED))?;
+        if !claude_auth.is_signed_in() {
+            return Err(anyhow!(AUTH_CONNECT_CLAUDE_WEB_REQUIRED));
         }
         Ok(crate::infra::claude::ClaudeContext::from_credential(
-            &inner.claude_auth,
+            claude_auth,
         ))
     }
 
@@ -98,7 +103,6 @@ impl AppState {
     /// Stores Claude browser credentials and upserts the dedicated provider.
     fn store_claude_login_result(&self, result: LoginResult) -> Result<AppSnapshot> {
         let mut inner = self.lock()?;
-        inner.claude_auth = result.credential;
         let existing_id = inner
             .providers
             .providers
@@ -107,9 +111,10 @@ impl AppState {
             .map(|provider| provider.id.clone())
             .unwrap_or_default();
         let is_new_provider = existing_id.is_empty();
-        let provider_config = claude_provider_from_models(&existing_id, result.models);
+        let provider_config = claude_provider_from_models(&existing_id, result.models.clone());
         let provider_id = inner.providers.upsert(provider_config);
         if let Some(provider) = inner.providers.provider_mut(&provider_id) {
+            provider.claude_auth = Some(result.credential);
             for model in &mut provider.models {
                 model.provider_id = provider_id.clone();
                 model.provider_name = provider.name.clone();
@@ -126,20 +131,19 @@ impl AppState {
         } else {
             inner.ensure_selected_model();
         }
-        inner.status = AUTH_CONNECTED_CLAUDE.to_owned();
-        inner.storage.save_claude_auth(&inner.claude_auth)?;
-        inner.storage.save_providers(&inner.providers)?;
-        inner.storage.save_settings(&inner.settings)?;
-        inner.storage.save_sessions(&inner.sessions)?;
+        inner.status = AUTH_CONNECTED_CLAUDE_WEB.to_owned();
+        inner.persist_state()?;
         Ok(inner.build_snapshot())
     }
 
     /// Records a Claude authentication error in shared state.
     fn set_claude_auth_error(&self, message: &str) {
         if let Ok(mut inner) = self.lock() {
-            inner.claude_auth.error = message.to_owned();
+            if let Some(auth) = inner.get_claude_auth_mut() {
+                auth.error = message.to_owned();
+            }
             inner.status = format!("Claude sign-in failed: {message}");
-            let _ = inner.storage.save_claude_auth(&inner.claude_auth);
+            let _ = inner.persist_state();
         }
     }
 }
@@ -161,10 +165,13 @@ fn claude_provider_from_models(
         custom_headers: Vec::new(),
         custom_headers_enabled: false,
         filter_models: false,
-        model_filter_regex: crate::domain::DEFAULT_MODEL_FILTER_REGEX.to_owned(),
+        model_filter_regex: String::new(),
         built_in: false,
+        is_env: false,
+        env_var: String::new(),
         enabled: true,
         models,
         error: String::new(),
+        claude_auth: None,
     }
 }

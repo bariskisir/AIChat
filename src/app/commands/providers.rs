@@ -21,23 +21,6 @@ pub fn settings_update(
 }
 
 #[tauri::command]
-/// Starts the ChatGPT OAuth sign-in flow for the Codex provider.
-pub fn auth_start_login(
-    state: State<'_, AppState>,
-    app_handle: AppHandle,
-) -> CmdResult<AppSnapshot> {
-    state
-        .start_codex_login(app_handle)
-        .map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-/// Signs out of the ChatGPT account used by the Codex provider.
-pub fn auth_sign_out(state: State<'_, AppState>) -> CmdResult<AppSnapshot> {
-    state.sign_out_codex().map_err(|e| e.to_string())
-}
-
-#[tauri::command]
 /// Starts the browser-based Claude.ai sign-in flow.
 pub fn claude_auth_start_login(
     state: State<'_, AppState>,
