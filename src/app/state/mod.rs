@@ -1,5 +1,6 @@
 //! Shared application state and business logic module root.
 
+mod antigravity;
 mod chat;
 mod chat_pipeline;
 mod claude;
@@ -10,13 +11,13 @@ mod sessions;
 mod settings;
 
 use super::view::{
-    AccountSnapshot, AppSnapshot, CatalogSnapshot, ClaudeAccountSnapshot,
-    ClaudeCodeAccountSnapshot, CodexAccountSnapshot, ProviderSnapshot,
+    AccountSnapshot, AntigravityAccountSnapshot, AppSnapshot, CatalogSnapshot,
+    ClaudeAccountSnapshot, ClaudeCodeAccountSnapshot, CodexAccountSnapshot, ProviderSnapshot,
 };
 use crate::domain::messages::*;
 use crate::domain::{
-    AppSettings, ChatSession, ClaudeCodeStatus, CodexStatus,
-    ProviderStorage, model_key,
+    AntigravityStatus, AppSettings, ChatSession, ClaudeCodeStatus, CodexStatus, ProviderStorage,
+    model_key,
 };
 use crate::infra::{codex_credentials, paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
@@ -33,6 +34,7 @@ pub struct AppState {
 pub(super) struct StateInner {
     pub(super) storage: Storage,
     pub(super) settings: AppSettings,
+    pub(super) antigravity: AntigravityStatus,
     pub(super) claude_code: ClaudeCodeStatus,
     pub(super) codex: CodexStatus,
     pub(super) providers: ProviderStorage,
@@ -46,6 +48,7 @@ impl AppState {
     pub fn new(paths: AppPaths) -> Result<Self> {
         let storage = Storage::new(&paths)?;
         let mut settings = storage.load_settings()?;
+        let antigravity = AntigravityStatus::default();
         let claude_code = ClaudeCodeStatus::default();
         let codex = CodexStatus::default();
         let mut providers = storage.load_providers()?;
@@ -58,6 +61,7 @@ impl AppState {
             inner: Arc::new(Mutex::new(StateInner {
                 storage,
                 settings,
+                antigravity,
                 claude_code,
                 codex,
                 providers,
@@ -164,6 +168,15 @@ impl StateInner {
                 limit_label: self.claude_code.limit_label.clone(),
                 error: self.claude_code.error.clone(),
             },
+            antigravity_account: AntigravityAccountSnapshot {
+                available: crate::infra::antigravity::credentials_available() || !self.antigravity.project_id.is_empty(),
+                email: self.antigravity.email.clone(),
+                project_id: self.antigravity.project_id.clone(),
+                plan: self.antigravity.plan.clone(),
+                cli_version: self.antigravity.cli_version.clone(),
+                limit_label: self.antigravity.limit_label.clone(),
+                error: self.antigravity.error.clone(),
+            },
             codex_account: CodexAccountSnapshot {
                 available: codex_credentials::credentials_available(),
                 email: self.codex.email.clone(),
@@ -179,6 +192,7 @@ impl StateInner {
                 codex_url: crate::domain::CODEX_PROVIDER_URL.to_owned(),
                 claude_url: crate::domain::CLAUDE_PROVIDER_URL.to_owned(),
                 claude_code_url: crate::domain::CLAUDE_CODE_PROVIDER_URL.to_owned(),
+                antigravity_url: crate::domain::ANTIGRAVITY_PROVIDER_URL.to_owned(),
                 default_model_filter_regex: crate::domain::DEFAULT_MODEL_FILTER_REGEX.to_owned(),
                 error: self
                     .providers

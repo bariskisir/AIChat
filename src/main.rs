@@ -1,6 +1,6 @@
 //! Starts the Tauri desktop AI Chat application.
 
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 mod app;
@@ -65,6 +65,7 @@ fn main() -> Result<()> {
                 }
                 state.start_claude_code_bootstrap(app.handle().clone());
                 state.start_codex_bootstrap(app.handle().clone());
+                state.start_antigravity_bootstrap(app.handle().clone());
 
                 if state.check_updates_on_startup() {
                     state.spawn_update_check(app.handle().clone());

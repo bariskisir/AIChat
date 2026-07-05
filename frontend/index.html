@@ -163,11 +163,11 @@
               </label>
             </div>
             <div id="codexAccountPanel" class="ch-provider-form__auth" hidden>
-              <section class="ch-codex-account">
-                <dl class="ch-codex-account__details">
+              <section class="ch-provider-account">
+                <dl class="ch-provider-account__details">
                   <div>
                     <dt>Status</dt>
-                    <dd class="ch-codex-account__limit">
+                    <dd class="ch-provider-account__limit">
                       <span id="codexAccountStatus">--</span>
                       <button id="btnCodexRefresh" class="ch-btn--icon" type="button" title="Refresh Codex account">&#8635;</button>
                     </dd>
@@ -193,8 +193,8 @@
             </div>
             <div id="claudeLoginRow" class="ch-provider-form__auth" hidden>
               <button id="btnClaudeLogin" class="ch-btn--primary" type="button">Sign in with Claude Web</button>
-              <section id="claudeAccountPanel" class="ch-codex-account" hidden>
-                <dl class="ch-codex-account__details">
+              <section id="claudeAccountPanel" class="ch-provider-account" hidden>
+                <dl class="ch-provider-account__details">
                   <div>
                     <dt>Email</dt>
                     <dd id="claudeAccountEmail">--</dd>
@@ -205,7 +205,7 @@
                   </div>
                   <div>
                     <dt>Models</dt>
-                    <dd class="ch-codex-account__limit">
+                    <dd class="ch-provider-account__limit">
                       <span id="claudeAccountModels">--</span>
                       <button id="btnClaudeRefresh" class="ch-btn--icon" type="button" title="Refresh Claude Web account">&#8635;</button>
                     </dd>
@@ -215,11 +215,11 @@
               </section>
             </div>
             <div id="claudeCodeLoginRow" class="ch-provider-form__auth" hidden>
-              <section id="claudeCodeAccountPanel" class="ch-codex-account">
-                <dl class="ch-codex-account__details">
+              <section id="claudeCodeAccountPanel" class="ch-provider-account">
+                <dl class="ch-provider-account__details">
                   <div>
                     <dt>Status</dt>
-                    <dd class="ch-codex-account__limit">
+                    <dd class="ch-provider-account__limit">
                       <span id="claudeCodeAccountStatus">--</span>
                       <button id="btnClaudeCodeRefresh" class="ch-btn--icon" type="button" title="Refresh Claude Code account">&#8635;</button>
                     </dd>
@@ -239,12 +239,50 @@
                 </dl>
               </section>
             </div>
+            <div id="antigravityLoginRow" class="ch-provider-form__auth" hidden>
+              <section id="antigravityAccountPanel" class="ch-provider-account">
+                <dl class="ch-provider-account__details">
+                  <div>
+                    <dt>Status</dt>
+                    <dd class="ch-provider-account__limit">
+                      <span id="antigravityAccountStatus">--</span>
+                      <button id="btnAntigravityRefresh" class="ch-btn--icon" type="button" title="Refresh Antigravity account">&#8635;</button>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Email</dt>
+                    <dd id="antigravityEmail">--</dd>
+                  </div>
+                  <div>
+                    <dt>Project ID</dt>
+                    <dd id="antigravityProjectId">--</dd>
+                  </div>
+                  <div>
+                    <dt>Version</dt>
+                    <dd id="antigravityVersion">--</dd>
+                  </div>
+                  <div>
+                    <dt>Plan</dt>
+                    <dd id="antigravityPlan">--</dd>
+                  </div>
+                  <div>
+                    <dt>Limits</dt>
+                    <dd id="antigravityLimit">--</dd>
+                  </div>
+                  <div>
+                    <dt>Models</dt>
+                    <dd id="antigravityModels">--</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
             <label class="ch-toggle-field ch-provider-enabled-field">
               <span>Enabled</span>
               <input id="providerEnabled" class="ch-toggle" type="checkbox" checked>
             </label>
-            <p id="providerEnvWarning" class="ch-codex-account__disclaimer" hidden>Environment-based providers read API keys from environment variables. They cannot be deleted. Create a new provider to use a different API key.</p>
-            <p id="providerClaudeWarning" class="ch-codex-account__disclaimer" hidden>Anthropic prohibits third-party tool usage. Use at your own risk.</p>
+            <p id="providerEnvWarning" class="ch-provider-account__disclaimer" hidden>Environment-based providers read API keys from environment variables. They cannot be deleted. Create a new provider to use a different API key.</p>
+            <p id="providerClaudeWarning" class="ch-provider-account__disclaimer" hidden>Anthropic prohibits third-party tool usage. Use at your own risk.</p>
+            <p id="providerAntigravityWarning" class="ch-provider-account__disclaimer" hidden>Google prohibits third-party tool usage. Use at your own risk.</p>
             <div id="providerActions" class="ch-dialog__actions">
               <button id="btnCancelProvider" class="ch-btn--sm" type="button">Cancel</button>
               <button class="ch-btn--primary" type="submit">Save</button>

@@ -162,6 +162,16 @@ pub const PROVIDER_CLAUDE_NAME: &str = "ClaudeWeb";
 /// Display name for the built-in Claude Code (Anthropic API) provider.
 pub const PROVIDER_CLAUDE_CODE_NAME: &str = "ClaudeCode";
 
+/// Display name for the built-in Antigravity provider.
+pub const PROVIDER_ANTIGRAVITY_NAME: &str = "Antigravity";
+
+/// Shown as the provider-level prompt when Antigravity credentials are missing.
+pub const AUTH_ANTIGRAVITY_PROMPT: &str = "Sign in with the Antigravity CLI.";
+
+/// Shown when Antigravity chat is attempted without a valid token.
+pub const AUTH_ANTIGRAVITY_REQUIRED: &str =
+    "Antigravity credentials not found. Sign in with the Antigravity CLI or enter your access token in the provider settings.";
+
 /// Description for the default free model on the OpenCode Zen provider.
 pub const PROVIDER_OPENCODE_DEFAULT_MODEL_DESC: &str = "OpenCode Zen default free model";
 

@@ -695,19 +695,19 @@ textarea:disabled {
   height: var(--control-height-md);
 }
 
-.ch-codex-account {
+.ch-provider-account {
   display: grid;
   gap: var(--spacing-md);
 }
 
-.ch-codex-account__details {
+.ch-provider-account__details {
   display: grid;
   gap: var(--spacing-sm);
   margin: 0;
   padding: 0;
 }
 
-.ch-codex-account__details div {
+.ch-provider-account__details div {
   display: grid;
   grid-template-columns: var(--codex-account-label-width) minmax(0, 1fr);
   align-items: center;
@@ -716,13 +716,13 @@ textarea:disabled {
   border-bottom: var(--border-default);
 }
 
-.ch-codex-account__details dt {
+.ch-provider-account__details dt {
   color: var(--muted);
   font-size: var(--font-size-xs);
   font-weight: var(--font-weight-bold);
 }
 
-.ch-codex-account__details dd {
+.ch-provider-account__details dd {
   min-width: 0;
   margin: 0;
   overflow: hidden;
@@ -746,33 +746,41 @@ textarea:disabled {
   text-overflow: ellipsis;
 }
 
-.ch-codex-account__limit {
+#antigravityLimit,
+#antigravityModels {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.ch-provider-account__limit {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
 }
 
-.ch-codex-account__limit span {
+.ch-provider-account__limit span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.ch-codex-account__limit .ch-btn--icon {
+.ch-provider-account__limit .ch-btn--icon {
   width: 28px;
   min-width: 28px;
   height: 28px;
 }
 
-.ch-codex-account__disclaimer {
+.ch-provider-account__disclaimer {
   margin: 0;
   font-size: var(--font-size-xs);
   color: var(--warning-text);
 }
 
 #providerEnvWarning,
-#providerClaudeWarning {
+#providerClaudeWarning,
+#providerAntigravityWarning {
   padding: 0 var(--spacing-md);
 }
 

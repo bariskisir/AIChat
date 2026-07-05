@@ -1,5 +1,6 @@
 //! Infrastructure services for persistence, OpenAI-compatible APIs, paths, shell, and logging.
 
+pub mod antigravity;
 pub mod chatgpt;
 pub mod claude;
 pub mod claudecode;

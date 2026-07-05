@@ -40,6 +40,9 @@ impl AppState {
         } else if provider.kind() == ProviderKind::ClaudeCode {
             self.fetch_claude_code_models_for_provider(&provider)
                 .await?
+        } else if provider.kind() == ProviderKind::Antigravity {
+            self.fetch_antigravity_models_for_provider(&provider)
+                .await?
         } else {
             fetch_models_for_save(&provider).await?
         };
@@ -85,6 +88,15 @@ impl AppState {
             let codex_available = crate::infra::codex_credentials::credentials_available();
             let claude_signed_in = inner.get_claude_auth().map(|a| a.is_signed_in()).unwrap_or(false);
             let claude_code_available = crate::infra::claudecode::credentials_available();
+            let antigravity_available = {
+                crate::infra::antigravity::credentials_available()
+                    || inner
+                        .providers
+                        .providers
+                        .iter()
+                        .any(|p| p.api_url.trim() == crate::domain::ANTIGRAVITY_PROVIDER_URL
+                            && !p.api_key.trim().is_empty())
+            };
             inner
                 .providers
                 .providers
@@ -94,6 +106,8 @@ impl AppState {
                         && (provider.kind() != ProviderKind::Codex || codex_available)
                         && (provider.kind() != ProviderKind::Claude || claude_signed_in)
                         && (provider.kind() != ProviderKind::ClaudeCode || claude_code_available)
+                        && (provider.kind() != ProviderKind::Antigravity
+                            || antigravity_available)
                 })
                 .map(|provider| provider.id.clone())
                 .collect::<Vec<_>>()
@@ -164,6 +178,8 @@ impl AppState {
             self.fetch_claude_models_for_provider(&provider).await
         } else if provider.kind() == ProviderKind::ClaudeCode {
             self.fetch_claude_code_models_for_provider(&provider).await
+        } else if provider.kind() == ProviderKind::Antigravity {
+            self.fetch_antigravity_models_for_provider(&provider).await
         } else {
             openai::fetch_models(&OpenAiContext::from_provider(&provider)).await
         }
@@ -251,6 +267,18 @@ impl AppState {
             .provider(provider_id)
             .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SELECTED_PROVIDER))?;
         Ok(provider.kind() == ProviderKind::ClaudeCode)
+    }
+
+    /// Returns whether the selected model belongs to the Antigravity provider.
+    pub(super) fn selected_provider_is_antigravity(&self) -> Result<bool> {
+        let inner = self.lock()?;
+        let (provider_id, _) = split_model_key(&inner.settings.model)
+            .ok_or_else(|| anyhow!(ERR_VALIDATION_SELECT_MODEL_FIRST))?;
+        let provider = inner
+            .providers
+            .provider(provider_id)
+            .ok_or_else(|| anyhow!(ERR_NOT_FOUND_SELECTED_PROVIDER))?;
+        Ok(provider.kind() == ProviderKind::Antigravity)
     }
 
     /// Ensures commands that require a provider have one.

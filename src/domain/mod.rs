@@ -1,5 +1,6 @@
 //! Domain models and constants for AI Chat.
 
+mod antigravity;
 mod catalog;
 mod claude;
 mod claudecode;
@@ -10,6 +11,7 @@ mod providers;
 mod sessions;
 mod settings;
 
+pub use antigravity::*;
 pub use catalog::*;
 pub use claude::*;
 pub use claudecode::*;
@@ -23,6 +25,7 @@ pub const MESSAGE_CONTEXT_LIMIT: usize = 40;
 pub const CODEX_PROVIDER_URL: &str = "codex://chatgpt";
 pub const CLAUDE_PROVIDER_URL: &str = "claude://claude.ai";
 pub const CLAUDE_CODE_PROVIDER_URL: &str = "claudecode://anthropic";
+pub const ANTIGRAVITY_PROVIDER_URL: &str = "antigravity://google";
 pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.5";
 pub const DEFAULT_THINKING_VARIANT: &str = messages::LABEL_THINKING_HIGH;
 pub const DEFAULT_VERBOSITY_SETTING: &str = "default";
@@ -59,4 +62,5 @@ pub enum ProviderKind {
     Codex,
     Claude,
     ClaudeCode,
+    Antigravity,
 }

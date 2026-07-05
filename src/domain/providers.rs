@@ -2,8 +2,9 @@
 
 use super::messages::*;
 use super::{
-    AvailableModel, CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL, CODEX_PROVIDER_URL,
-    ClaudeCredential, ProviderKind, default_thinking_variant, default_verbosity, fallback_thinking_variants,
+    ANTIGRAVITY_PROVIDER_URL, AvailableModel, CLAUDE_CODE_PROVIDER_URL, CLAUDE_PROVIDER_URL,
+    CODEX_PROVIDER_URL, ClaudeCredential, ProviderKind, default_thinking_variant,
+    default_verbosity, fallback_thinking_variants,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -13,6 +14,7 @@ pub const OPENCODE_PROVIDER_ID: &str = "opencode-zen";
 pub const CODEX_PROVIDER_ID: &str = "codex";
 pub const CLAUDE_PROVIDER_ID: &str = "claude";
 pub const CLAUDE_CODE_PROVIDER_ID: &str = "claude-code";
+pub const ANTIGRAVITY_PROVIDER_ID: &str = "antigravity";
 pub const OPENCODE_DEFAULT_MODEL: &str = "deepseek-v4-flash-free";
 pub const DEFAULT_MODEL_FILTER_REGEX: &str = "free|big-pickle";
 
@@ -31,6 +33,7 @@ impl Default for ProviderStorage {
                 codex_provider(),
                 claude_provider(),
                 claude_code_provider(),
+                antigravity_provider(),
             ],
         }
     }
@@ -62,6 +65,11 @@ impl ProviderStorage {
             &mut self.providers,
             CLAUDE_CODE_PROVIDER_URL,
             claude_code_provider(),
+        );
+        ensure_special_builtin_provider(
+            &mut self.providers,
+            ANTIGRAVITY_PROVIDER_URL,
+            antigravity_provider(),
         );
         self.ensure_env_providers();
     }
@@ -175,6 +183,8 @@ impl ProviderConfig {
             ProviderKind::Claude
         } else if self.api_url.trim() == CLAUDE_CODE_PROVIDER_URL {
             ProviderKind::ClaudeCode
+        } else if self.api_url.trim() == ANTIGRAVITY_PROVIDER_URL {
+            ProviderKind::Antigravity
         } else {
             ProviderKind::OpenAi
         }
@@ -289,6 +299,27 @@ fn claude_code_provider() -> ProviderConfig {
         enabled: false,
         models: Vec::new(),
         error: AUTH_CLAUDE_CODE_PROMPT.to_owned(),
+        claude_auth: None,
+    }
+}
+
+/// Builds the fixed Antigravity provider shell; models load after token is provided.
+fn antigravity_provider() -> ProviderConfig {
+    ProviderConfig {
+        id: ANTIGRAVITY_PROVIDER_ID.to_owned(),
+        name: PROVIDER_ANTIGRAVITY_NAME.to_owned(),
+        api_url: ANTIGRAVITY_PROVIDER_URL.to_owned(),
+        api_key: String::new(),
+        custom_headers: Vec::new(),
+        custom_headers_enabled: false,
+        filter_models: false,
+        model_filter_regex: String::new(),
+        built_in: true,
+        is_env: false,
+        env_var: String::new(),
+        enabled: false,
+        models: Vec::new(),
+        error: AUTH_ANTIGRAVITY_PROMPT.to_owned(),
         claude_auth: None,
     }
 }

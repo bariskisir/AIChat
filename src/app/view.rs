@@ -14,6 +14,7 @@ pub struct AppSnapshot {
     pub account: AccountSnapshot,
     pub claude_account: ClaudeAccountSnapshot,
     pub claude_code_account: ClaudeCodeAccountSnapshot,
+    pub antigravity_account: AntigravityAccountSnapshot,
     pub codex_account: CodexAccountSnapshot,
     pub providers: ProviderSnapshot,
     pub catalog: CatalogSnapshot,
@@ -60,6 +61,18 @@ pub struct CodexAccountSnapshot {
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AntigravityAccountSnapshot {
+    pub available: bool,
+    pub email: String,
+    pub project_id: String,
+    pub plan: String,
+    pub cli_version: String,
+    pub limit_label: String,
+    pub error: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProviderSnapshot {
     pub configured: bool,
     pub providers: Vec<ProviderConfig>,
@@ -68,6 +81,7 @@ pub struct ProviderSnapshot {
     pub codex_url: String,
     pub claude_url: String,
     pub claude_code_url: String,
+    pub antigravity_url: String,
     pub default_model_filter_regex: String,
     pub error: String,
 }

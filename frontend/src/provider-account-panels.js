@@ -5,6 +5,7 @@ import * as Renderer from "./render.js";
 function codexUrl() { return AppContext.model.appState?.providers?.codexUrl || "codex://chatgpt"; }
 function claudeUrl() { return AppContext.model.appState?.providers?.claudeUrl || "claude://claude.ai"; }
 function claudeCodeUrl() { return AppContext.model.appState?.providers?.claudeCodeUrl || "claudecode://anthropic"; }
+function antigravityUrl() { return AppContext.model.appState?.providers?.antigravityUrl || "antigravity://google"; }
 // Wires Codex and Claude account buttons to backend commands.
 export function bind(refs, setStatus) {
     refs.btnCodexRefresh.addEventListener("click", () => refreshCodexAccount(refs, setStatus));
@@ -12,14 +13,15 @@ export function bind(refs, setStatus) {
     refs.btnClaudeRefresh.addEventListener("click", () => refreshClaudeAccount(refs, setStatus));
     refs.btnClaudeSignOut.addEventListener("click", () => signOutClaude(refs, setStatus));
     refs.btnClaudeCodeRefresh.addEventListener("click", () => refreshClaudeCodeAccount(refs, setStatus));
+    refs.btnAntigravityRefresh.addEventListener("click", () => refreshAntigravityAccount(refs, setStatus));
 }
 // Reports whether the editor currently targets a dedicated account provider.
 export function isSpecialForm(refs) {
-    return isCodexForm(refs) || isClaudeForm(refs) || isClaudeCodeForm(refs);
+    return isCodexForm(refs) || isClaudeForm(refs) || isClaudeCodeForm(refs) || isAntigravityForm(refs);
 }
 // Reports whether a template is backed by a dedicated account provider.
 export function isSpecialTemplate(template) {
-    return isCodexTemplate(template) || isClaudeTemplate(template) || isClaudeCodeTemplate(template);
+    return isCodexTemplate(template) || isClaudeTemplate(template) || isClaudeCodeTemplate(template) || isAntigravityTemplate(template);
 }
 // Applies fixed editor values for dedicated account provider templates.
 export function applyTemplate(refs, template) {
@@ -38,12 +40,14 @@ export function render(refs) {
     const isCodex = isCodexForm(refs);
     const isClaude = isClaudeForm(refs);
     const isClaudeCode = isClaudeCodeForm(refs);
+    const isAntigravity = isAntigravityForm(refs);
     const isEnv = isEnvForm(refs);
-    const isSpecial = isCodex || isClaude || isClaudeCode;
+    const isSpecial = isCodex || isClaude || isClaudeCode || isAntigravity;
     refs.providerTemplateField.hidden = isSpecial;
     refs.codexAccountPanel.hidden = !isCodex;
     refs.claudeLoginRow.hidden = !isClaude;
     refs.claudeCodeLoginRow.hidden = !isClaudeCode;
+    refs.antigravityLoginRow.hidden = !isAntigravity;
     refs.providerNameField.hidden = isSpecial;
     refs.providerApiUrlField.hidden = isSpecial;
     refs.providerApiKeyField.hidden = isSpecial;
@@ -53,6 +57,7 @@ export function render(refs) {
     refs.providerApiUrl.required = !isSpecial;
     refs.providerEnvWarning.hidden = !isEnv;
     refs.providerClaudeWarning.hidden = !(isClaude || isClaudeCode);
+    refs.providerAntigravityWarning.hidden = !isAntigravity;
     if (!isSpecial) {
         refs.providerTemplateField.hidden = false;
         if (isEnv) {
@@ -68,6 +73,10 @@ export function render(refs) {
         refs.providerName.value = "ClaudeCode";
         refs.providerApiUrl.value = claudeCodeUrl();
     }
+    else if (isAntigravity) {
+        refs.providerName.value = "Antigravity";
+        refs.providerApiUrl.value = antigravityUrl();
+    }
     else {
         refs.providerName.value = "ClaudeWeb";
         refs.providerApiUrl.value = claudeUrl();
@@ -80,6 +89,7 @@ export function render(refs) {
     renderCodexAccount(refs, isCodex);
     renderClaudeAccount(refs, isClaude);
     renderClaudeCodeAccount(refs, isClaudeCode);
+    renderAntigravityAccount(refs, isAntigravity);
 }
 // Returns whether the current editor values represent the Codex provider.
 function isCodexForm(refs) {
@@ -108,13 +118,24 @@ function isClaudeTemplate(template) {
 function isClaudeCodeTemplate(template) {
     return template.apiUrl.trim().toLocaleLowerCase() === claudeCodeUrl();
 }
+// Returns whether the current editor values represent the Antigravity provider.
+function isAntigravityForm(refs) {
+    return refs.providerApiUrl.value.trim().toLocaleLowerCase() === antigravityUrl()
+        || refs.providerTemplate.value === "Antigravity";
+}
+// Returns whether a template is the dedicated Antigravity template.
+function isAntigravityTemplate(template) {
+    return template.apiUrl.trim().toLocaleLowerCase() === antigravityUrl();
+}
 // Selects the saved special provider row after login creates it.
 function syncSpecialProviderId(refs) {
     const provider = isCodexForm(refs)
         ? specialProvider(codexUrl())
         : isClaudeCodeForm(refs)
             ? specialProvider(claudeCodeUrl())
-            : specialProvider(claudeUrl());
+            : isAntigravityForm(refs)
+                ? specialProvider(antigravityUrl())
+                : specialProvider(claudeUrl());
     if (provider && !refs.providerId.value) {
         refs.providerId.value = provider.id;
         refs.providerEditorTitle.textContent = "Edit Provider";
@@ -165,6 +186,29 @@ function renderClaudeCodeAccount(refs, isClaudeCode) {
     refs.claudeCodeAccountPlan.textContent = account?.plan || "--";
     refs.claudeCodeAccountLimit.textContent = account?.limitLabel || "--";
     refs.claudeCodeAccountModels.textContent = state ? modelList(state, claudeCodeUrl()) : "--";
+}
+// Renders the Antigravity (Gemini Code Assist) account details.
+function renderAntigravityAccount(refs, isAntigravity) {
+    refs.antigravityAccountPanel.hidden = !isAntigravity;
+    if (!isAntigravity) {
+        return;
+    }
+    const state = AppContext.model.appState;
+    const account = state?.antigravityAccount;
+    const available = Boolean(account?.available);
+    refs.antigravityAccountStatus.textContent = available
+        ? "Reading from Windows Credential Manager."
+        : "Sign in with the Antigravity CLI.";
+    refs.antigravityEmail.textContent = account?.email || "--";
+    refs.antigravityProjectId.textContent = account?.projectId || "--";
+    refs.antigravityVersion.textContent = account?.cliVersion || "--";
+    refs.antigravityPlan.textContent = account?.plan || "--";
+    refs.antigravityLimit.textContent = account?.limitLabel || "--";
+    refs.antigravityModels.textContent = state ? modelList(state, antigravityUrl()) : "--";
+}
+// Refreshes Antigravity models and usage from the provider's API key.
+async function refreshAntigravityAccount(refs, setStatus) {
+    await refreshAccount(refs, setStatus, antigravityUrl(), refs.btnAntigravityRefresh, "Sign in with the Antigravity CLI first.", "Refreshing Antigravity account...");
 }
 // Refreshes Claude Code models and usage from local CLI credentials.
 async function refreshClaudeCodeAccount(refs, setStatus) {
