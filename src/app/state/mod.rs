@@ -22,8 +22,6 @@ use crate::infra::{codex_credentials, paths::AppPaths, shell, storage::Storage};
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
-use tauri::Manager;
-use tauri_plugin_notification::NotificationExt;
 use tokio::runtime::Runtime;
 
 #[derive(Clone)]
@@ -99,26 +97,13 @@ impl AppState {
     }
 
     /// Spawns a background task for startup update checking.
-    pub fn spawn_update_check(&self, app_handle: tauri::AppHandle) {
+    pub fn spawn_update_check(&self, _app_handle: tauri::AppHandle) {
         let version = self.app_version();
         let _state = self.clone();
         self.runtime.spawn(async move {
             let result = crate::infra::update::check_for_update(&version).await;
             if result.has_update {
-                let message = format!(
-                    "AI Chat {} is available — click to download",
-                    result.latest_version
-                );
-                if let Some(window) = app_handle.get_webview_window("main") {
-                    let _ = window.show();
-                    let _ = window.set_focus();
-                }
-                let _ = app_handle
-                    .notification()
-                    .builder()
-                    .title("AI Chat Update Available")
-                    .body(&message)
-                    .show();
+                crate::infra::update::show_update_notification(&result.latest_version);
             }
             if !result.error_message.is_empty() {
                 log::warn!("Update check failed: {}", result.error_message);

@@ -22,9 +22,14 @@ pub fn link_open(target: String, state: State<'_, AppState>) -> CmdResult<()> {
 
 /// Checks for updates and returns the result.
 #[tauri::command]
-pub async fn check_update(state: State<'_, AppState>) -> CmdResult<serde_json::Value> {
+pub async fn check_update(
+    state: State<'_, AppState>,
+) -> CmdResult<serde_json::Value> {
     let current_version = state.app_version();
     let result = update::check_for_update(&current_version).await;
+    if result.has_update {
+        update::show_update_notification(&result.latest_version);
+    }
     Ok(serde_json::json!({
         "hasUpdate": result.has_update,
         "latestVersion": result.latest_version,

@@ -3,6 +3,31 @@
 use anyhow::{Context, Result, anyhow};
 use serde_json::Value;
 
+pub const UPDATE_URL: &str = "https://github.com/bariskisir/AIChat/releases/latest";
+
+/// Shows a Windows toast notification that opens the releases page on click.
+pub fn show_update_notification(version: &str) {
+    use notify_rust::{Notification, NotificationResponse};
+
+    let mut notification = Notification::new();
+    notification
+        .summary("AI Chat")
+        .body(&format!("AI Chat {version} is available — click to download"))
+        .appname("AI Chat");
+
+    if let Ok(handle) = notification.show() {
+        std::thread::spawn(move || {
+            let _ = handle.wait_for_response(|response: &NotificationResponse| {
+                if matches!(response, NotificationResponse::Default)
+                    || matches!(response, NotificationResponse::Action(_))
+                {
+                    let _ = crate::infra::shell::open_url(UPDATE_URL);
+                }
+            });
+        });
+    }
+}
+
 pub struct UpdateCheckResult {
     pub has_update: bool,
     pub latest_version: String,
