@@ -599,7 +599,7 @@ const RAW_TEMPLATES: &[(&str, &str)] = &[
     ("xAI", "https://api.x.ai/v1"),
     ("Xinference", "http://localhost:9997/v1"),
     ("Yi", "https://api.lingyiwanwu.com/v1"),
-    ("Zenmux", "https://zenmux.ai/api/v1"),
+    ("ZenMux", "https://zenmux.ai/api/v1"),
     ("Zhipu", "https://open.bigmodel.cn/api/paas/v4"),
 ];
 
