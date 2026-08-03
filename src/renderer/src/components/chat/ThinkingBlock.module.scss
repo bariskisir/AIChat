@@ -1,0 +1,110 @@
+/* Styles a compact live thinking preview and its bordered expandable reasoning body. */
+
+.container {
+  margin: 5px 0 15px;
+}
+
+.header {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border);
+  border-radius: 10px;
+  color: var(--color-text-2);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expanded .header {
+  border-radius: 10px 10px 0 0;
+}
+
+.icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-2);
+}
+
+.thinking {
+  color: var(--color-primary);
+  animation: thinkingPulse 1.1s ease-in-out infinite alternate;
+}
+
+.heading {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: var(--color-text-1);
+    font-size: 12px;
+    font-weight: 550;
+  }
+
+  small {
+    color: var(--color-text-3);
+    font-size: 10px;
+    mask-image: linear-gradient(to right, transparent 0%, black 18%, black 100%);
+  }
+}
+
+.chevron {
+  flex: 0 0 auto;
+  color: var(--color-text-3);
+  transition: transform 150ms ease;
+}
+
+.expanded .chevron {
+  transform: rotate(90deg);
+}
+
+.content {
+  position: relative;
+  padding: 14px 16px;
+  border-width: 0 0.5px 0.5px;
+  border-style: solid;
+  border-color: var(--color-border);
+  border-radius: 0 0 10px 10px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+
+  p {
+    margin: 0 0 8px;
+  }
+
+  p:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.copyButton {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+@keyframes thinkingPulse {
+  to {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--color-primary) 55%, transparent));
+    transform: scale(1.08);
+  }
+}

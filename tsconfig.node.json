@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2023"],
+    "types": ["node", "vitest/globals"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "composite": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@main/*": ["./src/main/*"],
+      "@renderer/*": ["./src/renderer/src/*"],
+      "@shared/*": ["./src/contracts/*"]
+    }
+  },
+  "include": [
+    "vite.config.mts",
+    "vitest.config.ts",
+    "src/main/**/*.ts",
+    "src/preload/**/*.ts",
+    "src/renderer/src/i18n/index.ts",
+    "src/renderer/src/i18n/locales/*.ts",
+    "src/renderer/src/store/appSlice.ts",
+    "src/renderer/src/services/SettingsPersistenceQueue.ts",
+    "src/renderer/src/utils/formatters.ts",
+    "src/renderer/src/utils/citations.ts",
+    "src/renderer/src/utils/markdown.ts",
+    "src/contracts/**/*.ts",
+    "tests/**/*.ts"
+  ]
+}

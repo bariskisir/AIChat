@@ -1,0 +1,5 @@
+/* Hides the light-DOM host after model-generated content moves into its shadow root. */
+
+.host {
+  display: none;
+}

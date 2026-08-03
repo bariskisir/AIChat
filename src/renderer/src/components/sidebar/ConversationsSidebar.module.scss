@@ -1,0 +1,204 @@
+/* Styles the conversations sidebar with collapsible state. */
+
+.container {
+  position: relative;
+  width: attr(data-sidebar-width px, 266px);
+  height: 100%;
+  min-height: 0;
+  flex-basis: attr(data-sidebar-width px, 266px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 0.5px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-background-soft) 58%, var(--color-background));
+  transition:
+    width 180ms ease,
+    flex-basis 180ms ease,
+    border-color 180ms ease;
+}
+
+:global(body.conversations-sidebar-resizing) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+.resizing {
+  transition: none;
+}
+
+.collapsed {
+  width: 0;
+  flex-basis: 0;
+  border-right-color: transparent;
+}
+
+.resizeHandle {
+  position: absolute;
+  top: 0;
+  right: -2px;
+  bottom: 0;
+  width: 5px;
+  z-index: 5;
+  cursor: col-resize;
+  touch-action: none;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 2px;
+    bottom: 0;
+    width: 1px;
+    background: transparent;
+    transition: background 150ms ease;
+  }
+
+  &:hover::before,
+  &:active::before,
+  .container.resizing &::before {
+    background: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  }
+}
+
+.header {
+  height: 48px;
+  flex: 0 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px 0 14px;
+  border-bottom: 0.5px solid var(--color-border);
+  color: var(--color-text-1);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.headerActions {
+  display: flex;
+  gap: 4px;
+}
+
+.scrollArea {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 7px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.item {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  border: 0.5px solid transparent;
+  border-radius: var(--list-item-radius);
+
+  &:hover,
+  &.active {
+    border-color: var(--color-border);
+    background: var(--color-background-soft);
+  }
+
+  .deleteButton {
+    visibility: hidden;
+  }
+
+  &:hover .deleteButton,
+  &.active .deleteButton {
+    visibility: visible;
+  }
+}
+
+.openButton {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px 8px 8px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.itemBody {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.itemTitle,
+.itemMeta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.itemTitle {
+  color: var(--color-text-1);
+  font-size: 11px;
+  font-weight: 580;
+}
+
+.generatingTitle {
+  color: transparent;
+  background: linear-gradient(
+    100deg,
+    var(--color-text-3) 0%,
+    var(--color-text-3) 40%,
+    var(--color-text-1) 50%,
+    var(--color-text-3) 60%,
+    var(--color-text-3) 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  animation: titleShimmer 1.25s linear infinite;
+}
+
+@keyframes titleShimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.itemMeta {
+  color: var(--color-text-3);
+  font-size: 9px;
+}
+
+.deleteButton {
+  flex: 0 0 28px;
+  margin-right: 3px;
+}
+
+.emptyWrap {
+  height: 100%;
+  display: grid;
+  place-content: center;
+
+  :global(.ant-empty-description) {
+    color: var(--color-text-3);
+    font-size: 11px;
+  }
+}
+
+.renameInput {
+  margin-top: 8px;
+}
