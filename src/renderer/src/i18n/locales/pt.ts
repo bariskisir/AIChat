@@ -100,6 +100,7 @@ const pt = {
     assistant: 'Assistente',
     you: 'Você',
     generating: 'Gerando…',
+    codeBlockProgress: 'Gerando {{language}} · {{lines}} linhas · {{characters}} caracteres',
     stopped: 'Parado',
     reasoning: 'Raciocínio',
     requestFailed: 'Não foi possível gerar a resposta.',

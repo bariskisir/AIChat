@@ -100,6 +100,7 @@ const ja = {
     assistant: 'アシスタント',
     you: 'あなた',
     generating: '生成中…',
+    codeBlockProgress: '{{language}}を生成中 · {{lines}}行 · {{characters}}文字',
     stopped: '停止済み',
     reasoning: '推論',
     requestFailed: '回答を生成できませんでした。',

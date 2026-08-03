@@ -32,6 +32,7 @@ import {
 } from '@renderer/utils/citations'
 import { convertLatexDelimiters, stripBlankLinesInSvg } from '@renderer/utils/markdown'
 import { getModelLogo } from '@renderer/utils/modelLogos'
+import { createStreamingTextProjection } from '@renderer/utils/streamingProjection'
 import 'katex/dist/katex.min.css'
 import 'remark-github-blockquote-alert/alert.css'
 import ThinkingBlock from './ThinkingBlock'
@@ -145,13 +146,20 @@ const MessageBubble = ({
     ? getModelLogo(message.model ? { modelId: message.model.modelId } : undefined)
     : undefined
 
-  const markdownContent = useMemo(
-    () =>
-      stripBlankLinesInSvg(
-        convertLatexDelimiters(withCitationTags(message.content, message.citations ?? [])),
-      ),
-    [message.content, message.citations],
-  )
+  const markdownContent = useMemo(() => {
+    const padded = withCitationTags(message.content, message.citations ?? [])
+    const viewContent =
+      message.status === 'streaming'
+        ? createStreamingTextProjection(padded, ({ language, lineCount, charCount }) =>
+            t('chat.codeBlockProgress', {
+              language,
+              lines: lineCount.toLocaleString(),
+              characters: charCount.toLocaleString(),
+            }),
+          )
+        : padded
+    return stripBlankLinesInSvg(convertLatexDelimiters(viewContent))
+  }, [message.content, message.citations, message.status, t])
 
   const remarkPlugins = useMemo<PluggableList>(
     () => [

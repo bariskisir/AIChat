@@ -100,6 +100,7 @@ const ko = {
     assistant: '어시스턴트',
     you: '나',
     generating: '생성 중…',
+    codeBlockProgress: '{{language}} 생성 중 · {{lines}}줄 · {{characters}}자',
     stopped: '중지됨',
     reasoning: '추론',
     requestFailed: '응답을 생성하지 못했습니다.',

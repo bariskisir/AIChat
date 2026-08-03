@@ -100,6 +100,7 @@ const ru = {
     assistant: 'Ассистент',
     you: 'Вы',
     generating: 'Создание…',
+    codeBlockProgress: 'Создание {{language}} · {{lines}} строк · {{characters}} символов',
     stopped: 'Остановлено',
     reasoning: 'Рассуждение',
     requestFailed: 'Не удалось создать ответ.',

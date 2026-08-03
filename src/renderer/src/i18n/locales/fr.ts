@@ -100,6 +100,7 @@ const fr = {
     assistant: 'Assistant',
     you: 'Vous',
     generating: 'Génération…',
+    codeBlockProgress: 'Génération de {{language}} · {{lines}} lignes · {{characters}} caractères',
     stopped: 'Arrêté',
     reasoning: 'Raisonnement',
     requestFailed: 'La réponse n’a pas pu être générée.',

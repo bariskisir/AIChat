@@ -31,6 +31,7 @@
     "src/renderer/src/utils/formatters.ts",
     "src/renderer/src/utils/citations.ts",
     "src/renderer/src/utils/markdown.ts",
+    "src/renderer/src/utils/streamingProjection.ts",
     "src/contracts/**/*.ts",
     "tests/**/*.ts"
   ]

@@ -99,6 +99,7 @@ const en = {
     assistant: 'Assistant',
     you: 'You',
     generating: 'Generating…',
+    codeBlockProgress: 'Generating {{language}} · {{lines}} lines · {{characters}} chars',
     stopped: 'Stopped',
     reasoning: 'Reasoning',
     requestFailed: 'The response could not be generated.',

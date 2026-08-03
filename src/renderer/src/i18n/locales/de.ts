@@ -100,6 +100,7 @@ const de = {
     assistant: 'Assistent',
     you: 'Sie',
     generating: 'Wird erstellt…',
+    codeBlockProgress: '{{language}} wird generiert · {{lines}} Zeilen · {{characters}} Zeichen',
     stopped: 'Gestoppt',
     reasoning: 'Schlussfolgerung',
     requestFailed: 'Die Antwort konnte nicht erstellt werden.',

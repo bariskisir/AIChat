@@ -99,6 +99,7 @@ const zh = {
     assistant: '助手',
     you: '你',
     generating: '正在生成…',
+    codeBlockProgress: '正在生成 {{language}} · {{lines}} 行 · {{characters}} 字符',
     stopped: '已停止',
     reasoning: '推理',
     requestFailed: '无法生成回复。',

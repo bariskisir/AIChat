@@ -100,6 +100,7 @@ const tr = {
     assistant: 'Asistan',
     you: 'Siz',
     generating: 'Üretiliyor…',
+    codeBlockProgress: '{{language}} üretiliyor · {{lines}} satır · {{characters}} karakter',
     stopped: 'Durduruldu',
     reasoning: 'Akıl yürütme',
     requestFailed: 'Yanıt üretilemedi.',

@@ -101,6 +101,7 @@ const es = {
     assistant: 'Asistente',
     you: 'Tú',
     generating: 'Generando…',
+    codeBlockProgress: 'Generando {{language}} · {{lines}} líneas · {{characters}} caracteres',
     stopped: 'Detenido',
     reasoning: 'Razonamiento',
     requestFailed: 'No se pudo generar la respuesta.',
