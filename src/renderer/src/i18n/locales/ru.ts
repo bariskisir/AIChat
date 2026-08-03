@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Russian interface strings.
  */
 
@@ -34,6 +34,7 @@ const ru = {
     apiKey: 'Ключ API',
     save: 'Сохранить',
     saveFailed: 'Не удалось сохранить провайдера.',
+    apiKeyInvalid: 'API-ключ содержит символы, не поддерживаемые HTTP-заголовками.',
     models: 'Модели',
     fetchFailed: 'Не удалось получить список. Проверьте URL и API-ключ.',
     copyApiKey: 'Копировать API-ключ',
@@ -165,6 +166,7 @@ const ru = {
       bing: 'Искать актуальные источники через Bing.',
     },
     inputTokens: '{{count}} вход',
+    totalTokens: '{{count}} всего',
     outputTokens: '{{count}} выход',
     estimatedTokens: '≈ {{count}} токенов',
     searchResultsFound: 'Результатов поиска: {{count}}',

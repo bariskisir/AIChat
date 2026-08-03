@@ -329,6 +329,10 @@ const ProviderSettingsSection = (): React.JSX.Element => {
   const saveProvider = async (): Promise<void> => {
     const connection = await readConnectionValues()
     if (!connection) return
+    if (connection.apiKey && [...connection.apiKey].some((char) => char.charCodeAt(0) > 0xff)) {
+      void message.error(t('providers.apiKeyInvalid'))
+      return
+    }
     setSaving(true)
     try {
       const input: ProviderInput = {

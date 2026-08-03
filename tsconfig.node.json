@@ -32,6 +32,8 @@
     "src/renderer/src/utils/citations.ts",
     "src/renderer/src/utils/markdown.ts",
     "src/renderer/src/utils/streamingProjection.ts",
+    "src/renderer/src/utils/modelSearch.ts",
+    "src/renderer/src/hooks/inputHistoryNavigation.ts",
     "src/contracts/**/*.ts",
     "tests/**/*.ts"
   ]

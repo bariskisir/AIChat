@@ -12,6 +12,7 @@ import type {
   DeleteConversationResult,
 } from '@shared/index'
 import { MAX_CHAT_ERROR_LENGTH, REASONING_EFFORTS, WEB_SEARCH_MODES } from '@shared/index'
+import { clampSurrogateBoundary } from '@shared/index'
 import { z } from 'zod'
 import { parsePersistedSettings, settingsSchema } from '../config/settings.schema'
 
@@ -170,7 +171,7 @@ export default class StorageService {
   /** Creates a new empty chat conversation. */
   public async createConversation(title?: string): Promise<Conversation> {
     const now = new Date().toISOString()
-    const normalizedTitle = title?.trim().slice(0, 200)
+    const normalizedTitle = title?.trim().slice(0, clampSurrogateBoundary(title.trim(), 200))
     const conversation: Conversation = {
       revision: 1,
       id: randomUUID(),
@@ -243,7 +244,8 @@ export default class StorageService {
 
   /** Replaces a generated title with a validated user or Quick Model title. */
   public async renameConversation(id: string, title: string): Promise<Conversation> {
-    const normalizedTitle = title.trim().slice(0, 200)
+    const trimmed = title.trim()
+    const normalizedTitle = trimmed.slice(0, clampSurrogateBoundary(trimmed, 200))
     if (!normalizedTitle) throw new Error('Chat title cannot be empty.')
     return this.updateConversation(id, (conversation) => {
       conversation.title = normalizedTitle

@@ -26,6 +26,8 @@ import {
   type WebSearchMode,
 } from '@shared/index'
 import { useConversationActions } from '@renderer/hooks/useConversationActions'
+import { useInputHistory } from '@renderer/hooks/useInputHistory'
+import { shouldHandleInputHistoryNavigation } from '@renderer/hooks/inputHistoryNavigation'
 import { createLogger } from '@renderer/services/LoggerService'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
 import {
@@ -87,6 +89,7 @@ const ChatWorkspace = (): React.JSX.Element => {
   const lastMessageCount = useRef(0)
   const userScrolledUpRef = useRef(false)
   const inputRef = useRef<TextAreaRef>(null)
+  const isComposingRef = useRef(false)
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [imageGeneration, setImageGeneration] = useState(false)
@@ -94,6 +97,10 @@ const ChatWorkspace = (): React.JSX.Element => {
   const [alternateTargetId, setAlternateTargetId] = useState<string | null>(null)
   const [alternateModel, setAlternateModel] = useState<ModelReference | null>(null)
   const currentConversationId = currentConversation?.id
+
+  const inputHistory = useInputHistory({
+    applyDraft: useCallback((text: string) => setDraft(text), []),
+  })
 
   const activeRequestCount = currentConversation?.messages.some(
     (m) => m.status === 'streaming' && m.role === 'assistant',
@@ -710,6 +717,7 @@ const ChatWorkspace = (): React.JSX.Element => {
     const history = [...conversation.messages, user]
     setDraft('')
     setAttachments([])
+    inputHistory.saveHistory(content)
     await startCompletion(history, model, imageGeneration)
   }
 
@@ -929,10 +937,45 @@ const ChatWorkspace = (): React.JSX.Element => {
           autoSize={{ minRows: 2, maxRows: 8 }}
           placeholder={t('chat.placeholder')}
           onChange={(event) => setDraft(event.target.value)}
+          onCompositionStart={() => {
+            isComposingRef.current = true
+          }}
+          onCompositionEnd={() => {
+            isComposingRef.current = false
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
               void sendDraft()
+              return
+            }
+            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+            const textArea = inputRef.current?.resizableTextArea?.textArea
+            const isAllSelected =
+              !!textArea &&
+              textArea.selectionStart === 0 &&
+              textArea.selectionEnd === textArea.value.length
+            const isCursorAtEnd = !!textArea && textArea.selectionEnd === textArea.value.length
+            if (
+              !shouldHandleInputHistoryNavigation({
+                isAllSelected,
+                isComposing: isComposingRef.current,
+                isCursorAtEnd,
+                key: event.key,
+                text: draft,
+              })
+            ) {
+              return
+            }
+            event.preventDefault()
+            if (inputHistory.navigateHistory(event.key === 'ArrowUp' ? 'up' : 'down', draft)) {
+              requestAnimationFrame(() => {
+                const area = inputRef.current?.resizableTextArea?.textArea
+                if (area) {
+                  const position = area.value.length
+                  area.setSelectionRange(position, position)
+                }
+              })
             }
           }}
         />

@@ -3,6 +3,7 @@
 import readabilitySource from '@mozilla/readability/Readability.js?raw'
 import turndownSource from 'turndown/lib/turndown.browser.umd.js?raw'
 import type { Citation, WebSearchMode } from '@shared/index'
+import { clampSurrogateBoundary } from '@shared/index'
 import type LoggerService from '../logging/logger.service'
 import SearchWindowService from './hidden.window.service'
 
@@ -167,11 +168,12 @@ export default class WebSearchService {
         index,
         title: result.title || hostnameFor(result.url),
         url: result.url,
-        snippet: result.content.slice(0, MAX_SNIPPET_CHARS),
+        snippet: result.content.slice(0, clampSurrogateBoundary(result.content, MAX_SNIPPET_CHARS)),
       }
       citations.push(citation)
+      const contentCut = clampSurrogateBoundary(result.content, MAX_CONTENT_CHARS)
       contexts.push(
-        `[${citation.index}] ${citation.title}\nURL: ${citation.url}\n${result.content.slice(0, MAX_CONTENT_CHARS)}`,
+        `[${citation.index}] ${citation.title}\nURL: ${citation.url}\n${result.content.slice(0, contentCut)}`,
       )
     }
     return { citations, context: contexts.join('\n\n') }

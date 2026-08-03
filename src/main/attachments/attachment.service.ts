@@ -82,6 +82,30 @@ const imageMimeType = (extension: string): string => {
   return 'application/octet-stream'
 }
 
+/** True when a decoded text sample looks binary rather than readable text. */
+const hasBinaryIndicators = (text: string): boolean => {
+  let controlCharacters = 0
+  let characters = 0
+  for (const character of text.slice(0, 8_000)) {
+    characters += 1
+    const codePoint = character.codePointAt(0) ?? 0
+    if (codePoint === 0 || codePoint === 0xfffd) return true
+    if (
+      (codePoint < 0x20 && codePoint !== 0x09 && codePoint !== 0x0a && codePoint !== 0x0d) ||
+      (codePoint >= 0x7f && codePoint <= 0x9f)
+    ) {
+      controlCharacters += 1
+    }
+  }
+  return controlCharacters / Math.max(characters, 1) > 0.01
+}
+
+/** Decodes a buffer as text when it plausibly is one, otherwise returns null. */
+const decodeTextBufferIfText = (buffer: Buffer): string | null => {
+  const text = buffer.toString('utf8')
+  return hasBinaryIndicators(text) ? null : text
+}
+
 /** Owns the native file picker and bounded attachment preprocessing. */
 export default class AttachmentService {
   /** Creates an attachment service backed by the application's durable storage. */
@@ -151,6 +175,20 @@ export default class AttachmentService {
         localPath,
         kind: 'text',
         extractedText: text,
+      }
+    }
+    if (!extension) {
+      const decoded = decodeTextBufferIfText(await readFile(localPath))
+      if (decoded !== null) {
+        return {
+          id,
+          name,
+          mimeType: 'text/plain',
+          size,
+          localPath,
+          kind: 'text',
+          extractedText: decoded.slice(0, 250_000),
+        }
       }
     }
     let extractedText = 'This document is attached, but no plain-text preview was available.'

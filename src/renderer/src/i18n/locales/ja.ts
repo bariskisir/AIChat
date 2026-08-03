@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Japanese interface strings.
  */
 
@@ -34,6 +34,7 @@ const ja = {
     apiKey: 'API キー',
     save: '保存',
     saveFailed: 'プロバイダーを保存できませんでした。',
+    apiKeyInvalid: 'API キーに HTTP ヘッダーでサポートされていない文字が含まれています。',
     models: 'モデル',
     fetchFailed: 'モデル一覧を取得できませんでした。URL と API キーを確認してください。',
     copyApiKey: 'API キーをコピー',
@@ -165,6 +166,7 @@ const ja = {
       bing: 'Bing で最新の情報源を検索します。',
     },
     inputTokens: '{{count}} 入力',
+    totalTokens: '合計 {{count}}',
     outputTokens: '{{count}} 出力',
     estimatedTokens: '約 {{count}} トークン',
     searchResultsFound: '{{count}} 件の検索結果',

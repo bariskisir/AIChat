@@ -1,4 +1,4 @@
-/**
+﻿/**
  * German interface strings.
  */
 
@@ -34,6 +34,8 @@ const de = {
     apiKey: 'API-Schlüssel',
     save: 'Speichern',
     saveFailed: 'Der Anbieter konnte nicht gespeichert werden.',
+    apiKeyInvalid:
+      'Der API-Schlüssel enthält Zeichen, die von HTTP-Headern nicht unterstützt werden.',
     models: 'Modelle',
     fetchFailed: 'Modellliste konnte nicht geladen werden. URL und API-Schlüssel prüfen.',
     copyApiKey: 'API-Schlüssel kopieren',
@@ -165,6 +167,7 @@ const de = {
       bing: 'Aktuelle Quellen mit Bing suchen.',
     },
     inputTokens: '{{count}} Eingabe',
+    totalTokens: '{{count}} gesamt',
     outputTokens: '{{count}} Ausgabe',
     estimatedTokens: '≈ {{count}} Token',
     searchResultsFound: '{{count}} Suchergebnisse',

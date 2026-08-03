@@ -5,6 +5,7 @@ import { Button, Input, Modal, Tooltip } from 'antd'
 import { Bot, Brain, ChevronsUpDown, Eye, Image, Search, Star } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ModelDescriptor, ModelReference, ProviderSummary } from '@shared/index'
+import { getSearchMatchScore } from '@renderer/utils/modelSearch'
 import ModelAvatar from './ModelAvatar'
 import styles from './ModelSelect.module.scss'
 
@@ -61,16 +62,20 @@ const ModelSelect = ({
       ),
     [chatModels, value],
   )
-  const searchTerms = useMemo(
-    () => deferredSearch.trim().toLocaleLowerCase().split(/\s+/u).filter(Boolean),
-    [deferredSearch],
-  )
   const groups = useMemo((): ModelGroup[] => {
-    const filtered = chatModels.filter((model) => {
-      const target =
-        `${model.name} ${model.modelId} ${providerNames.get(model.providerId) ?? ''} ${model.providerId}`.toLocaleLowerCase()
-      return searchTerms.every((term) => target.includes(term))
-    })
+    const scored: Array<{ model: ModelDescriptor; score: number }> = []
+    for (const model of chatModels) {
+      const score = getSearchMatchScore(deferredSearch, [
+        { value: model.name, weight: 0, allowAbbreviation: true },
+        { value: model.modelId, weight: 1, allowAbbreviation: true },
+        { value: providerNames.get(model.providerId) ?? '', weight: 5 },
+        { value: model.providerId, weight: 6 },
+      ])
+      if (score === null) continue
+      scored.push({ model, score })
+    }
+    scored.sort((left, right) => left.score - right.score)
+    const filtered = scored.map((entry) => entry.model)
     const favorites = filtered.filter((model) => model.favorite)
     const byProvider = new Map<string, ModelDescriptor[]>()
     for (const model of filtered) {
@@ -90,7 +95,7 @@ const ModelSelect = ({
           : []
       }),
     ]
-  }, [chatModels, providerNames, providers, searchTerms, t])
+  }, [chatModels, deferredSearch, providerNames, providers, t])
 
   /** Selects one model and closes the popup. */
   const select = (model: ModelReference | null): void => {

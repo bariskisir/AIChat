@@ -1,19 +1,8 @@
 /** Renders one message with Markdown, reasoning, citations, token usage, and direct actions. */
 
 import { useMemo } from 'react'
-import { Button, Tooltip } from 'antd'
-import {
-  ArrowDown,
-  ArrowUp,
-  Bot,
-  Copy,
-  GitBranch,
-  Pencil,
-  RefreshCw,
-  Trash2,
-  User,
-  Users,
-} from 'lucide-react'
+import { Button, Image as AntImage, Tooltip } from 'antd'
+import { Bot, Copy, GitBranch, Pencil, RefreshCw, Trash2, User, Users } from 'lucide-react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
 import type { PluggableList } from 'unified'
 import rehypeKatex from 'rehype-katex'
@@ -37,6 +26,7 @@ import 'katex/dist/katex.min.css'
 import 'remark-github-blockquote-alert/alert.css'
 import ThinkingBlock from './ThinkingBlock'
 import SearchBlock from './SearchBlock'
+import TokenUsageCard from './TokenUsageCard'
 import CodeBlock from './markdown/CodeBlock'
 import ImageViewer from './markdown/ImageViewer'
 import MarkdownTable from './markdown/MarkdownTable'
@@ -222,10 +212,29 @@ const MessageBubble = ({
     return map
   }, [message.content])
 
+  /** True when the message renders multiple images, enabling grouped prev/next preview. */
+  const hasMultipleImages = useMemo(() => {
+    const images = message.content.match(/!\[[^\]]*\]\([^)]*\)/g) ?? []
+    return images.length > 1
+  }, [message.content])
+
   /** Copies only the readable message content to the system clipboard. */
   const copyMessage = async (): Promise<void> => {
     await navigator.clipboard.writeText(message.content)
   }
+
+  /** Renders the message body, grouped so multiple images share prev/next navigation. */
+  const markdownElement = (
+    <ReactMarkdown
+      remarkPlugins={remarkPlugins}
+      rehypePlugins={rehypePlugins}
+      components={components}
+      disallowedElements={DISALLOWED_ELEMENTS}
+      urlTransform={transformUrl}
+    >
+      {markdownContent}
+    </ReactMarkdown>
+  )
 
   return (
     <article
@@ -279,30 +288,17 @@ const MessageBubble = ({
         )}
         <div className={styles.markdown}>
           {message.content ? (
-            <ReactMarkdown
-              remarkPlugins={remarkPlugins}
-              rehypePlugins={rehypePlugins}
-              components={components}
-              disallowedElements={DISALLOWED_ELEMENTS}
-              urlTransform={transformUrl}
-            >
-              {markdownContent}
-            </ReactMarkdown>
+            hasMultipleImages ? (
+              <AntImage.PreviewGroup>{markdownElement}</AntImage.PreviewGroup>
+            ) : (
+              markdownElement
+            )
           ) : message.status === 'streaming' ? (
             <span className={styles.cursor}>●</span>
           ) : null}
         </div>
         {assistant && message.usage ? (
-          <div className={styles.usage}>
-            <span>
-              <ArrowUp size={11} />
-              {t('chat.inputTokens', { count: message.usage.promptTokens })}
-            </span>
-            <span>
-              <ArrowDown size={11} />
-              {t('chat.outputTokens', { count: message.usage.completionTokens })}
-            </span>
-          </div>
+          <TokenUsageCard usage={message.usage} message={message} modelLabel={modelLabel} />
         ) : !assistant && userTokenCount > 0 ? (
           <div className={styles.usage}>
             <span>{t('chat.estimatedTokens', { count: userTokenCount })}</span>

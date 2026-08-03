@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Spanish interface strings.
  */
 
@@ -35,6 +35,7 @@ const es = {
     apiKey: 'Clave de API',
     save: 'Guardar',
     saveFailed: 'No se pudo guardar el proveedor.',
+    apiKeyInvalid: 'La clave de API contiene caracteres no admitidos por los encabezados HTTP.',
     models: 'Modelos',
     fetchFailed: 'No se pudo obtener la lista. Comprueba la URL y la clave de API.',
     copyApiKey: 'Copiar clave de API',
@@ -166,6 +167,7 @@ const es = {
       bing: 'Buscar fuentes actuales con Bing.',
     },
     inputTokens: '{{count}} entrada',
+    totalTokens: '{{count}} en total',
     outputTokens: '{{count}} salida',
     estimatedTokens: '≈ {{count}} tokens',
     searchResultsFound: '{{count}} resultados de búsqueda',

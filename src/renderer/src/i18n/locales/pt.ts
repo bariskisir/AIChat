@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Portuguese interface strings.
  */
 
@@ -34,6 +34,7 @@ const pt = {
     apiKey: 'Chave da API',
     save: 'Salvar',
     saveFailed: 'Não foi possível salvar o provedor.',
+    apiKeyInvalid: 'A chave de API contém caracteres não suportados pelos cabeçalhos HTTP.',
     models: 'Modelos',
     fetchFailed: 'Não foi possível buscar a lista. Verifique a URL e a chave de API.',
     copyApiKey: 'Copiar chave de API',
@@ -165,6 +166,7 @@ const pt = {
       bing: 'Pesquisar fontes atuais com o Bing.',
     },
     inputTokens: '{{count}} entrada',
+    totalTokens: '{{count}} no total',
     outputTokens: '{{count}} saída',
     estimatedTokens: '≈ {{count}} tokens',
     searchResultsFound: '{{count}} resultados de pesquisa',

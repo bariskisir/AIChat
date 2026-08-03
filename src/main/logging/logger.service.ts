@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { app } from 'electron'
 import electronLog from 'electron-log/main'
 import type { LogLevel, LogRecord } from '@shared/index'
+import { clampSurrogateBoundary } from '@shared/index'
 
 const MAX_LOG_SIZE_BYTES = 10 * 1024 * 1024
 const GENERAL_RETENTION_DAYS = 30
@@ -104,9 +105,10 @@ export default class LoggerService {
     if (details === undefined) return ''
     if (details instanceof Error)
       return `${details.name}: ${details.message}\n${details.stack ?? ''}`.trim()
-    if (typeof details === 'string') return details.slice(0, 8_000)
+    if (typeof details === 'string') return details.slice(0, clampSurrogateBoundary(details, 8_000))
     try {
-      return JSON.stringify(details).slice(0, 8_000)
+      const serialized = JSON.stringify(details)
+      return serialized.slice(0, clampSurrogateBoundary(serialized, 8_000))
     } catch {
       if (
         typeof details === 'number' ||
@@ -114,7 +116,8 @@ export default class LoggerService {
         typeof details === 'bigint' ||
         typeof details === 'symbol'
       ) {
-        return String(details).slice(0, 8_000)
+        const text = String(details)
+        return text.slice(0, clampSurrogateBoundary(text, 8_000))
       }
       return `[Unserializable ${typeof details}]`
     }

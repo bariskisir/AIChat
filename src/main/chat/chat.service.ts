@@ -8,6 +8,7 @@ import type {
   ModelReference,
   WebSearchMode,
 } from '@shared/index'
+import { clampSurrogateBoundary } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
 import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
@@ -138,7 +139,7 @@ export default class ChatService {
         quickModel,
         [
           { role: 'system', content: TITLE_SYSTEM_PROMPT },
-          { role: 'user', content: userText.slice(0, 2_000) },
+          { role: 'user', content: userText.slice(0, clampSurrogateBoundary(userText, 2_000)) },
         ],
         AbortSignal.timeout(30_000),
       )

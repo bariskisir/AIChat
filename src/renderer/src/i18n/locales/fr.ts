@@ -1,4 +1,4 @@
-/**
+﻿/**
  * French interface strings.
  */
 
@@ -34,6 +34,7 @@ const fr = {
     apiKey: 'Clé API',
     save: 'Enregistrer',
     saveFailed: 'Le fournisseur n’a pas pu être enregistré.',
+    apiKeyInvalid: 'La clé API contient des caractères non pris en charge par les en-têtes HTTP.',
     models: 'Modèles',
     fetchFailed: 'La liste n’a pas pu être chargée. Vérifiez l’URL et la clé API.',
     copyApiKey: 'Copier la clé API',
@@ -165,6 +166,7 @@ const fr = {
       bing: 'Rechercher des sources actuelles avec Bing.',
     },
     inputTokens: '{{count}} entrée',
+    totalTokens: '{{count}} au total',
     outputTokens: '{{count}} sortie',
     estimatedTokens: '≈ {{count}} jetons',
     searchResultsFound: '{{count}} résultats de recherche',

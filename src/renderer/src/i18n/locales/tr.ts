@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Turkish interface strings.
  */
 
@@ -34,6 +34,7 @@ const tr = {
     apiKey: 'API anahtarı',
     save: 'Kaydet',
     saveFailed: 'Provider kaydedilemedi.',
+    apiKeyInvalid: 'API anahtarı, HTTP başlıklarında desteklenmeyen karakterler içeriyor.',
     models: 'Modeller',
     fetchFailed: 'Model listesi alınamadı. Geçerli URL ve API key’i kontrol edin.',
     copyApiKey: 'API key’i kopyala',
@@ -165,6 +166,7 @@ const tr = {
       bing: 'Güncel kaynakları Bing ile ara.',
     },
     inputTokens: '{{count}} girdi',
+    totalTokens: '{{count}} toplam',
     outputTokens: '{{count}} çıktı',
     estimatedTokens: '≈ {{count}} token',
     searchResultsFound: '{{count}} arama sonucu',

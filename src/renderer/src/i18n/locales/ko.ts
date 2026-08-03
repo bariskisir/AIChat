@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Korean interface strings.
  */
 
@@ -34,6 +34,7 @@ const ko = {
     apiKey: 'API 키',
     save: '저장',
     saveFailed: '제공자를 저장하지 못했습니다.',
+    apiKeyInvalid: 'API 키에 HTTP 헤더에서 지원되지 않는 문자가 포함되어 있습니다.',
     models: '모델',
     fetchFailed: '모델 목록을 가져오지 못했습니다. URL과 API 키를 확인하세요.',
     copyApiKey: 'API 키 복사',
@@ -165,6 +166,7 @@ const ko = {
       bing: 'Bing에서 최신 출처를 검색합니다.',
     },
     inputTokens: '{{count}} 입력',
+    totalTokens: '총 {{count}}개',
     outputTokens: '{{count}} 출력',
     estimatedTokens: '약 {{count}} 토큰',
     searchResultsFound: '검색 결과 {{count}}개',

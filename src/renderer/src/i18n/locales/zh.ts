@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Chinese interface strings.
  */
 
@@ -34,6 +34,7 @@ const zh = {
     apiKey: 'API 密钥',
     save: '保存',
     saveFailed: '无法保存提供商。',
+    apiKeyInvalid: 'API 密钥包含 HTTP 标头不支持的字符。',
     models: '模型',
     fetchFailed: '无法获取模型列表。请检查当前 URL 和 API 密钥。',
     copyApiKey: '复制 API 密钥',
@@ -164,6 +165,7 @@ const zh = {
       bing: '使用 Bing 搜索当前来源。',
     },
     inputTokens: '{{count}} 输入',
+    totalTokens: '共 {{count}} 个',
     outputTokens: '{{count}} 输出',
     estimatedTokens: '≈ {{count}} 个令牌',
     searchResultsFound: '{{count}} 条搜索结果',

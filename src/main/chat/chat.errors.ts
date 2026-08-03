@@ -2,13 +2,15 @@
 
 import type { TokenUsage } from '@shared/index'
 import { MAX_CHAT_ERROR_LENGTH } from '@shared/index'
+import { clampSurrogateBoundary } from '@shared/index'
 
 /** Bounds one provider response body while clearly marking truncated diagnostics. */
 export const boundProviderErrorText = (text: string): string => {
   const normalized = text.trim()
   if (normalized.length <= MAX_CHAT_ERROR_LENGTH) return normalized
   const marker = '\n[Provider response truncated.]'
-  return `${normalized.slice(0, MAX_CHAT_ERROR_LENGTH - marker.length)}${marker}`
+  const cut = clampSurrogateBoundary(normalized, MAX_CHAT_ERROR_LENGTH - marker.length)
+  return `${normalized.slice(0, cut)}${marker}`
 }
 
 /** Builds a chat-safe HTTP error containing the provider's actual response body. */

@@ -257,6 +257,50 @@
   }
 }
 
+.tokenCard {
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px;
+
+  span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+}
+
+.tokenCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tokenCardTitle {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tokenCardTime {
+  color: var(--color-text-3);
+  font-size: 10px;
+}
+
+.tokenCardRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.tokenCardTotal {
+  color: var(--color-text-3);
+  font-size: 10px;
+}
+
 .codeBlock {
   min-width: 35ch;
   margin-bottom: 10px;
