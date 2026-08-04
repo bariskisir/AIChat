@@ -24,6 +24,7 @@ export interface ChatMessage {
   usage?: TokenUsage | undefined
   tokenCount?: number | undefined
   reasoningStartedAt?: number | undefined
+  durationMs?: number | undefined
   createdAt: string
   status: 'complete' | 'streaming' | 'stopped' | 'error'
   error?: string | undefined

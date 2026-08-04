@@ -73,6 +73,13 @@ const toModelReference = (model: ModelReference): ModelReference => ({
 })
 
 /** Renders and owns the complete chat interaction for the currently selected local topic. */
+/** Freezes the elapsed duration of a message that is no longer streaming. */
+const freezeDuration = (item: ChatMessage): ChatMessage => {
+  if (item.durationMs !== undefined) return item
+  const start = item.reasoningStartedAt ?? Date.parse(item.createdAt)
+  return { ...item, durationMs: Math.max(0, Date.now() - start) }
+}
+
 interface ChatWorkspaceProps {
   expanded: boolean
   onToggleExpanded: () => void
@@ -342,14 +349,16 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
               messages: conversation.messages.filter((item) => item.id !== messageId),
             }
           }
-          return mapMessage((item) => ({ ...item, status: 'complete' as const }))
+          return mapMessage((item) => freezeDuration({ ...item, status: 'complete' as const }))
         }
         case 'error':
-          return mapMessage((item) => ({
-            ...item,
-            status: 'error',
-            error: event.message || t('chat.requestFailed'),
-          }))
+          return mapMessage((item) =>
+            freezeDuration({
+              ...item,
+              status: 'error',
+              error: event.message || t('chat.requestFailed'),
+            }),
+          )
         case 'content': {
           const target = conversation.messages.find((item) => item.id === messageId)
           if (!target) return conversation
@@ -522,7 +531,9 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
           return {
             ...conversation,
             messages: conversation.messages.map((item) =>
-              item.id === active.messageId ? { ...item, status: 'complete' as const } : item,
+              item.id === active.messageId
+                ? freezeDuration({ ...item, status: 'complete' as const })
+                : item,
             ),
           }
         })
@@ -530,11 +541,13 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       }
       if (event.type === 'error') {
         logger.error('Provider request failed.', event.message)
-        updateMessage(active.messageId, (item) => ({
-          ...item,
-          status: 'error',
-          error: event.message || t('chat.requestFailed'),
-        }))
+        updateMessage(active.messageId, (item) =>
+          freezeDuration({
+            ...item,
+            status: 'error',
+            error: event.message || t('chat.requestFailed'),
+          }),
+        )
         return
       }
       if (event.type === 'content') {
@@ -572,6 +585,8 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
   ])
 
   const selectedModel = currentConversation?.selectedModel ?? snapshot.lastUsedModel
+  const selectedModelRef = useRef(selectedModel)
+  selectedModelRef.current = selectedModel
   const selectedDescriptor = snapshot.models.find(
     (model) =>
       selectedModel !== null &&
@@ -691,11 +706,13 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       logger.error('Chat request could not be started.', error)
       activeRequests.current.delete(requestId)
       syncConversationGeneratingState(conversation.id)
-      updateMessage(assistant.id, (item) => ({
-        ...item,
-        status: 'error',
-        error: t('chat.requestFailed'),
-      }))
+      updateMessage(assistant.id, (item) =>
+        freezeDuration({
+          ...item,
+          status: 'error',
+          error: t('chat.requestFailed'),
+        }),
+      )
     })
   }
 
@@ -735,7 +752,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       ...conversation,
       messages: conversation.messages.map((item) =>
         entries.some(([, active]) => active.messageId === item.id)
-          ? { ...item, status: 'stopped' as const }
+          ? freezeDuration({ ...item, status: 'stopped' as const })
           : item,
       ),
     }))
@@ -815,7 +832,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
   /** Opens a single-model picker for an alternate response to one assistant turn. */
   const openAlternateModel = (messageId: string): void => {
     setAlternateTargetId(messageId)
-    setAlternateModel(selectedModel)
+    setAlternateModel(selectedModelRef.current)
   }
 
   /** Starts one alternate response with the model selected in the dialog. */

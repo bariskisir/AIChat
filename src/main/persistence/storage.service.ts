@@ -56,6 +56,7 @@ const messageSchema = z.object({
   usage: tokenUsageSchema.optional(),
   tokenCount: z.number().int().nonnegative().optional(),
   reasoningStartedAt: z.number().int().nonnegative().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
   createdAt: z.iso.datetime(),
   status: z.enum(['complete', 'streaming', 'stopped', 'error']),
   error: z.string().max(MAX_CHAT_ERROR_LENGTH).optional(),

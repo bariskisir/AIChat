@@ -1,6 +1,6 @@
 /** Renders one message with Markdown, reasoning, citations, token usage, and direct actions. */
 
-import { useMemo } from 'react'
+import { memo, useMemo } from 'react'
 import { Button, Image as AntImage, Tooltip } from 'antd'
 import { Bot, Copy, GitBranch, Pencil, RefreshCw, Trash2, User, Users } from 'lucide-react'
 import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
@@ -355,4 +355,10 @@ const MessageBubble = ({
   )
 }
 
-export default MessageBubble
+export default memo(MessageBubble, (prev, next) => {
+  return (
+    prev.message === next.message &&
+    prev.modelLabel === next.modelLabel &&
+    prev.expanded === next.expanded
+  )
+})

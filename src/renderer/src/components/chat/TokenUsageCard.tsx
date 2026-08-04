@@ -23,7 +23,12 @@ const formatDuration = (milliseconds: number): string => {
 const TokenUsageCard = ({ usage, message }: TokenUsageCardProps): React.JSX.Element => {
   const { t } = useTranslation()
 
-  const elapsed = message.reasoningStartedAt ? Date.now() - message.reasoningStartedAt : null
+  const elapsed =
+    message.durationMs !== undefined
+      ? message.durationMs
+      : message.status === 'streaming' && message.reasoningStartedAt
+        ? Date.now() - message.reasoningStartedAt
+        : null
 
   return (
     <div className={styles.usage}>
@@ -37,8 +42,8 @@ const TokenUsageCard = ({ usage, message }: TokenUsageCardProps): React.JSX.Elem
       </span>
       <span>
         <Clock size={11} />
-        {message.reasoningStartedAt
-          ? formatDuration(elapsed ?? 0)
+        {elapsed !== null
+          ? formatDuration(elapsed)
           : new Date(message.createdAt).toLocaleTimeString()}
       </span>
     </div>
