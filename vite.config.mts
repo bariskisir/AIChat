@@ -81,8 +81,16 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
+              name: 'vendor-react',
+              test: /node_modules\/(react|react-dom|react-redux|@reduxjs\/toolkit|immer|reselect|scheduler|use-sync-external-store|@remix-run|hoist-non-react-statics)/,
+            },
+            {
+              name: 'vendor-antd',
+              test: /node_modules\/(antd|@ant-design|@rc-component|rc-|dayjs)/,
+            },
+            {
               name: 'vendor',
-              test: /node_modules\/(?!mermaid|@viz-js|cytoscape|langium|dagre|graphlib)/,
+              test: /node_modules\/(?!mermaid|@viz-js|cytoscape|langium|dagre|graphlib|@mermaid-js)/,
             },
           ],
         },

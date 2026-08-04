@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Portuguese interface strings.
  */
 
@@ -39,7 +39,7 @@ const pt = {
     fetchFailed: 'Não foi possível buscar a lista. Verifique a URL e a chave de API.',
     copyApiKey: 'Copiar chave de API',
     apiKeyCopied: 'Chave de API copiada.',
-    fetchModelList: 'Buscar lista de modelos',
+    fetchModelList: 'Obter lista de modelos',
     manualModel: 'Adicionar modelo manualmente',
     manualModelTitle: 'Adicionar modelo manual',
     modelName: 'Nome do modelo',

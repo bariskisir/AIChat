@@ -1,0 +1,140 @@
+/* Styles the conversation tab strip to match the conversations sidebar look. */
+
+.tabBar {
+  min-height: 38px;
+  flex: 0 0 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 4px;
+  border-bottom: 0.5px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-background-soft) 58%, var(--color-background));
+  user-select: none;
+}
+
+.compact {
+  width: min(900px, calc(100% - 30px));
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.label {
+  flex: 0 0 auto;
+  padding-left: 6px;
+  color: var(--color-text-1);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.strip {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.item {
+  min-width: 56px;
+  max-width: 180px;
+  height: 28px;
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  border: 0.5px solid transparent;
+  border-radius: var(--list-item-radius);
+
+  &:hover,
+  &.active {
+    border-color: var(--color-border);
+    background: var(--color-background-soft);
+  }
+
+  .deleteButton {
+    visibility: hidden;
+  }
+
+  &:hover .deleteButton,
+  &.active .deleteButton {
+    visibility: visible;
+  }
+}
+
+.openButton {
+  min-width: 0;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 4px 0 8px;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+  }
+}
+
+.itemTitle {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-text-1);
+  font-size: 11px;
+  font-weight: 580;
+}
+
+.generatingTitle {
+  color: transparent;
+  background: linear-gradient(
+    100deg,
+    var(--color-text-3) 0%,
+    var(--color-text-3) 40%,
+    var(--color-text-1) 50%,
+    var(--color-text-3) 60%,
+    var(--color-text-3) 100%
+  );
+  background-size: 300% 100%;
+  background-clip: text;
+  animation: titleShimmer 1.25s linear infinite;
+}
+
+@keyframes titleShimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.deleteButton {
+  flex: 0 0 28px;
+  margin-right: 3px;
+}
+
+.actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.actionButton {
+  color: var(--color-text-2);
+}
+
+.actionDanger {
+  color: var(--color-error);
+}

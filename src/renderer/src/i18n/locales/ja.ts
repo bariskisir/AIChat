@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Japanese interface strings.
  */
 

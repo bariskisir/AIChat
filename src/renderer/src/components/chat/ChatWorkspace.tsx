@@ -73,7 +73,12 @@ const toModelReference = (model: ModelReference): ModelReference => ({
 })
 
 /** Renders and owns the complete chat interaction for the currently selected local topic. */
-const ChatWorkspace = (): React.JSX.Element => {
+interface ChatWorkspaceProps {
+  expanded: boolean
+  onToggleExpanded: () => void
+}
+
+const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): React.JSX.Element => {
   const currentConversation = useAppSelector((state) => state.app.currentConversation)
   const snapshot = useAppSelector((state) => state.app.providers)
   const dispatch = useAppDispatch()
@@ -93,7 +98,6 @@ const ChatWorkspace = (): React.JSX.Element => {
   const [draft, setDraft] = useState('')
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [imageGeneration, setImageGeneration] = useState(false)
-  const [expandedMode, setExpandedMode] = useState(true)
   const [alternateTargetId, setAlternateTargetId] = useState<string | null>(null)
   const [alternateModel, setAlternateModel] = useState<ModelReference | null>(null)
   const currentConversationId = currentConversation?.id
@@ -836,7 +840,7 @@ const ChatWorkspace = (): React.JSX.Element => {
     <MessageBubble
       key={item.id}
       message={item}
-      expanded={expandedMode}
+      expanded={expanded}
       modelLabel={
         item.model
           ? `${modelNames.get(modelReferenceKey(item.model)) ?? item.model.modelId} | ${providerNames.get(item.model.providerId) ?? item.model.providerId}`
@@ -863,7 +867,7 @@ const ChatWorkspace = (): React.JSX.Element => {
   return (
     <section ref={workspaceRef} className={styles.workspace}>
       <header className={styles.topbar}>
-        <div className={`${styles.topbarContent} ${expandedMode ? '' : styles.centeredTopbar}`}>
+        <div className={`${styles.topbarContent} ${expanded ? '' : styles.centeredTopbar}`}>
           <ModelSelect
             className={styles.modelSelect ?? ''}
             models={snapshot.models}
@@ -873,18 +877,18 @@ const ChatWorkspace = (): React.JSX.Element => {
             onFavorite={(model, favorite) => void toggleFavorite(model, favorite)}
           />
           <span className={styles.topbarSpacer} />
-          <Tooltip title={expandedMode ? t('chat.collapseDialog') : t('chat.expandDialog')}>
+          <Tooltip title={expanded ? t('chat.collapseDialog') : t('chat.expandDialog')}>
             <Button
               type="text"
-              icon={expandedMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              onClick={() => setExpandedMode((v) => !v)}
+              icon={expanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              onClick={onToggleExpanded}
             />
           </Tooltip>
         </div>
       </header>
       <div
         ref={timelineRef}
-        className={`${styles.timeline} ${expandedMode ? '' : styles.centeredTimeline}`}
+        className={`${styles.timeline} ${expanded ? '' : styles.centeredTimeline}`}
       >
         {visibleMessages.length === 0 ? (
           <div className={styles.welcome}>
@@ -912,7 +916,7 @@ const ChatWorkspace = (): React.JSX.Element => {
           })
         )}
       </div>
-      <div className={`${styles.composerWrap} ${expandedMode ? '' : styles.centeredComposer}`}>
+      <div className={`${styles.composerWrap} ${expanded ? '' : styles.centeredComposer}`}>
         {attachments.length > 0 && (
           <div className={styles.draftChips}>
             {attachments.map((attachment) => (

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Turkish interface strings.
  */
 

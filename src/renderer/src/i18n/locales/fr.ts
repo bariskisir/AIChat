@@ -1,4 +1,4 @@
-﻿/**
+/**
  * French interface strings.
  */
 
@@ -39,7 +39,7 @@ const fr = {
     fetchFailed: 'La liste n’a pas pu être chargée. Vérifiez l’URL et la clé API.',
     copyApiKey: 'Copier la clé API',
     apiKeyCopied: 'Clé API copiée.',
-    fetchModelList: 'Charger la liste',
+    fetchModelList: 'Obtenir la liste des modèles',
     manualModel: 'Ajouter un modèle manuellement',
     manualModelTitle: 'Ajouter un modèle manuel',
     modelName: 'Nom du modèle',

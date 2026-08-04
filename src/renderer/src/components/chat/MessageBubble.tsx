@@ -298,7 +298,7 @@ const MessageBubble = ({
           ) : null}
         </div>
         {assistant && message.usage ? (
-          <TokenUsageCard usage={message.usage} message={message} modelLabel={modelLabel} />
+          <TokenUsageCard usage={message.usage} message={message} />
         ) : !assistant && userTokenCount > 0 ? (
           <div className={styles.usage}>
             <span>{t('chat.estimatedTokens', { count: userTokenCount })}</span>
