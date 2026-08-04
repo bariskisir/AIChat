@@ -30,6 +30,13 @@ export const useConversationTabs = () => {
     [conversationActions],
   )
 
+  /** Renames one conversation, same as the sidebar row rename dialog. */
+  const renameTab = useCallback(
+    (id: string, title: string): Promise<boolean> =>
+      conversationActions.renameConversation(id, title),
+    [conversationActions],
+  )
+
   /** Creates a new conversation, same as the sidebar new-chat button. */
   const createNewTab = useCallback((): void => {
     void conversationActions.createConversation()
@@ -73,5 +80,5 @@ export const useConversationTabs = () => {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [createNewTab, cycleTab, page])
 
-  return { createNewTab, cycleTab, deleteAllTabs, deleteTab, openTab }
+  return { createNewTab, cycleTab, deleteAllTabs, deleteTab, openTab, renameTab }
 }

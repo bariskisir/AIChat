@@ -486,7 +486,6 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
         return
       }
       if (event.type === 'complete' || event.type === 'error') {
-        dispatch(setTitleGeneratingConversationId(null))
         flushPendingDeltas()
         activeRequests.current.delete(event.requestId)
         syncConversationGeneratingState(active.conversationId)

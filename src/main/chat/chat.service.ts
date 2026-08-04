@@ -29,7 +29,7 @@ import type StorageService from '../persistence/storage.service'
 import type { WebSearchResult } from '../search/web.search.service'
 import WebSearchService from '../search/web.search.service'
 import { createProviderError, parseTokenUsage, readReasoningDelta } from './chat.errors'
-import { fallbackTitle, sanitizeTitle, TITLE_SYSTEM_PROMPT } from './title.generator'
+import { buildTitlePrompt, fallbackTitle, sanitizeTitle } from './title.generator'
 
 type Emit = (event: ChatStreamEvent) => void
 
@@ -80,6 +80,7 @@ export default class ChatService {
     this.active.set(request.requestId, controller)
     try {
       const titleWasDefault = await this.assignTitleFromFirstMessage(request, emit)
+      const titlePromise = titleWasDefault ? this.generateTitle(request, emit) : Promise.resolve()
       if (request.imageGeneration) {
         emit({ requestId: request.requestId, type: 'status', status: 'generating' })
         await this.generateImage(request, controller.signal, emit)
@@ -88,7 +89,7 @@ export default class ChatService {
       }
       if (!controller.signal.aborted) {
         emit({ requestId: request.requestId, type: 'complete' })
-        if (titleWasDefault) void this.generateTitle(request, emit)
+        await titlePromise
       }
     } catch (error) {
       if (controller.signal.aborted) return
@@ -118,7 +119,7 @@ export default class ChatService {
     return true
   }
 
-  /** Refines the fallback title with the Quick Model after the first answer completes. */
+  /** Refines the fallback title with the Quick Model in parallel with the answer stream. */
   private async generateTitle(request: ChatRequest, emit: Emit): Promise<void> {
     const { quickModel, titleGenerationEnabled } = this.providers.snapshot()
     if (!titleGenerationEnabled || !quickModel) return
@@ -128,18 +129,30 @@ export default class ChatService {
       .join(' ')
       .trim()
     if (!userText) return
-    emit({
-      requestId: request.requestId,
-      type: 'status',
-      status: 'generating-title',
-      conversationId: request.conversationId,
-    })
+    const firstUserContent =
+      request.messages.find((message) => message.role === 'user')?.content ?? ''
     try {
+      // A manual rename while the title is being generated must win over it.
+      const conversation = await this.storage.getConversation(request.conversationId)
+      if (conversation.title !== fallbackTitle(firstUserContent)) return
+      emit({
+        requestId: request.requestId,
+        type: 'status',
+        status: 'generating-title',
+        conversationId: request.conversationId,
+      })
+      const settings = await this.storage.loadSettings()
       const content = await this.completeOnce(
         quickModel,
         [
-          { role: 'system', content: TITLE_SYSTEM_PROMPT },
-          { role: 'user', content: userText.slice(0, clampSurrogateBoundary(userText, 2_000)) },
+          { role: 'system', content: buildTitlePrompt(settings.language) },
+          {
+            role: 'user',
+            content: JSON.stringify({
+              role: 'user',
+              mainText: userText.slice(0, clampSurrogateBoundary(userText, 2_000)),
+            }),
+          },
         ],
         AbortSignal.timeout(30_000),
       )
