@@ -2,6 +2,46 @@
 
 const SVG_DATA_URL_PREFIX = 'data:image/svg+xml;base64,'
 
+/** Maps a MIME type to its file extension, defaulting to PNG for unknown types. */
+const MIME_EXTENSIONS: Readonly<Record<string, string>> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+  'image/svg+xml': '.svg',
+  'image/avif': '.avif',
+  'image/bmp': '.bmp',
+  'image/x-icon': '.ico',
+  'image/vnd.microsoft.icon': '.ico',
+}
+
+/** Resolves the file extension for one image MIME type, falling back to PNG. */
+export const imageExtensionFromMime = (mimeType: string): string =>
+  MIME_EXTENSIONS[mimeType] ?? '.png'
+
+/** Converts a base name into a filesystem-safe file name, falling back to a timestamped name. */
+export const sanitizeImageFileName = (baseName: string): string => {
+  const sanitized = baseName
+    .trim()
+    .replace(/[\\/:*?"<>|]/gu, '-')
+    .replace(/\s+/gu, '-')
+    .slice(0, 60)
+  return sanitized || `image-${new Date().toISOString().slice(0, 16).replace(/[:T]/gu, '')}`
+}
+
+/** Builds a suggested file name for one image blob, using its MIME type for the extension. */
+export const suggestImageFileName = (baseName: string, mimeType: string): string =>
+  `${sanitizeImageFileName(baseName)}${imageExtensionFromMime(mimeType)}`
+
+/** Encodes one image blob as a base64 data URL for transfer over the save-file IPC bridge. */
+export const blobToDataUrl = (blob: Blob): Promise<string> =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result ?? ''))
+    reader.onerror = () => reject(new Error('Image blob could not be read'))
+    reader.readAsDataURL(blob)
+  })
+
 /** Resolves the intrinsic drawing size of an SVG, preferring the viewBox over layout metrics. */
 const svgDrawingSize = (svg: SVGElement): { width: number; height: number } => {
   const viewBoxParts = svg.getAttribute('viewBox')?.trim().split(/\s+/u).map(Number) ?? []

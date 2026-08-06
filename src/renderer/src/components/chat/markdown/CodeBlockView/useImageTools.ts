@@ -15,6 +15,21 @@ export interface ImageToolsOptions {
   enableWheelZoom?: boolean
 }
 
+/** Creates the wheel handler that zooms a preview and consumes the event before page scrolling. */
+export const createWheelZoomHandler = (
+  container: HTMLElement,
+  zoom: (delta: number) => void,
+): ((event: WheelEvent) => void) => {
+  return (event: WheelEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.target) {
+      if (container.contains(event.target as Node)) {
+        event.preventDefault()
+        zoom(event.deltaY < 0 ? 0.1 : -0.1)
+      }
+    }
+  }
+}
+
 /** Imperative preview controls backed by a container element. */
 export const useImageTools = (
   containerRef: RefObject<HTMLDivElement | null>,
@@ -161,18 +176,9 @@ export const useImageTools = (
     if (!enableWheelZoom || !containerRef.current) return
 
     const container = containerRef.current
+    const handleWheel = createWheelZoomHandler(container, zoom)
 
-    /** Converts modified wheel input over the preview into bounded zoom changes. */
-    const handleWheel = (e: WheelEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.target) {
-        if (container.contains(e.target as Node)) {
-          const delta = e.deltaY < 0 ? 0.1 : -0.1
-          zoom(delta)
-        }
-      }
-    }
-
-    container.addEventListener('wheel', handleWheel, { passive: true })
+    container.addEventListener('wheel', handleWheel, { passive: false })
     return () => container.removeEventListener('wheel', handleWheel)
   }, [containerRef, zoom, enableWheelZoom])
 

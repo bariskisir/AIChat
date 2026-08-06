@@ -38,7 +38,7 @@ const compressDiagramSource = (source: string): string => {
 const plantUmlUrlFor = (format: 'png' | 'svg', source: string): string =>
   `${PLANTUML_ENDPOINT}/${format}/${compressDiagramSource(source)}`
 
-interface PlantUmlPreviewProps extends BasicPreviewProps {
+export interface PlantUmlPreviewProps extends BasicPreviewProps {
   ref?: React.RefObject<BasicPreviewHandles | null> | undefined
 }
 

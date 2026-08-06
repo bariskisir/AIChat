@@ -17,6 +17,7 @@ const ko = {
     copy: '복사',
     copied: '복사됨',
     copyImageSource: '이미지 소스 복사',
+    saveImage: '이미지를 다른 이름으로 저장...',
   },
   providers: {
     title: '제공자',

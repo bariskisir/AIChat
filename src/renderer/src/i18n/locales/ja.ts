@@ -17,6 +17,7 @@ const ja = {
     copy: 'コピー',
     copied: 'コピーしました',
     copyImageSource: '画像ソースをコピー',
+    saveImage: '画像を保存...',
   },
   providers: {
     title: 'プロバイダー',

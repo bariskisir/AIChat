@@ -7,7 +7,7 @@ import type { BasicPreviewHandles, BasicPreviewProps } from './types'
 import { renderSvgInShadowHost } from './renderSvgInShadowHost'
 import { useDebouncedRender } from './useDebouncedRender'
 
-interface SvgPreviewProps extends BasicPreviewProps {
+export interface SvgPreviewProps extends BasicPreviewProps {
   ref?: React.RefObject<BasicPreviewHandles | null> | undefined
 }
 

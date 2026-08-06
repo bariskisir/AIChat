@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import { useTranslation } from 'react-i18next'
 import MarkdownSvg from './markdown/MarkdownSvg'
+import { useMinimumDisplayDuration } from './useMinimumDisplayDuration'
 import styles from './ThinkingBlock.module.scss'
 
 /** Properties accepted by the streamed reasoning presentation. */
@@ -17,6 +18,9 @@ export interface ThinkingBlockProps {
   streaming: boolean
   startedAt?: number | undefined
 }
+
+/** Minimum time the live preview stays visible after the stream stops. */
+const THINKING_PREVIEW_MIN_DURATION_MS = 1_000
 
 /** Converts elapsed milliseconds into tenths of a second. */
 const formatSeconds = (milliseconds: number): string =>
@@ -41,6 +45,10 @@ const ThinkingBlock = ({
         .at(-1) ?? '',
     [content],
   )
+  const stablePreview = useMinimumDisplayDuration(streaming ? preview : '', {
+    enabled: streaming,
+    minimumDurationMs: THINKING_PREVIEW_MIN_DURATION_MS,
+  })
 
   useEffect(() => {
     if (!streaming) return
@@ -74,7 +82,7 @@ const ThinkingBlock = ({
         </span>
         <span className={styles.heading}>
           <strong>{status}</strong>
-          {streaming && !expanded && preview && <small>{preview}</small>}
+          {!expanded && stablePreview && <small>{stablePreview}</small>}
         </span>
         <ChevronRight className={styles.chevron} size={18} />
       </button>

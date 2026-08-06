@@ -238,13 +238,39 @@ export default class WebSearchService {
         redirect: 'follow',
         signal: AbortSignal.any([signal, AbortSignal.timeout(CONTENT_TIMEOUT_MS)]),
       })
-      if (!response.ok) return null
+      if (!response.ok) return await this.fetchPageWithWindowFallback(url, signal)
       const html = await this.readBoundedText(response, MAX_PAGE_BYTES)
-      if (!html) return null
+      if (!html) return await this.fetchPageWithWindowFallback(url, signal)
       return await this.extractWithReadability(html, url, signal)
     } catch (error) {
       if (signal.aborted) throw error
+      return this.fetchPageWithWindowFallback(url, signal)
+    }
+  }
+
+  /** Renders a page in a hidden window when a direct fetch was rejected or timed out. */
+  private async fetchPageWithWindowFallback(
+    url: string,
+    signal: AbortSignal,
+  ): Promise<SearchContent | null> {
+    if (signal.aborted) throw abortError()
+    const uid = randomUid()
+    try {
+      await this.searchWindow.open(uid, url, signal)
+      if (signal.aborted) throw abortError()
+      const article = await this.searchWindow.evaluate<SearchContent>(
+        uid,
+        CONTENT_EXTRACTION_SCRIPT,
+      )
+      if (!article.content) return null
+      this.logger.info('WebSearch', 'Page recovered through the hidden-window fallback.', { url })
+      return { title: article.title || url, url, content: article.content }
+    } catch (error) {
+      if (signal.aborted) throw error
+      this.logger.warn('WebSearch', 'Hidden-window page fallback failed.', error)
       return null
+    } finally {
+      this.searchWindow.close(uid)
     }
   }
 

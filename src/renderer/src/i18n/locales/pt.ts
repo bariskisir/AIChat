@@ -17,6 +17,7 @@ const pt = {
     copy: 'Copiar',
     copied: 'Copiado',
     copyImageSource: 'Copiar fonte da imagem',
+    saveImage: 'Salvar imagem como...',
   },
   providers: {
     title: 'Provedores',

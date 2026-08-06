@@ -108,6 +108,22 @@ describe('getModelSupportedReasoningEffortOptions', () => {
     ])
   })
 
+  it('exposes Gemma 4 as a thinking toggle on Gemini and Ollama providers', () => {
+    const gemini = { id: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com' }
+    const ollama = { id: 'ollama', baseUrl: 'http://localhost:11434' }
+    expect(getModelSupportedReasoningEffortOptions({ id: 'gemma-4-26b-a4b-it' }, gemini)).toEqual([
+      'default',
+      'off',
+      'auto',
+    ])
+    expect(getModelSupportedReasoningEffortOptions({ id: 'gemma-4-31b-it' }, ollama)).toEqual([
+      'default',
+      'off',
+      'auto',
+    ])
+    expect(getModelSupportedReasoningEffortOptions({ id: 'gemma-4-26b-a4b-it' })).toBeUndefined()
+  })
+
   it('returns undefined for models without thinking control', () => {
     expect(getModelSupportedReasoningEffortOptions({ id: 'gpt-4o' })).toBeUndefined()
     expect(
@@ -225,6 +241,20 @@ describe('buildReasoningParameters', () => {
   it('uses reasoning_effort for Gemini 3 models', () => {
     expect(buildReasoningParameters('gemini-3-flash', 'medium')).toEqual({
       reasoning_effort: 'medium',
+    })
+  })
+
+  it('toggles Gemma 4 thinking through the Ollama think parameter', () => {
+    const ollama = { id: 'ollama', baseUrl: 'http://localhost:11434' }
+    expect(buildReasoningParameters('gemma-4-31b-it', 'auto', ollama)).toEqual({ think: true })
+    expect(buildReasoningParameters('gemma-4-31b-it', 'high', ollama)).toEqual({ think: true })
+    expect(buildReasoningParameters('gemma-4-31b-it', 'off', ollama)).toEqual({ think: false })
+  })
+
+  it('keeps the Gemini thinking-config wire for Google-hosted Gemma 4', () => {
+    const gemini = { id: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com' }
+    expect(buildReasoningParameters('gemma-4-26b-a4b-it', 'auto', gemini)).toEqual({
+      extra_body: { google: { thinking_config: { thinking_budget: -1, include_thoughts: true } } },
     })
   })
 

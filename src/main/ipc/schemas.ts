@@ -142,5 +142,5 @@ export const rendererLogSchema = z.object({
 
 export const fileSaveSchema = z.object({
   suggestedName: z.string().trim().min(1).max(200),
-  content: z.string().max(10_000_000),
+  content: z.string().max(35_000_000),
 })

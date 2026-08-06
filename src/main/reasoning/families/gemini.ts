@@ -28,14 +28,15 @@ export const GEMINI_THINKING_MODEL_REGEX = new RegExp(
 /** Gemini flash-family models (the only ones that can hard-disable thinking). */
 export const GEMINI_FLASH_MODEL_REGEX = /gemini[^\n]*-flash[^\n]*$/i
 
-/** Google-hosted Gemma 4 thinking models (Gemini API provider only). */
+/** Google-hosted or Ollama-served Gemma 4 thinking models. */
 export const isHostedGemma4ThinkingModel = (
   model?: ReasoningModelLike,
   provider?: ReasoningProviderLike,
 ): boolean => {
   if (!model) return false
   const modelId = getLowerBaseModelName(model.id, '/')
-  return detectProviderKind(provider) === 'gemini' && /^gemma-4-/.test(modelId)
+  const kind = detectProviderKind(provider)
+  return (kind === 'gemini' || kind === 'ollama') && /^gemma-4-/.test(modelId)
 }
 
 /** Gemini models that expose thinking-token control. */

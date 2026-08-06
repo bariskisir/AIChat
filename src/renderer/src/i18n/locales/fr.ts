@@ -17,6 +17,7 @@ const fr = {
     copy: 'Copier',
     copied: 'Copié',
     copyImageSource: "Copier la source de l'image",
+    saveImage: "Enregistrer l'image sous...",
   },
   providers: {
     title: 'Fournisseurs',

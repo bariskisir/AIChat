@@ -17,6 +17,7 @@ const zh = {
     copy: '复制',
     copied: '已复制',
     copyImageSource: '复制图片来源',
+    saveImage: '图片另存为...',
   },
   providers: {
     title: '提供商',

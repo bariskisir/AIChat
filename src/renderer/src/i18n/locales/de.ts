@@ -17,6 +17,7 @@ const de = {
     copy: 'Kopieren',
     copied: 'Kopiert',
     copyImageSource: 'Bildquelle kopieren',
+    saveImage: 'Bild speichern unter...',
   },
   providers: {
     title: 'Anbieter',

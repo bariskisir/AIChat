@@ -266,6 +266,20 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       defaultPath: suggestedName,
     })
     if (canceled || !filePath) return false
+
+    if (content.startsWith('data:')) {
+      const commaIndex = content.indexOf(',')
+      if (commaIndex === -1) throw new Error('Invalid data URL payload.')
+      const metadata = content.slice(0, commaIndex)
+      const payload = content.slice(commaIndex + 1)
+      if (metadata.includes(';base64')) {
+        await fs.writeFile(filePath, Buffer.from(payload, 'base64'))
+      } else {
+        await fs.writeFile(filePath, payload, 'utf-8')
+      }
+      return true
+    }
+
     await fs.writeFile(filePath, content, 'utf-8')
     return true
   })

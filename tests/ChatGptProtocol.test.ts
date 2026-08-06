@@ -113,6 +113,20 @@ describe('parseResponsesSseLine', () => {
     expect(delta).toMatchObject({ content: '', reasoning: 'Thinking' })
   })
 
+  it('emits plaintext reasoning_text deltas', () => {
+    const delta = parseResponsesSseLine(
+      `data: ${JSON.stringify({ type: 'response.reasoning_text.delta', delta: 'Deep thought' })}`,
+    )
+    expect(delta).toMatchObject({ content: '', reasoning: 'Deep thought' })
+  })
+
+  it('ignores encrypted reasoning deltas that cannot be rendered', () => {
+    const delta = parseResponsesSseLine(
+      `data: ${JSON.stringify({ type: 'response.reasoning.encrypted_content.delta', delta: 'base64:cipher' })}`,
+    )
+    expect(delta).toMatchObject({ content: '', reasoning: '', error: null })
+  })
+
   it('reports stream errors', () => {
     const delta = parseResponsesSseLine(
       `data: ${JSON.stringify({ type: 'error', message: 'Rate limited' })}`,

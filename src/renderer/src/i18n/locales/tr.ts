@@ -17,6 +17,7 @@ const tr = {
     copy: 'Kopyala',
     copied: 'Kopyalandı',
     copyImageSource: 'Görsel Kaynağını Kopyala',
+    saveImage: 'Görseli Farklı Kaydet...',
   },
   providers: {
     title: 'Sağlayıcılar',

@@ -77,7 +77,7 @@ export const MODEL_SUPPORTED_REASONING_EFFORT = {
   gemini3_flash: ['minimal', 'low', 'medium', 'high'] as const,
   gemini3_pro: ['low', 'high'] as const,
   gemini3_1_pro: ['low', 'medium', 'high'] as const,
-  gemma4_hosted: ['minimal', 'high'] as const,
+  gemma4_hosted: ['auto'] as const,
   qwen: ['low', 'medium', 'high'] as const,
   qwen_thinking: ['low', 'medium', 'high'] as const,
   doubao: ['auto', 'high'] as const,
@@ -123,7 +123,7 @@ export const MODEL_SUPPORTED_OPTIONS = {
   gemini3_flash: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gemini3_flash] as const,
   gemini3_pro: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gemini3_pro] as const,
   gemini3_1_pro: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gemini3_1_pro] as const,
-  gemma4_hosted: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gemma4_hosted] as const,
+  gemma4_hosted: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.gemma4_hosted] as const,
   qwen: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.qwen] as const,
   qwen_thinking: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.qwen_thinking] as const,
   doubao: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.doubao] as const,
@@ -367,9 +367,6 @@ const CLAUDE_TOKEN_LIMITS: ReadonlyArray<ThinkingTokenLimit> = [
 const OTHER_TOKEN_LIMITS: ReadonlyArray<ThinkingTokenLimit> = [
   { pattern: 'baichuan-m2$', min: 0, max: 30_000 },
   { pattern: 'baichuan-m3$', min: 0, max: 30_000 },
-  { pattern: 'gemma-?4[:-]?e[24]b', min: 1024, max: 8192 },
-  { pattern: 'gemma-?4[:-]?26b', min: 1024, max: 30720 },
-  { pattern: 'gemma-?4[:-]?31b', min: 1024, max: 30720 },
 ]
 
 /** All thinking-token budget ranges in first-match priority order. */

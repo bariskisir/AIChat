@@ -3,7 +3,7 @@
 import { memo, useMemo } from 'react'
 import { Button, Image as AntImage, Tooltip } from 'antd'
 import { Bot, Copy, GitBranch, Pencil, RefreshCw, Trash2, User, Users } from 'lucide-react'
-import ReactMarkdown, { defaultUrlTransform, type Components } from 'react-markdown'
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
 import type { PluggableList } from 'unified'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
@@ -13,12 +13,7 @@ import remarkAlert from 'remark-github-blockquote-alert'
 import remarkMath from 'remark-math'
 import { useTranslation } from 'react-i18next'
 import { estimateTextTokens, type ChatMessage } from '@shared/index'
-import {
-  citationHostname,
-  findCitationInChildren,
-  withCitationTags,
-  type CitationTagData,
-} from '@renderer/utils/citations'
+import { withCitationTags } from '@renderer/utils/citations'
 import { convertLatexDelimiters, stripBlankLinesInSvg } from '@renderer/utils/markdown'
 import { getModelLogo } from '@renderer/utils/modelLogos'
 import { createStreamingTextProjection } from '@renderer/utils/streamingProjection'
@@ -27,11 +22,7 @@ import 'remark-github-blockquote-alert/alert.css'
 import ThinkingBlock from './ThinkingBlock'
 import SearchBlock from './SearchBlock'
 import TokenUsageCard from './TokenUsageCard'
-import CodeBlock from './markdown/CodeBlock'
-import ImageViewer from './markdown/ImageViewer'
-import MarkdownTable from './markdown/MarkdownTable'
-import MarkdownSvg from './markdown/MarkdownSvg'
-import ShadowDomStyle from './markdown/ShadowDomStyle'
+import { useStableMarkdownComponents } from './markdown/markdownComponents'
 import remarkDisableConstructs from './markdown/remarkDisableConstructs'
 import rehypeHeadingIds from './markdown/rehypeHeadingIds'
 import rehypeScalableSvg from './markdown/rehypeScalableSvg'
@@ -60,55 +51,6 @@ const transformUrl = (url: string): string =>
   url.startsWith('data:image/png') || url.startsWith('data:image/jpeg')
     ? url
     : defaultUrlTransform(url)
-
-/** Opens one Markdown link through the trusted system-browser bridge. */
-const MarkdownLink: Components['a'] = ({ href, children }) => (
-  <button
-    type="button"
-    className={styles.link}
-    onClick={() => href && void window.app.openExternal(href)}
-  >
-    {children}
-  </button>
-)
-
-/** Citation tooltip card with title, snippet, and hostname. */
-const CitationTooltipCard = ({ citation }: { citation: CitationTagData }): React.JSX.Element => (
-  <div className={styles.citationTooltipCard}>
-    <div className={styles.citationTooltipTitle}>
-      {citation.title || citationHostname(citation.url)}
-    </div>
-    {citation.content && <div className={styles.citationTooltipContent}>{citation.content}</div>}
-    <div className={styles.citationTooltipHost}>{citationHostname(citation.url)}</div>
-  </div>
-)
-
-/** Renders Markdown links, turning citation-tagged links into tooltip superscripts. */
-const CitationSup: Components['a'] = ({ href, children }) => {
-  const citationData = findCitationInChildren(children)
-  if (citationData) {
-    let parsed: CitationTagData
-    try {
-      parsed = JSON.parse(citationData)
-    } catch {
-      return <MarkdownLink href={href}>{children}</MarkdownLink>
-    }
-    return (
-      <Tooltip arrow={false} placement="top" title={<CitationTooltipCard citation={parsed} />}>
-        <sup className={styles.citationSup}>
-          <button
-            type="button"
-            className={styles.citationSupButton}
-            onClick={() => parsed.url && void window.app.openExternal(parsed.url)}
-          >
-            {parsed.id}
-          </button>
-        </sup>
-      </Tooltip>
-    )
-  }
-  return <MarkdownLink href={href}>{children}</MarkdownLink>
-}
 
 /** Displays a durable user or assistant message and its context-sensitive direct actions. */
 const MessageBubble = ({
@@ -171,46 +113,7 @@ const MessageBubble = ({
     return plugins
   }, [markdownContent])
 
-  const components = useMemo(() => {
-    const map: Partial<Components> = {
-      a: CitationSup,
-      code: CodeBlock,
-      /** Wraps Markdown tables with source-aware copy controls. */
-      table: (props) => (
-        <MarkdownTable
-          onCopy={async () => {
-            const position = props.node?.position
-            if (!position?.start?.line || !position.end?.line) return ''
-            return message.content
-              .split('\n')
-              .slice(position.start.line - 1, position.end.line)
-              .join('\n')
-              .trim()
-          }}
-        >
-          {props.children}
-        </MarkdownTable>
-      ),
-      /** Renders Markdown images with preview and context-menu actions. */
-      img: ({ node, style: _style, ...rest }) => <ImageViewer {...rest} />,
-      svg: MarkdownSvg,
-      /** Lets fenced-code containers expose their own overflow behavior. */
-      pre: ({ node, className, ...rest }) => (
-        <pre className={`${styles.markdownPre} ${className ?? ''}`} {...rest} />
-      ),
-      /** Avoids invalid paragraph nesting when a paragraph contains an image. */
-      p: ({ node, ...rest }) => {
-        const hasImage = node?.children.some(
-          (child) => child.type === 'element' && child.tagName === 'img',
-        )
-        if (hasImage) return <div {...rest} />
-        return <p {...rest} />
-      },
-      /** Scopes model-authored style tags to a shadow-root subtree. */
-      style: (props) => <ShadowDomStyle>{props.children}</ShadowDomStyle>,
-    }
-    return map
-  }, [message.content])
+  const components = useStableMarkdownComponents(message)
 
   /** True when the message renders multiple images, enabling grouped prev/next preview. */
   const hasMultipleImages = useMemo(() => {

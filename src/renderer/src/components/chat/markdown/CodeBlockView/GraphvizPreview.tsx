@@ -31,7 +31,7 @@ const getVizInstance = (): Promise<VizInstance> => {
   return vizLoading
 }
 
-interface GraphvizPreviewProps extends BasicPreviewProps {
+export interface GraphvizPreviewProps extends BasicPreviewProps {
   ref?: React.RefObject<BasicPreviewHandles | null> | undefined
 }
 

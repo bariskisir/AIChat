@@ -24,6 +24,7 @@ import {
 import {
   GEMINI_FLASH_MODEL_REGEX,
   isGemini3ThinkingTokenModel,
+  isHostedGemma4ThinkingModel,
   isSupportedThinkingTokenGeminiModel,
 } from './families/gemini'
 import { isGrok4FastReasoningModel } from './families/grok'
@@ -102,6 +103,10 @@ export const buildReasoningParameters = (
   if (effort === 'default') return null
 
   if (effort === 'off') {
+    if (kind === 'ollama' && isHostedGemma4ThinkingModel(model, provider)) {
+      return { think: false }
+    }
+
     if (kind === 'openrouter') {
       if (isSupportNoneReasoningEffortModel(model)) return { reasoning: { effort: 'none' } }
       return { reasoning: { enabled: false, exclude: true } }
@@ -366,6 +371,10 @@ export const buildReasoningParameters = (
 
   if (getLowerBaseModelName(model.id).includes('mistral-small-2603')) {
     return { reasoning_effort: 'high' }
+  }
+
+  if (kind === 'ollama' && isHostedGemma4ThinkingModel(model, provider)) {
+    return { think: true }
   }
 
   if (isSupportedThinkingTokenGeminiModel(model, provider)) {

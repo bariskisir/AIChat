@@ -17,6 +17,7 @@ const es = {
     copy: 'Copiar',
     copied: 'Copiado',
     copyImageSource: 'Copiar fuente de la imagen',
+    saveImage: 'Guardar imagen como...',
   },
   providers: {
     title: 'Proveedores',

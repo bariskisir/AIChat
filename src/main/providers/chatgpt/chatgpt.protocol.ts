@@ -193,7 +193,7 @@ export const parseResponsesSseLine = (line: string): ResponsesSseDelta | null =>
       error: null,
     }
   }
-  if (type.includes('reasoning_summary_text.delta')) {
+  if (type.includes('reasoning_text.delta') || type.includes('reasoning_summary_text.delta')) {
     return {
       content: '',
       reasoning: rawStringValue(event.delta),

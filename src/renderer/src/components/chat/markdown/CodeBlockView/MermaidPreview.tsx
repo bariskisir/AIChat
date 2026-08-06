@@ -8,7 +8,7 @@ import type { BasicPreviewHandles, BasicPreviewProps } from './types'
 import { renderSvgInShadowHost } from './renderSvgInShadowHost'
 import { useDebouncedRender } from './useDebouncedRender'
 
-interface MermaidPreviewProps extends BasicPreviewProps {
+export interface MermaidPreviewProps extends BasicPreviewProps {
   ref?: React.RefObject<BasicPreviewHandles | null> | undefined
 }
 
