@@ -1,4 +1,4 @@
-/** Google/Bing web search with hidden windows and Readability extraction. */
+/** Google, Bing, and DuckDuckGo web search with hidden windows and Readability extraction. */
 
 import readabilitySource from '@mozilla/readability/Readability.js?raw'
 import turndownSource from 'turndown/lib/turndown.browser.umd.js?raw'
@@ -28,7 +28,8 @@ const CHROME_USER_AGENT =
 
 const MAX_QUERIES = 3
 const MAX_RESULTS_PER_QUERY = 5
-const MAX_CITATIONS = 5
+/** Keeps every found result citable so the accordion can list them all. */
+const MAX_CITATIONS = MAX_QUERIES * MAX_RESULTS_PER_QUERY
 const MAX_SNIPPET_CHARS = 260
 const MAX_CONTENT_CHARS = 8_000
 const CONTENT_TIMEOUT_MS = 30_000
@@ -51,12 +52,29 @@ const hostnameFor = (url: string): string => {
   }
 }
 
-/** Builds the engine URLs used by the local Google and Bing providers. */
+/** Builds the engine URLs used by the local Google, Bing, and DuckDuckGo providers. */
 const buildSearchUrl = (engine: Exclude<WebSearchMode, 'off'>, query: string): string => {
   const encoded = encodeURIComponent(query)
-  return engine === 'google'
-    ? 'https://www.google.com/search?q=%s'.replace('%s', encoded)
-    : 'https://cn.bing.com/search?q=%s&ensearch=1'.replace('%s', encoded)
+  if (engine === 'google') return 'https://www.google.com/search?q=%s'.replace('%s', encoded)
+  if (engine === 'bing') return 'https://cn.bing.com/search?q=%s&ensearch=1'.replace('%s', encoded)
+  return 'https://html.duckduckgo.com/html/?q=%s'.replace('%s', encoded)
+}
+
+/** Sorted engine candidates used when the selected engine returns no results. */
+const SEARCH_ENGINES: Exclude<WebSearchMode, 'off'>[] = ['bing', 'duckduckgo', 'google']
+
+/** Builds the engine fallback order: selected first, then DuckDuckGo, then the rest alphabetically. */
+const buildSearchFallbackOrder = (
+  selected: Exclude<WebSearchMode, 'off'>,
+  useWebSearchFallback: boolean,
+): Exclude<WebSearchMode, 'off'>[] => {
+  if (!useWebSearchFallback) return [selected]
+  const order: Exclude<WebSearchMode, 'off'>[] = [selected]
+  if (selected !== 'duckduckgo') order.push('duckduckgo')
+  for (const engine of SEARCH_ENGINES) {
+    if (engine !== selected && engine !== 'duckduckgo') order.push(engine)
+  }
+  return order
 }
 
 /** Applies the app-language restriction to local engine queries. */
@@ -102,6 +120,21 @@ const BING_EXTRACTION_SCRIPT = `(() => {
   }
 })()`
 
+/** Extracts DuckDuckGo organic results with the html endpoint selectors and real-link attribute. */
+const DUCKDUCKGO_EXTRACTION_SCRIPT = `(() => {
+  const results = [];
+  try {
+    document.querySelectorAll('#links .result').forEach((item) => {
+      if (item.classList.contains('result--ad')) return;
+      const link = item.querySelector('.result__a');
+      if (!link) return;
+      const url = link.getAttribute('data-udg') || link.href || '';
+      results.push({ title: link.textContent || '', url });
+    });
+  } catch (error) {}
+  return results;
+})()`
+
 /** Runs Readability plus Turndown extraction inside a rendered page. */
 const CONTENT_EXTRACTION_SCRIPT = `(() => {
   ${readabilitySource}
@@ -129,14 +162,21 @@ export default class WebSearchService {
     engine: Exclude<WebSearchMode, 'off'>,
     queries: string[],
     language: string,
+    useWebSearchFallback: boolean,
     signal: AbortSignal,
-    onProgress?: (query: string, count: number, done: boolean) => void,
+    onProgress?: (query: string, engine: string, count: number, done: boolean) => void,
   ): Promise<WebSearchResult> {
     const settled = await Promise.allSettled(
       queries.slice(0, MAX_QUERIES).map(async (query) => {
         if (signal.aborted) throw abortError()
-        onProgress?.(query, 0, false)
-        const links = await this.searchEngine(engine, query, language, signal)
+        const links = await this.searchWithEngineFallback(
+          engine,
+          query,
+          language,
+          useWebSearchFallback,
+          signal,
+          onProgress,
+        )
         if (signal.aborted) throw abortError()
         const contents = await this.fetchPageContents(links, signal)
         return contents
@@ -144,16 +184,13 @@ export default class WebSearchService {
     )
     const results: SearchContent[] = []
     for (let index = 0; index < settled.length; index += 1) {
-      const query = queries[index] ?? ''
       const outcome = settled[index]
       if (!outcome) continue
       if (outcome.status === 'rejected') {
         if (signal.aborted) throw outcome.reason
         this.logger.warn('WebSearch', `${engine} search failed for a query.`, outcome.reason)
-        onProgress?.(query, -1, true)
         continue
       }
-      onProgress?.(query, outcome.value.length, true)
       results.push(...outcome.value)
     }
 
@@ -179,6 +216,38 @@ export default class WebSearchService {
     return { citations, context: contexts.join('\n\n') }
   }
 
+  /** Searches one query across engines until the first engine yields results. */
+  private async searchWithEngineFallback(
+    engine: Exclude<WebSearchMode, 'off'>,
+    query: string,
+    language: string,
+    useWebSearchFallback: boolean,
+    signal: AbortSignal,
+    onProgress?: (query: string, engine: string, count: number, done: boolean) => void,
+  ): Promise<SearchLink[]> {
+    const order = buildSearchFallbackOrder(engine, useWebSearchFallback)
+    for (const candidate of order) {
+      if (signal.aborted) throw abortError()
+      onProgress?.(query, candidate, 0, false)
+      let links: SearchLink[] = []
+      try {
+        links = await this.searchEngine(candidate, query, language, signal)
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn('WebSearch', `${candidate} search failed; trying the next engine.`, error)
+        onProgress?.(query, candidate, -1, true)
+        continue
+      }
+      if (signal.aborted) throw abortError()
+      onProgress?.(query, candidate, links.length, true)
+      if (links.length > 0) return links
+      this.logger.info('WebSearch', `${candidate} returned no results; trying the next engine.`, {
+        query,
+      })
+    }
+    return []
+  }
+
   /** Loads one engine results page in a hidden window and extracts organic links. */
   private async searchEngine(
     engine: Exclude<WebSearchMode, 'off'>,
@@ -190,13 +259,16 @@ export default class WebSearchService {
     const cleanedQuery = query.split('\r\n')[1] ?? query
     const queryWithLanguage = language ? applyLanguageFilter(cleanedQuery, language) : cleanedQuery
     const url = buildSearchUrl(engine, queryWithLanguage)
+    const extractionScript =
+      engine === 'google'
+        ? GOOGLE_EXTRACTION_SCRIPT
+        : engine === 'bing'
+          ? BING_EXTRACTION_SCRIPT
+          : DUCKDUCKGO_EXTRACTION_SCRIPT
     try {
       await this.searchWindow.open(uid, url, signal)
       if (signal.aborted) throw abortError()
-      const items = await this.searchWindow.evaluate<SearchLink[]>(
-        uid,
-        engine === 'google' ? GOOGLE_EXTRACTION_SCRIPT : BING_EXTRACTION_SCRIPT,
-      )
+      const items = await this.searchWindow.evaluate<SearchLink[]>(uid, extractionScript)
       return items.filter((item) => /^https?:\/\//i.test(item.url)).slice(0, MAX_RESULTS_PER_QUERY)
     } finally {
       this.searchWindow.close(uid)

@@ -5,13 +5,14 @@ import { ChevronRight, Globe } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { Citation } from '@shared/index'
 import { citationHostname } from '@renderer/utils/citations'
-import { BingLogo, GoogleLogo } from '@renderer/components/app/icons'
+import { BingLogo, DuckDuckGoLogo, GoogleLogo } from '@renderer/components/app/icons'
 import styles from './SearchBlock.module.scss'
 
 /** Returns the monochrome mark of the selected web-search engine. */
 const engineIcon = (engine: string): React.JSX.Element => {
   if (engine === 'google') return <GoogleLogo width={15} height={15} />
   if (engine === 'bing') return <BingLogo width={15} height={15} />
+  if (engine === 'duckduckgo') return <DuckDuckGoLogo width={15} height={15} />
   return <Globe size={15} className={styles.fallback} />
 }
 

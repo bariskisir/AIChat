@@ -5,7 +5,7 @@ import type { ModelReference } from './providers'
 import type { ReasoningEffort } from './reasoning'
 
 /** Lists web-search modes available in each chat conversation. */
-export const WEB_SEARCH_MODES = ['off', 'google', 'bing'] as const
+export const WEB_SEARCH_MODES = ['off', 'google', 'bing', 'duckduckgo'] as const
 
 /** Identifies one web-search mode or the disabled state. */
 export type WebSearchMode = (typeof WEB_SEARCH_MODES)[number]
@@ -22,6 +22,7 @@ export interface Conversation {
   selectedModel: ModelReference | null
   searchMode: WebSearchMode
   lastSearchEngine: Exclude<WebSearchMode, 'off'>
+  useWebSearchFallback: boolean
   reasoningEffort: ReasoningEffort
 }
 

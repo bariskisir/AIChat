@@ -41,6 +41,7 @@ describe('toConversationSummary', () => {
       selectedModel: null,
       searchMode: 'off',
       lastSearchEngine: 'google',
+      useWebSearchFallback: true,
       reasoningEffort: 'off',
     }
     expect(toConversationSummary(conversation)).toEqual({

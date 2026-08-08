@@ -656,6 +656,11 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     }))
   }
 
+  /** Updates whether zero-result searches fall back to the remaining engines. */
+  const selectWebSearchFallback = (value: boolean): void => {
+    updateConversation((conversation) => ({ ...conversation, useWebSearchFallback: value }))
+  }
+
   /** Opens the native picker and appends validated attachment copies to the draft. */
   const selectAttachments = async (): Promise<void> => {
     const conversation = conversationRef.current
@@ -699,6 +704,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       model,
       messages: history,
       searchMode: conversation.searchMode,
+      useWebSearchFallback: conversation.useWebSearchFallback,
       reasoningEffort: requestReasoningEffort,
       imageGeneration: useImageGeneration,
     }
@@ -819,6 +825,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
         selectedModel: conversation.selectedModel,
         searchMode: conversation.searchMode,
         lastSearchEngine: conversation.lastSearchEngine,
+        useWebSearchFallback: conversation.useWebSearchFallback,
         reasoningEffort: conversation.reasoningEffort,
       })
       dispatch(addConversationSummary(toConversationSummary(branch)))
@@ -1025,7 +1032,12 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
                 }
               />
             )}
-          <WebSearchControl value={currentConversation.searchMode} onChange={selectWebSearch} />
+          <WebSearchControl
+            value={currentConversation.searchMode}
+            onChange={selectWebSearch}
+            useWebSearchFallback={currentConversation.useWebSearchFallback}
+            onWebSearchFallbackChange={selectWebSearchFallback}
+          />
           {imageDescriptor && (
             <Tooltip title={t('chat.imageGeneration')}>
               <Button

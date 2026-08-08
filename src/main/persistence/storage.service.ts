@@ -51,7 +51,7 @@ const messageSchema = z.object({
   reasoning: z.string().optional(),
   model: modelReferenceSchema.optional(),
   attachments: z.array(attachmentSchema).max(10).optional(),
-  citations: z.array(citationSchema).max(10).optional(),
+  citations: z.array(citationSchema).max(15).optional(),
   searchQueries: z.array(searchQueryStatusSchema).max(10).optional(),
   usage: tokenUsageSchema.optional(),
   tokenCount: z.number().int().nonnegative().optional(),
@@ -71,7 +71,8 @@ const conversationSchema = z.object({
   messages: z.array(messageSchema),
   selectedModel: modelReferenceSchema.nullable(),
   searchMode: z.enum(WEB_SEARCH_MODES),
-  lastSearchEngine: z.enum(['google', 'bing']),
+  lastSearchEngine: z.enum(['google', 'bing', 'duckduckgo']),
+  useWebSearchFallback: z.boolean(),
   reasoningEffort: z.enum(REASONING_EFFORTS),
 })
 
@@ -92,6 +93,7 @@ const normalizeConversation = (input: unknown): unknown => {
     selectedModel: value.selectedModel ?? null,
     searchMode: value.searchMode ?? 'off',
     lastSearchEngine: value.lastSearchEngine ?? 'google',
+    useWebSearchFallback: value.useWebSearchFallback ?? true,
     reasoningEffort: value.reasoningEffort ?? 'default',
   }
 }
@@ -184,6 +186,7 @@ export default class StorageService {
       selectedModel: null,
       searchMode: 'off',
       lastSearchEngine: 'google',
+      useWebSearchFallback: true,
       reasoningEffort: 'default',
     }
     this.conversationWrites.add(conversation.id)

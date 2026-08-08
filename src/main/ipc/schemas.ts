@@ -55,7 +55,7 @@ export const messageSchema = z.object({
   reasoning: z.string().max(2_000_000).optional(),
   model: modelReferenceSchema.optional(),
   attachments: z.array(attachmentSchema).max(10).optional(),
-  citations: z.array(citationSchema).max(10).optional(),
+  citations: z.array(citationSchema).max(15).optional(),
   searchQueries: z.array(searchQueryStatusSchema).max(10).optional(),
   usage: tokenUsageSchema.optional(),
   tokenCount: z.number().int().nonnegative().optional(),
@@ -76,7 +76,8 @@ export const conversationSchema = z.object({
   messages: z.array(messageSchema).max(10_000),
   selectedModel: modelReferenceSchema.nullable(),
   searchMode: z.enum(WEB_SEARCH_MODES),
-  lastSearchEngine: z.enum(['google', 'bing']),
+  lastSearchEngine: z.enum(['google', 'bing', 'duckduckgo']),
+  useWebSearchFallback: z.boolean(),
   reasoningEffort: z.enum(REASONING_EFFORTS),
 })
 
@@ -129,6 +130,7 @@ export const chatRequestSchema = z.object({
   model: modelReferenceSchema,
   messages: z.array(messageSchema).max(10_000),
   searchMode: z.enum(WEB_SEARCH_MODES),
+  useWebSearchFallback: z.boolean(),
   reasoningEffort: z.enum(REASONING_EFFORTS),
   imageGeneration: z.boolean(),
 })

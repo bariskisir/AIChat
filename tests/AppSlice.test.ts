@@ -32,6 +32,7 @@ const conversation = (id: string, title = 'New Conversation'): Conversation => (
   selectedModel: null,
   searchMode: 'off',
   lastSearchEngine: 'google',
+  useWebSearchFallback: true,
   reasoningEffort: 'off',
 })
 

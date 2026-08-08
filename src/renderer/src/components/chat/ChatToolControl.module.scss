@@ -79,3 +79,16 @@
     line-height: 1.35;
   }
 }
+
+.panelDivider {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--color-border-soft);
+}
+
+.searchFallbackRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+}

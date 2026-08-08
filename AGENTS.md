@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-AI Chat is a local-first Electron desktop client with three provider families: OpenAI-compatible APIs, ChatGPT account login through the Codex backend, and Claude Web account sessions. Users configure or sign in to providers, fetch each provider's model catalog, explicitly select available models, mark favorites, and chat over provider-specific streaming protocols. Responses stream reasoning, citations, usage, web-search results, code blocks, and SVG artifacts into local conversations persisted as individual JSON files. The app also provides Google/Bing page extraction, image generation, image and office-document attachments, a rich Markdown renderer (Mermaid, Graphviz, PlantUML, KaTeX, SVG, shadow-DOM-styled model HTML), automatic title generation, a system tray, and GitHub-based auto-updates.
+AI Chat is a local-first Electron desktop client with three provider families: OpenAI-compatible APIs, ChatGPT account login through the Codex backend, and Claude Web account sessions. Users configure or sign in to providers, fetch each provider's model catalog, explicitly select available models, mark favorites, and chat over provider-specific streaming protocols. Responses stream reasoning, citations, usage, web-search results, code blocks, and SVG artifacts into local conversations persisted as individual JSON files. The app also provides Google/Bing/DuckDuckGo page extraction with per-conversation engine fallback, image generation, image and office-document attachments, a rich Markdown renderer (Mermaid, Graphviz, PlantUML, KaTeX, SVG, shadow-DOM-styled model HTML), automatic title generation, a system tray, and GitHub-based auto-updates.
 
 ## Tech Stack
 
@@ -14,7 +14,7 @@ AI Chat is a local-first Electron desktop client with three provider families: O
 | Styling       | SCSS Modules                                                                 |
 | Validation    | Zod 4.4 (all IPC boundaries and persistence)                                 |
 | AI Providers  | OpenAI-compatible REST, ChatGPT Codex backend, Claude Web sessions           |
-| Web Search    | Google/Bing via hidden windows (Readability + Turndown)                      |
+| Web Search    | Google/Bing/DuckDuckGo via hidden windows (Readability + Turndown), zero-result engine fallback |
 | Attachments   | officeparser (PDF, Office docs), image paste                                 |
 | Markdown      | react-markdown 10 + remark/rehype (GFM, math, KaTeX, raw, CJK-friendly, GitHub blockquote alerts), mermaid 11, @viz-js/viz, PlantUML via pako |
 | Drag & Drop   | @hello-pangea/dnd                                                             |
@@ -97,7 +97,7 @@ aichat/
 │   │   │   ├── familyPatterns.ts      # 43 central family-name regexes
 │   │   │   └── families/              # claude, openai, gemini, chinese, grok, misc predicates
 │   │   ├── search/
-│   │   │   ├── web.search.service.ts  # Google/Bing queries + Readability/Turndown extraction
+│   │   │   ├── web.search.service.ts  # Google/Bing/DuckDuckGo queries + fallback order + Readability/Turndown
 │   │   │   └── hidden.window.service.ts # Hidden sandboxed windows with Safari UA
 │   │   └── updates/
 │   │       ├── app.updater.ts         # GitHub release check, download + silent install
@@ -142,7 +142,7 @@ aichat/
 │           │       ├── MessageBubble.tsx     # Markdown, reasoning, citations, actions
 │           │       ├── ModelSelect.tsx       # Searchable centered model picker (ModelAvatar)
 │           │       ├── ModelAvatar.tsx       # Company logo or fallback letter
-│           │       ├── WebSearchControl.tsx  # Off/Google/Bing per-conversation toggle
+│           │       ├── WebSearchControl.tsx  # Off/Google/Bing/DuckDuckGo + fallback toggle per conversation
 │           │       ├── ReasoningControl.tsx  # Thinking-effort picker
 │           │       ├── ThinkingBlock.tsx     # Collapsible reasoning output
 │           │       ├── SearchBlock.tsx       # Web-search status + references
@@ -167,7 +167,7 @@ aichat/
 ├── .github/workflows/release.yml       # Tag-triggered CI: check, package, publish releases
 ├── biome.json                         # Biome config; excludes src/renderer/src/assets/models/**
 ├── vite.config.mts                    # Vite config: main/preload (unbundled) + renderer builds
-├── vitest.config.ts                   # Vitest config: node environment with path aliases
+├── vitest.config.mts                  # Vitest config: node environment with path aliases
 ├── tsconfig.json                      # References tsconfig.node.json + tsconfig.web.json
 ├── tsconfig.node.json                 # Main/preload/tests TS: NodeNext, strict, aliases
 ├── tsconfig.web.json                  # Renderer TS: ESNext, react-jsx, @renderer/@shared paths
@@ -259,11 +259,11 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
 - **StorageService** -- File-based persistence under `%APPDATA%/AI Chat/Data/`. Settings in `settings.json`, conversations as individual `conversations/{uuid}.json` files, attachments in `attachments/`. Uses a per-file in-memory serialisation queue (`withFileLock`) and a `conversationWrites` set so a stale renderer save can never resurrect a just-deleted topic. Writes are atomic (temp file + rename). A delete always returns a replacement conversation (keep-at-least-one invariant enforced in the renderer).
 - **ProviderRegistry + ProviderFamily** -- The old monolith is split into a registry (CRUD, built-in presets, plaintext API keys in `providers.json`, favorites/last-used/quick models, catalog fetch routing, `snapshot()` for the renderer) and per-type family adapters (`OpenAiCompatibleFamily`, `ChatGptFamily`, `ClaudeWebFamily`) that implement `fetchCatalog`, `startSignIn`/`signOut`, `authStatus`, `fetchUsage`. A clean install starts with OpenCode enabled (env-var key import, first-run catalog fetch, first free DeepSeek chat model as selected + Quick Model default), DeepSeek, ChatGPT, Claude Web, and NVIDIA, followed by the remaining built-in presets.
 - **ChatGptAuth / ClaudeWebAuth** -- ChatGPT uses system-browser OAuth with PKCE, plaintext tokens in `Data/auth/chatgpt-auth.json`, proactive + forced-on-401 refresh. Claude Web uses one persistent Electron session partition per provider, an embedded login window, claude.ai cookies, organization discovery, image upload, model bootstrap, ephemeral conversations, and account metadata.
-- **ChatService** -- Orchestrates the streaming transports (OpenAI-compatible `/chat/completions`, ChatGPT Codex Responses SSE, Claude Web completion SSE, image generation), preserves stream-significant whitespace, separates reasoning from answer content, accumulates Claude indexed blocks/tool artifacts, runs optional Google/Bing search, handles stop/abort via an `AbortController` map, normalizes usage, and generates titles with the Quick Model. Failed HTTP responses retain a bounded copy of the provider body so the chat bubble and logs show the actual API diagnostic.
+- **ChatService** -- Orchestrates the streaming transports (OpenAI-compatible `/chat/completions`, ChatGPT Codex Responses SSE, Claude Web completion SSE, image generation), preserves stream-significant whitespace, separates reasoning from answer content, accumulates Claude indexed blocks/tool artifacts, runs optional Google/Bing/DuckDuckGo search with zero-result engine fallback, handles stop/abort via an `AbortController` map, normalizes usage, and generates titles with the Quick Model. Failed HTTP responses retain a bounded copy of the provider body so the chat bubble and logs show the actual API diagnostic.
 - **Reasoning layer** (`src/main/reasoning/`) -- Centralizes reasoning-model detection (`isReasoningModel` across family predicates), supported effort options per model type, thinking-token budgets, and provider-specific payload building (`reasoning_effort`, `thinking`, `enable_thinking`, `chat_template_kwargs`, flattened `extra_body`). One `ModelFamily` regex set (`familyPatterns.ts`) backs every predicate.
 - **chatgptProtocol / claudeWebProtocol** -- Pure protocol helpers for Codex model catalogs, reasoning effort mapping, Responses request construction/SSE parsing, usage windows, and Claude bootstrap catalogs, account parsing, prompt/image flattening, thinking modes, and indexed reasoning/content/tool-artifact SSE accumulation.
 - **AttachmentService** -- Opens the native file picker, validates size/extensions (max 10 files, 20 MB each, 50 MB total), copies files into per-conversation private app storage, extracts text (250k chars cap) from text/code files and PDF/Office documents via `officeparser`, and builds image data URLs.
-- **WebSearchService / SearchWindowService** -- Runs up to three queries per search (Google or Bing) in parallel with bounded concurrency, extracts organic links, and converts article HTML to markdown with Readability + Turndown in hidden sandboxed windows (Safari user agent for engines, Chrome UA for articles). Content HTML is delivered as a base64 data URL capped under Chromium's 2 MB URL limit (`MAX_PAGE_BYTES = 1.4 MB`).
+- **WebSearchService / SearchWindowService** -- Runs up to three queries per search (Google, Bing, or DuckDuckGo) in parallel with bounded concurrency, extracts organic links, and converts article HTML to markdown with Readability + Turndown in hidden sandboxed windows (Safari user agent for engines, Chrome UA for articles). With the per-conversation `useWebSearchFallback` toggle (default on), a query that yields zero results tries DuckDuckGo first and then the remaining engines alphabetically. Content HTML is delivered as a base64 data URL capped under Chromium's 2 MB URL limit (`MAX_PAGE_BYTES = 1.4 MB`); every found result becomes a citation (`MAX_CITATIONS = 15`).
 - **LoggerService** -- Creates two `electron-log` instances (general + error-only). Daily rotation, 10 MB max per file, automatic pruning (30 days general, 60 days error). Receives renderer log entries via the `LogWrite` IPC channel.
 - **TrayService** -- Optional system tray icon (`process.resourcesPath/icon.png` when packaged, `build/icon.png` in dev, resized to 16 px on non-Windows), Open/Settings/Exit menu, click-to-show, and minimize-to-tray behavior driven by settings.
 - **AppUpdater / GitHubReleaseClient** -- Polls the GitHub Releases API (5-minute cache, Zod-validated, semver comparison), downloads the architecture-specific NSIS installer (`ai-chat-<v>-windows-<arch>-setup.exe`), verifies SHA-256 and size, and launches it silently (`/S --updated --force-run`). Linux/unpacked builds report "available" without downloading.
@@ -325,7 +325,7 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
 - **Refresh-token resilience**: ChatGPT access tokens refresh before expiry and once more after a 401. The settings panel exposes refresh-token availability and formats limit resets as `DD.MM HH:mm`.
 - **Company-first logo mapping**: `modelLogos.ts` maps model ids to 27 company brand logos (64x64 PNGs in `assets/models/`) with one regex per vendor; first-match-wins ordering resolves cross-vendor collisions (`glm-o1` → Zhipu, `qwen-omni` → Alibaba, `baidu/text-embedding-v1` → Baidu before OpenAI's catch-all `gpt|o1|o3|o4|omni|...`).
 - **Markdown/SVG stream fidelity**: Protocol parsers preserve leading whitespace and fenced blocks so code and SVG reach the Markdown pipeline intact. Model-generated `<style>` tags are scoped via shadow DOM, and SVG previews render through transparent shadow hosts on the active surface.
-- **Web search via hidden sandboxed windows**: Engine results and article pages are rendered in hidden windows (Safari UA for engines, Chrome UA for articles) with Readability + Turndown extraction; HTML travels as base64 data URLs capped under Chromium's 2 MB URL limit.
+- **Web search via hidden sandboxed windows**: Engine results and article pages are rendered in hidden windows (Safari UA for engines, Chrome UA for articles) with Readability + Turndown extraction; HTML travels as base64 data URLs capped under Chromium's 2 MB URL limit. Per-conversation `useWebSearchFallback` falls back to DuckDuckGo (then the remaining engines alphabetically) when the selected engine returns zero results.
 - **Local-first title generation**: Chat titles are generated by the Quick Model through the same streaming pipeline (with a deterministic 48-char fallback), keeping everything on-device and provider-neutral.
 - **Keep-at-least-one invariant**: Deleting the last message or the last conversation always leaves one empty chat behind (renderer fallback creates a fresh conversation when none remains).
 - **Optimistic provider reorder**: Provider drag-and-drop (`@hello-pangea/dnd`) applies the new order to Redux immediately and persists via IPC; on failure the previous snapshot is restored.
@@ -335,7 +335,7 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
 ## Testing
 
 - **Framework**: Vitest 4.1 with `environment: 'node'`.
-- **Path aliases**: `@main/*`, `@shared/*`, `@renderer/*` resolved in `vitest.config.ts`.
+- **Path aliases**: `@main/*`, `@shared/*`, `@renderer/*` resolved in `vitest.config.mts`.
 - **Test files**: 20 test files in `tests/` covering:
   - `AppSlice.test.ts` -- Redux reducer state transitions
   - `ChatGptProtocol.test.ts` -- Codex request, model, usage, and SSE parsing

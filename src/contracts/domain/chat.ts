@@ -61,6 +61,7 @@ export interface ChatRequest {
   model: ModelReference
   messages: ChatMessage[]
   searchMode: WebSearchMode
+  useWebSearchFallback: boolean
   reasoningEffort: ReasoningEffort
   imageGeneration: boolean
 }

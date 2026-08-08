@@ -196,13 +196,14 @@ export default class ChatService {
         request.searchMode,
         queries,
         settings.language,
+        request.useWebSearchFallback,
         signal,
-        (query, count, done) => {
+        (query, engine, count, done) => {
           emit({
             requestId: request.requestId,
             type: 'searchProgress',
             query,
-            engine: request.searchMode as Exclude<WebSearchMode, 'off'>,
+            engine: engine as Exclude<WebSearchMode, 'off'>,
             count,
             done,
           })
