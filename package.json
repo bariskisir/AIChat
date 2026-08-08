@@ -32,7 +32,7 @@
     "@viz-js/viz": "^3.28.0",
     "dompurify": "^3.4.12",
     "electron-log": "5.4.4",
-    "katex": "^0.16.47",
+    "katex": "^0.18.2",
     "mermaid": "^11.16.0",
     "officeparser": "^7.5.1",
     "pako": "^3.0.1",
