@@ -236,6 +236,7 @@ const ja = {
     general: '一般',
     display: '表示',
     updates: 'アップデート',
+    telemetry: 'テレメトリ',
     logging: 'ログ',
     about: 'について',
     interfaceLanguage: 'インターフェース言語',
@@ -282,6 +283,9 @@ const ja = {
     releaseNotes: 'リリースノート',
     updateError: 'アップデートの確認に失敗しました。',
     version: 'バージョン {{version}}',
+    telemetryCollection: '匿名の利用状況テレメトリを共有',
+    telemetryDescription:
+      'アクティブユーザー数を把握するため、アプリケーションの起動時に匿名のインストールID、バージョン、プラットフォーム、インターフェース言語を送信します。Microsoft は接続元IPからおおよその国と都市を推定します。チャット内容は送信されません。',
     logLevel: 'ログレベル',
     logLevelDescription: 'アプリケーションログの詳細度を制御します。',
     logFiles: 'ログファイル',

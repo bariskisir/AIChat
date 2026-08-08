@@ -2,7 +2,16 @@
  * Renders the reusable settings shell and delegates each category to an isolated section.
  */
 
-import { Info, Layers, Monitor, RefreshCw, ScrollText, Server, Settings2 } from 'lucide-react'
+import {
+  Activity,
+  Info,
+  Layers,
+  Monitor,
+  RefreshCw,
+  ScrollText,
+  Server,
+  Settings2,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useAppDispatch, useAppSelector } from '@renderer/store'
 import { setSettingsSection, type SettingsSection } from '@renderer/store/appSlice'
@@ -11,6 +20,7 @@ import GeneralSettingsSection from './sections/GeneralSettingsSection'
 import DisplaySettingsSection from './sections/DisplaySettingsSection'
 import LoggingSettingsSection from './sections/LoggingSettingsSection'
 import UpdatesSettingsSection from './sections/UpdatesSettingsSection'
+import TelemetrySettingsSection from './sections/TelemetrySettingsSection'
 import ProviderSettingsSection from './sections/ProviderSettingsSection'
 import QuickModelSettingsSection from './sections/QuickModelSettingsSection'
 import styles from './SettingsPage.module.scss'
@@ -30,6 +40,7 @@ const SettingsPage = (): React.JSX.Element => {
     { key: 'providers', label: t('providers.title'), icon: <Server size={17} /> },
     { key: 'quickModel', label: t('models.title'), icon: <Layers size={17} /> },
     { key: 'updates', label: t('settings.updates'), icon: <RefreshCw size={17} /> },
+    { key: 'telemetry', label: t('settings.telemetry'), icon: <Activity size={17} /> },
     { key: 'logging', label: t('settings.logging'), icon: <ScrollText size={17} /> },
     { key: 'about', label: t('settings.about'), icon: <Info size={17} /> },
   ]
@@ -40,6 +51,7 @@ const SettingsPage = (): React.JSX.Element => {
     if (section === 'providers') return <ProviderSettingsSection />
     if (section === 'quickModel') return <QuickModelSettingsSection />
     if (section === 'updates') return <UpdatesSettingsSection />
+    if (section === 'telemetry') return <TelemetrySettingsSection />
     if (section === 'logging') return <LoggingSettingsSection />
     if (section === 'about') return <AboutSettingsSection />
     return <GeneralSettingsSection />

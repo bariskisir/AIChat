@@ -236,6 +236,7 @@ const pt = {
     general: 'Geral',
     display: 'Aparência',
     updates: 'Atualizações',
+    telemetry: 'Telemetria',
     logging: 'Registo',
     about: 'Sobre',
     interfaceLanguage: 'Idioma da interface',
@@ -282,6 +283,9 @@ const pt = {
     releaseNotes: 'Notas da versão',
     updateError: 'A verificação de atualização falhou.',
     version: 'Versão {{version}}',
+    telemetryCollection: 'Partilhar telemetria de utilização anónima',
+    telemetryDescription:
+      'Ao iniciar a aplicação, são enviados um identificador de instalação anónimo, a versão, a plataforma e o idioma da interface para contar utilizadores ativos. A Microsoft obtém um país e uma cidade aproximados a partir do IP da ligação. Não são enviados conteúdos de conversas.',
     logLevel: 'Nível de registo',
     logLevelDescription: 'Escolha o nível de detalhe de diagnóstico guardado localmente.',
     logFiles: 'Ficheiros de registo',

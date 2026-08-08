@@ -59,6 +59,9 @@ describe('settingsSchema', () => {
 describe('settingsPatchSchema', () => {
   it('accepts a non-empty generic patch', () => {
     expect(settingsPatchSchema.parse({ theme: 'light' })).toEqual({ theme: 'light' })
+    expect(settingsPatchSchema.parse({ telemetryEnabled: false })).toEqual({
+      telemetryEnabled: false,
+    })
   })
 
   it('rejects empty and unknown-only patches', () => {

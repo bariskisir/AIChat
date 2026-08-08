@@ -236,6 +236,7 @@ const tr = {
     general: 'Genel',
     display: 'Görünüm',
     updates: 'Güncellemeler',
+    telemetry: 'Telemetri',
     logging: 'Günlükleme',
     about: 'Hakkında',
     interfaceLanguage: 'Arayüz dili',
@@ -282,6 +283,9 @@ const tr = {
     releaseNotes: 'Sürüm notları',
     updateError: 'Güncelleme denetimi başarısız oldu.',
     version: 'Sürüm {{version}}',
+    telemetryCollection: 'Anonim kullanım telemetrisini paylaş',
+    telemetryDescription:
+      'Etkin kullanıcı sayısını takip etmek için uygulama açılışında anonim bir kurulum kimliği, sürüm, platform ve arayüz dili gönderilir. Microsoft bağlantı IP adresinden yaklaşık ülke ve şehir bilgisini türetir. Sohbet içeriği gönderilmez.',
     logLevel: 'Günlük düzeyi',
     logLevelDescription: 'Uygulama günlüklerinin ayrıntı düzeyini belirleyin.',
     logFiles: 'Günlük dosyaları',

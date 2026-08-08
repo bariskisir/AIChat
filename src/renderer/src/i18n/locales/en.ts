@@ -235,6 +235,7 @@ const en = {
     general: 'General',
     display: 'Display',
     updates: 'Updates',
+    telemetry: 'Telemetry',
     logging: 'Logging',
     about: 'About',
     interfaceLanguage: 'Interface language',
@@ -281,6 +282,9 @@ const en = {
     releaseNotes: 'Release notes',
     updateError: 'Update check failed.',
     version: 'Version {{version}}',
+    telemetryCollection: 'Share anonymous usage telemetry',
+    telemetryDescription:
+      'At application startup, an anonymous installation ID, version, platform, and interface locale are sent to count active users. Microsoft derives an approximate country and city from the connection IP. No chat content is sent.',
     logLevel: 'Log level',
     logLevelDescription: 'Control the verbosity of application logs.',
     logFiles: 'Log files',

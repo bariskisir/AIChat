@@ -10,6 +10,7 @@ import AttachmentService from './attachments/attachment.service'
 import ChatService from './chat/chat.service'
 import LoggerService from './logging/logger.service'
 import StorageService from './persistence/storage.service'
+import TelemetryService from './telemetry/telemetry.service'
 import TrayService from './tray/tray.service'
 import WindowService from './window/window.service'
 import {
@@ -23,6 +24,7 @@ import {
 
 const applicationPaths = configureApplicationPaths()
 const windowService = new WindowService(applicationPaths.dataRoot)
+const telemetryService = new TelemetryService(applicationPaths.dataRoot)
 const hasSingleInstanceLock = app.requestSingleInstanceLock()
 let loggerService: LoggerService | null = null
 let trayService: TrayService | null = null
@@ -34,6 +36,17 @@ const openApplicationWindow = async (): Promise<void> => {
   const settings = await storage.loadSettings()
   const logger = new LoggerService(applicationPaths.logsRoot, settings.logLevel)
   loggerService = logger
+  void telemetryService
+    .trackStartup({
+      appName: 'AI Chat',
+      enabled: settings.telemetryEnabled,
+      version: app.getVersion(),
+      platform: process.platform,
+      locale: settings.language,
+    })
+    .catch((error: unknown) => {
+      logger.warn('TelemetryService', 'Startup telemetry could not be sent.', error)
+    })
   const chatgpt = new ChatGptAuth(applicationPaths.dataRoot, logger)
   const claude = new ClaudeWebAuth(logger)
   const providers = new ProviderRegistry(applicationPaths.dataRoot, logger)

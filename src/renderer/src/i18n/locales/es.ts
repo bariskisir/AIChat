@@ -237,6 +237,7 @@ const es = {
     general: 'General',
     display: 'Apariencia',
     updates: 'Actualizaciones',
+    telemetry: 'Telemetría',
     logging: 'Registro',
     about: 'Acerca de',
     interfaceLanguage: 'Idioma de la interfaz',
@@ -284,6 +285,9 @@ const es = {
     releaseNotes: 'Notas de la versión',
     updateError: 'Falló la búsqueda de actualizaciones.',
     version: 'Versión {{version}}',
+    telemetryCollection: 'Compartir telemetría de uso anónima',
+    telemetryDescription:
+      'Al iniciar la aplicación se envían un identificador de instalación anónimo, la versión, la plataforma y el idioma de la interfaz para contar usuarios activos. Microsoft obtiene un país y una ciudad aproximados a partir de la IP de conexión. No se envía contenido de chats.',
     logLevel: 'Nivel de registro',
     logLevelDescription: 'Elige cuánto detalle de diagnóstico se guarda localmente.',
     logFiles: 'Archivos de registro',

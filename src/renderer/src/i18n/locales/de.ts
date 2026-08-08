@@ -237,6 +237,7 @@ const de = {
     general: 'Allgemein',
     display: 'Anzeige',
     updates: 'Updates',
+    telemetry: 'Telemetrie',
     logging: 'Protokollierung',
     about: 'Über',
     interfaceLanguage: 'Oberflächensprache',
@@ -284,6 +285,9 @@ const de = {
     releaseNotes: 'Versionshinweise',
     updateError: 'Update-Prüfung fehlgeschlagen.',
     version: 'Version {{version}}',
+    telemetryCollection: 'Anonyme Nutzungstelemetrie teilen',
+    telemetryDescription:
+      'Beim Start der Anwendung werden eine anonyme Installations-ID, Version, Plattform und Oberflächensprache gesendet, um aktive Nutzer zu zählen. Microsoft leitet aus der Verbindungs-IP ein ungefähres Land und eine Stadt ab. Chatinhalte werden nicht gesendet.',
     logLevel: 'Protokollstufe',
     logLevelDescription: 'Legt fest, wie viele Diagnosedetails lokal gespeichert werden.',
     logFiles: 'Protokolldateien',

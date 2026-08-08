@@ -36,6 +36,7 @@ export interface AppSettings {
   showTrayIcon: boolean
   minimizeToTray: boolean
   autoUpdate: boolean
+  telemetryEnabled: boolean
   logLevel: LogLevel
 }
 
@@ -56,5 +57,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showTrayIcon: true,
   minimizeToTray: true,
   autoUpdate: true,
+  telemetryEnabled: true,
   logLevel: 'info',
 }
