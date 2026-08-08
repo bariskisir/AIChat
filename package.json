@@ -74,6 +74,11 @@
     "vite-plugin-electron": "^1.1.1",
     "vitest": "4.1.10"
   },
+  "overrides": {
+    "officeparser": {
+      "pdfjs-dist": "6.2.108"
+    }
+  },
   "engines": {
     "node": ">=24.0.0"
   },
