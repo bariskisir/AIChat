@@ -19,14 +19,14 @@ export class ChatGptFamily implements ProviderFamily {
     return this.auth.fetchModels(connection.id)
   }
 
-  /** Starts the ChatGPT PKCE OAuth flow in the system browser. */
-  public startSignIn(_providerId: string): Promise<void> {
-    return Promise.resolve(this.auth.startLogin())
+  /** Starts the ChatGPT PKCE OAuth flow in the system browser for one provider. */
+  public startSignIn(providerId: string): Promise<void> {
+    return Promise.resolve(this.auth.startLogin(providerId))
   }
 
-  /** Clears the persisted ChatGPT credential document. */
-  public signOut(_providerId: string): Promise<void> {
-    return this.auth.logout()
+  /** Clears the persisted credential document of one ChatGPT provider. */
+  public signOut(providerId: string): Promise<void> {
+    return this.auth.logout(providerId)
   }
 
   /** Returns renderer-safe authentication state for the app-owned ChatGPT login. */

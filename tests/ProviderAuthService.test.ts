@@ -1,6 +1,7 @@
 /**
- * Verifies ChatGPT OAuth browser and callback ordering, proactive token refresh,
- * and the one-time retry after a 401 response.
+ * Verifies per-provider ChatGPT OAuth browser and callback ordering, proactive token
+ * refresh, the one-time retry after a 401 response, and credential isolation between
+ * multiple ChatGPT provider instances.
  */
 
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -63,12 +64,12 @@ describe('ChatGptAuth', () => {
   it('opens the OAuth browser before waiting for the callback code', async () => {
     /** Resolves the simulated OAuth callback after browser launch is observed. */
     let resolveCallback: (code: string) => void = () => undefined
-    const callback = new Promise<string>((resolve) => {
-      resolveCallback = resolve
+    const callback = new Promise<{ providerId: string; code: string }>((resolve) => {
+      resolveCallback = (code) => resolve({ providerId: 'chatgpt', code })
     })
     const service = new ChatGptAuth(rootPath, createLogger())
     const internals = service as unknown as {
-      beginOAuthRedirect: (state: string) => Promise<string>
+      beginOAuthRedirect: (state: string) => Promise<{ providerId: string; code: string }>
       exchangeCode: (
         code: string,
         verifier: string,
@@ -84,7 +85,7 @@ describe('ChatGptAuth', () => {
       },
     }))
 
-    service.startLogin()
+    service.startLogin('chatgpt')
 
     await vi.waitFor(() => expect(electronMocks.openExternal).toHaveBeenCalledOnce())
     resolveCallback('authorization-code')
@@ -102,6 +103,51 @@ describe('ChatGptAuth', () => {
         account_id: 'account-id',
       },
     })
+  })
+
+  it('keeps credentials and login state isolated per provider instance', async () => {
+    const service = new ChatGptAuth(rootPath, createLogger())
+    const internals = service as unknown as {
+      beginOAuthRedirect: (state: string) => Promise<{ providerId: string; code: string }>
+      exchangeCode: (
+        code: string,
+        verifier: string,
+      ) => Promise<{ tokens: Record<string, string> } | null>
+    }
+    internals.beginOAuthRedirect = vi.fn(() =>
+      Promise.resolve({ providerId: 'second-provider', code: 'second-code' }),
+    )
+    internals.exchangeCode = vi.fn(async () => ({
+      tokens: {
+        access_token: 'second-access-token',
+        refresh_token: 'second-refresh-token',
+        id_token: '',
+        account_id: 'second-account',
+      },
+    }))
+
+    service.startLogin('second-provider')
+
+    await vi.waitFor(async () => {
+      expect((await service.getAuthStatus('second-provider')).signedIn).toBe(true)
+    })
+    expect(await service.getAuthStatus('chatgpt')).toMatchObject({ signedIn: false })
+    expect(await service.getCredentials('chatgpt')).toBeNull()
+    expect(await service.getCredentials('second-provider')).toMatchObject({
+      accessToken: 'second-access-token',
+      accountId: 'second-account',
+    })
+    const stored = JSON.parse(
+      await readFile(join(rootPath, 'auth', 'chatgpt-credentials-second-provider.json'), 'utf8'),
+    ) as Record<string, unknown>
+    expect(stored).toMatchObject({
+      tokens: { access_token: 'second-access-token', account_id: 'second-account' },
+    })
+
+    await service.logout('chatgpt')
+    expect(await service.getAuthStatus('second-provider')).toMatchObject({ signedIn: true })
+    await service.logout('second-provider')
+    expect(await service.getAuthStatus('second-provider')).toMatchObject({ signedIn: false })
   })
 
   it('uses the refresh token before returning expired credentials', async () => {

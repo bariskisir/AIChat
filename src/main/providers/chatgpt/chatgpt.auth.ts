@@ -1,6 +1,9 @@
 /**
- * Owns ChatGPT PKCE OAuth, credential persistence, token refresh, model catalogs,
- * and ChatGPT-style usage limits.
+ * Owns per-provider ChatGPT PKCE OAuth, credential persistence, token refresh,
+ * model catalogs, and ChatGPT-style usage limits. Every provider instance keeps
+ * its own credential document and login state; the fixed OAuth callback port
+ * serializes logins app-wide while the OAuth state parameter routes each
+ * authorization code back to the provider that started the login.
  */
 
 import { createHash, randomBytes } from 'node:crypto'
@@ -70,7 +73,7 @@ const titlePlan = (value: string): string =>
 export class ChatGptAuth {
   private readonly authRoot: string
   private readonly refreshPromises = new Map<string, Promise<void>>()
-  private loginInProgress = false
+  private loginInProgressProviderId: string | null = null
 
   /** Creates a ChatGPT auth service rooted in the private AI Chat data directory. */
   public constructor(
@@ -80,24 +83,28 @@ export class ChatGptAuth {
     this.authRoot = join(rootPath, 'auth')
   }
 
-  /** Starts the PKCE OAuth flow in the system browser and completes it in the background. */
-  public startLogin(): void {
-    if (this.loginInProgress) throw new Error('A ChatGPT login is already in progress.')
-    this.loginInProgress = true
-    void this.runLogin().finally(() => {
-      this.loginInProgress = false
+  /** Starts the PKCE OAuth flow in the system browser for one provider instance. */
+  public startLogin(providerId: string): void {
+    if (this.loginInProgressProviderId !== null) {
+      throw new Error('A ChatGPT login is already in progress.')
+    }
+    this.loginInProgressProviderId = providerId
+    void this.runLogin(providerId).finally(() => {
+      if (this.loginInProgressProviderId === providerId) {
+        this.loginInProgressProviderId = null
+      }
     })
   }
 
-  /** Clears the persisted ChatGPT credential document. */
-  public async logout(): Promise<void> {
-    await unlink(this.credentialPath()).catch(() => undefined)
+  /** Clears the persisted ChatGPT credential document for one provider. */
+  public async logout(providerId: string): Promise<void> {
+    await unlink(this.credentialPath(providerId)).catch(() => undefined)
   }
 
-  /** Returns renderer-safe authentication state for the app-owned ChatGPT login. */
+  /** Returns renderer-safe authentication state for one ChatGPT provider login. */
   public async getAuthStatus(providerId: string): Promise<ProviderAuthStatus> {
-    const file = await this.readAuthFile(this.credentialPath())
-    return this.buildStatus(providerId, file, this.loginInProgress)
+    const file = await this.readAuthFile(this.credentialPath(providerId))
+    return this.buildStatus(providerId, file, this.loginInProgressProviderId === providerId)
   }
 
   /** Fetches rate-limit usage for the ChatGPT provider account. */
@@ -127,9 +134,9 @@ export class ChatGptAuth {
     return models
   }
 
-  /** Resolves live ChatGPT credentials, refreshing the access token when needed. */
-  public async getCredentials(_providerId: string): Promise<ChatGptCredentials | null> {
-    const filePath = this.credentialPath()
+  /** Resolves live credentials for one provider, refreshing the access token when needed. */
+  public async getCredentials(providerId: string): Promise<ChatGptCredentials | null> {
+    const filePath = this.credentialPath(providerId)
     let file = await this.readAuthFile(filePath)
     if (!file?.tokens?.access_token) return null
     const accessToken = file.tokens.access_token
@@ -157,16 +164,16 @@ export class ChatGptAuth {
     if (!credentials) throw new Error('Sign in to ChatGPT first.')
     const response = await request(credentials)
     if (response.status !== 401) return response
-    credentials = await this.forceRefreshCredentials()
+    credentials = await this.forceRefreshCredentials(providerId)
     if (!credentials) return response
     await response.body?.cancel().catch(() => undefined)
     return request(credentials)
   }
 
   /** Completes one PKCE login: verifier, browser redirect, code exchange, and persistence. */
-  private async runLogin(): Promise<void> {
+  private async runLogin(providerId: string): Promise<void> {
     const verifier = randomBytes(32).toString('base64url')
-    const state = randomBytes(16).toString('base64url')
+    const state = `${providerId}:${randomBytes(16).toString('base64url')}`
     const challenge = createHash('sha256').update(verifier).digest('base64url')
     try {
       const callback = this.beginOAuthRedirect(state)
@@ -180,10 +187,10 @@ export class ChatGptAuth {
         state,
       })
       await shell.openExternal(`${CHATGPT_AUTH_URL}?${params.toString()}`)
-      const code = await callback
+      const { code } = await callback
       const tokens = await this.exchangeCode(code, verifier)
       if (!tokens) throw new Error('Token exchange failed.')
-      await this.writeAuthFile(this.credentialPath(), tokens)
+      await this.writeAuthFile(this.credentialPath(providerId), tokens)
     } catch (error) {
       this.logger.warn('ChatGptAuth', 'ChatGPT sign-in failed.', error)
     }
@@ -218,7 +225,7 @@ export class ChatGptAuth {
   }
 
   /** Starts the fixed-port localhost callback server and waits for the authorization code. */
-  private beginOAuthRedirect(expectedState: string): Promise<string> {
+  private beginOAuthRedirect(expectedState: string): Promise<{ providerId: string; code: string }> {
     return new Promise((resolve, reject) => {
       const server = createServer((request, response) => {
         try {
@@ -240,7 +247,7 @@ export class ChatGptAuth {
             '<html><body><h1>Logged in!</h1><p>You can close this window.</p></body></html>',
           )
           server.close()
-          resolve(code)
+          resolve({ providerId: expectedState.split(':')[0] ?? '', code })
         } catch (error) {
           response.writeHead(500)
           response.end('Internal error.')
@@ -302,9 +309,9 @@ export class ChatGptAuth {
     return trackedPromise
   }
 
-  /** Forces one refresh-token exchange and returns the newly persisted credentials. */
-  private async forceRefreshCredentials(): Promise<ChatGptCredentials | null> {
-    const filePath = this.credentialPath()
+  /** Forces one refresh-token exchange for one provider and returns the newly persisted credentials. */
+  private async forceRefreshCredentials(providerId: string): Promise<ChatGptCredentials | null> {
+    const filePath = this.credentialPath(providerId)
     const file = await this.readAuthFile(filePath)
     if (!file?.tokens?.access_token || !file.tokens.refresh_token) return null
     await this.refreshTokens(filePath, file)
@@ -372,9 +379,10 @@ export class ChatGptAuth {
     }
   }
 
-  /** Resolves the app-owned ChatGPT credential document path. */
-  private credentialPath(): string {
-    return join(this.authRoot, 'chatgpt-credentials.json')
+  /** Resolves the per-provider ChatGPT credential document path. */
+  private credentialPath(providerId: string): string {
+    if (providerId === 'chatgpt') return join(this.authRoot, 'chatgpt-credentials.json')
+    return join(this.authRoot, `chatgpt-credentials-${providerId}.json`)
   }
 
   /** Reads one credential document, returning null when it is missing or malformed. */

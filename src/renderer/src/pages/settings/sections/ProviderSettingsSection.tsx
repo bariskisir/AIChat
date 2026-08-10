@@ -2,7 +2,7 @@
 
 import type { DropResult } from '@hello-pangea/dnd'
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, App, Button, Form, Input, Modal, Progress, Select, Space, Switch } from 'antd'
 import {
   Brain,
@@ -75,6 +75,7 @@ const ProviderAuthPanel = ({
   const [usage, setUsage] = useState<ProviderUsageState | null>(null)
   const [loading, setLoading] = useState(false)
   const [usageLoading, setUsageLoading] = useState(false)
+  const wasSignedIn = useRef(false)
 
   /** Loads the renderer-safe authentication state for one provider. */
   const loadStatus = useCallback(async (): Promise<void> => {
@@ -133,17 +134,35 @@ const ProviderAuthPanel = ({
   }
 
   /** Fetches the rate-limit overview for a signed-in ChatGPT-style provider. */
-  const fetchUsage = async (): Promise<void> => {
-    setUsageLoading(true)
-    try {
-      setUsage(await window.app.fetchProviderUsage(providerId))
-    } catch (error) {
-      logger.error('Provider usage could not be loaded.', error)
-      void message.error(t('providers.usageFailed'))
-    } finally {
-      setUsageLoading(false)
+  const fetchUsage = useCallback(
+    async (silent = false): Promise<void> => {
+      setUsageLoading(true)
+      try {
+        setUsage(await window.app.fetchProviderUsage(providerId))
+      } catch (error) {
+        logger.error('Provider usage could not be loaded.', error)
+        if (!silent) void message.error(t('providers.usageFailed'))
+      } finally {
+        setUsageLoading(false)
+      }
+    },
+    [providerId, message, t],
+  )
+
+  /** Refreshes the usage overview once a ChatGPT provider becomes signed in, on open or after login. */
+  useEffect(() => {
+    if (type !== 'chatgpt') {
+      wasSignedIn.current = false
+      return
     }
-  }
+    const signedIn = Boolean(status?.signedIn)
+    if (signedIn && !wasSignedIn.current) {
+      wasSignedIn.current = true
+      void fetchUsage(true)
+    } else if (!signedIn) {
+      wasSignedIn.current = false
+    }
+  }, [type, status?.signedIn, fetchUsage])
 
   if (type === 'openai-compatible') return null
   return (
