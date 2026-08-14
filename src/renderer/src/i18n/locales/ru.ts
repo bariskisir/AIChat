@@ -235,6 +235,7 @@ const ru = {
     title: 'Настройки',
     general: 'Общие',
     display: 'Отображение',
+    tray: 'Область уведомлений',
     updates: 'Обновления',
     telemetry: 'Телеметрия',
     logging: 'Логирование',
@@ -266,8 +267,10 @@ const ru = {
     showTrayIcon: 'Показывать значок в трее',
     showTrayIconDescription: 'Показывать AI Chat в системном трее.',
     minimizeToTray: 'Сворачивать в трей при закрытии',
-    minimizeToTrayDescription:
-      'Скрывать окно в системном трее вместо выхода из приложения при закрытии.',
+    minimizeToTrayDescription: 'Скрывать окно в трее при закрытии, не завершая работу приложения.',
+    startMinimized: 'Запускать свёрнутым',
+    startMinimizedDescription:
+      'Запускает приложение скрытым в области уведомлений, не показывая его окно.',
     trayUnavailable: 'Интеграция с системным треем недоступна в Linux.',
     alwaysOnTop: 'Поверх всех окон',
     checkUpdatesOnStartup: 'Проверять обновления при запуске',

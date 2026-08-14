@@ -57,7 +57,10 @@ const openApplicationWindow = async (): Promise<void> => {
   const updater = new AppUpdater(logger)
   const chat = new ChatService(providers, chatgpt, claude, storage, logger)
   const attachments = new AttachmentService(storage)
-  const window = await windowService.createWindow(logger)
+  const window = await windowService.createWindow(
+    logger,
+    settings.showTrayIcon && settings.startMinimized,
+  )
   trayService?.dispose()
   const tray = new TrayService(window, settings, logger)
   trayService = tray

@@ -5,6 +5,7 @@
 import {
   Activity,
   Info,
+  Inbox,
   Layers,
   Monitor,
   RefreshCw,
@@ -19,6 +20,7 @@ import AboutSettingsSection from './sections/AboutSettingsSection'
 import GeneralSettingsSection from './sections/GeneralSettingsSection'
 import DisplaySettingsSection from './sections/DisplaySettingsSection'
 import LoggingSettingsSection from './sections/LoggingSettingsSection'
+import TraySettingsSection from './sections/TraySettingsSection'
 import UpdatesSettingsSection from './sections/UpdatesSettingsSection'
 import TelemetrySettingsSection from './sections/TelemetrySettingsSection'
 import ProviderSettingsSection from './sections/ProviderSettingsSection'
@@ -37,6 +39,7 @@ const SettingsPage = (): React.JSX.Element => {
   }> = [
     { key: 'general', label: t('settings.general'), icon: <Settings2 size={17} /> },
     { key: 'display', label: t('settings.display'), icon: <Monitor size={17} /> },
+    { key: 'tray', label: t('settings.tray'), icon: <Inbox size={17} /> },
     { key: 'providers', label: t('providers.title'), icon: <Server size={17} /> },
     { key: 'quickModel', label: t('models.title'), icon: <Layers size={17} /> },
     { key: 'updates', label: t('settings.updates'), icon: <RefreshCw size={17} /> },
@@ -48,6 +51,7 @@ const SettingsPage = (): React.JSX.Element => {
   /** Resolves the active category component without keeping inactive forms mounted. */
   const renderSection = (): React.JSX.Element => {
     if (section === 'display') return <DisplaySettingsSection />
+    if (section === 'tray') return <TraySettingsSection />
     if (section === 'providers') return <ProviderSettingsSection />
     if (section === 'quickModel') return <QuickModelSettingsSection />
     if (section === 'updates') return <UpdatesSettingsSection />

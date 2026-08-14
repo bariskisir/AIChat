@@ -235,6 +235,7 @@ const tr = {
     title: 'Ayarlar',
     general: 'Genel',
     display: 'Görünüm',
+    tray: 'Sistem Tepsisi',
     updates: 'Güncellemeler',
     telemetry: 'Telemetri',
     logging: 'Günlükleme',
@@ -267,6 +268,9 @@ const tr = {
     showTrayIconDescription: 'AI Chat uygulamasını sistem tepsisinde göster.',
     minimizeToTray: 'Kapatırken tepsiye küçült',
     minimizeToTrayDescription: 'Pencere kapandığında uygulamayı çalışır durumda tut.',
+    startMinimized: 'Küçültülmüş başlat',
+    startMinimizedDescription:
+      'Uygulamayı pencereyi göstermek yerine sistem tepsisinde gizli olarak başlatın.',
     trayUnavailable: 'Sistem tepsisi bütünleştirmesi Linux üzerinde kullanılamıyor.',
     alwaysOnTop: 'Her zaman üstte',
     checkUpdatesOnStartup: 'Başlangıçta güncellemeleri denetle',

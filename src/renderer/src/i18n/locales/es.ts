@@ -236,6 +236,7 @@ const es = {
     title: 'Ajustes',
     general: 'General',
     display: 'Apariencia',
+    tray: 'Área de notificación',
     updates: 'Actualizaciones',
     telemetry: 'Telemetría',
     logging: 'Registro',
@@ -268,7 +269,10 @@ const es = {
     showTrayIconDescription: 'Mostrar AI Chat en la bandeja del sistema.',
     minimizeToTray: 'Minimizar a la bandeja al cerrar',
     minimizeToTrayDescription:
-      'Oculta la ventana en la bandeja del sistema en lugar de salir al cerrarla.',
+      'Ocultar la ventana en la bandeja al cerrar en lugar de salir de la aplicación.',
+    startMinimized: 'Iniciar minimizado',
+    startMinimizedDescription:
+      'Inicia la aplicación oculta en el área de notificación en lugar de mostrar su ventana.',
     trayUnavailable: 'La integración con la bandeja del sistema no está disponible en Linux.',
     alwaysOnTop: 'Siempre visible',
     checkUpdatesOnStartup: 'Buscar actualizaciones al iniciar',

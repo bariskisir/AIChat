@@ -235,6 +235,7 @@ const pt = {
     title: 'Definições',
     general: 'Geral',
     display: 'Aparência',
+    tray: 'Área de notificação',
     updates: 'Atualizações',
     telemetry: 'Telemetria',
     logging: 'Registo',
@@ -267,6 +268,9 @@ const pt = {
     showTrayIconDescription: 'Mostrar o AI Chat na bandeja do sistema.',
     minimizeToTray: 'Minimizar para a área de notificação ao fechar',
     minimizeToTrayDescription: 'Oculte a janela na área de notificação em vez de sair ao fechá-la.',
+    startMinimized: 'Iniciar minimizado',
+    startMinimizedDescription:
+      'Inicie o aplicativo oculto na área de notificação em vez de mostrar a janela.',
     trayUnavailable: 'A integração com a área de notificação não está disponível no Linux.',
     alwaysOnTop: 'Sempre visível',
     checkUpdatesOnStartup: 'Procurar atualizações ao iniciar',

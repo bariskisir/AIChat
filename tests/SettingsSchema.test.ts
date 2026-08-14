@@ -54,6 +54,24 @@ describe('settingsSchema', () => {
     })
     expect(result.success).toBe(false)
   })
+
+  it('requires the tray icon when minimized startup is enabled', () => {
+    const result = settingsSchema.safeParse({
+      ...DEFAULT_SETTINGS,
+      showTrayIcon: false,
+      startMinimized: true,
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts minimized startup together with a tray icon', () => {
+    const result = settingsSchema.safeParse({
+      ...DEFAULT_SETTINGS,
+      showTrayIcon: true,
+      startMinimized: true,
+    })
+    expect(result.success).toBe(true)
+  })
 })
 
 describe('settingsPatchSchema', () => {
@@ -62,6 +80,7 @@ describe('settingsPatchSchema', () => {
     expect(settingsPatchSchema.parse({ telemetryEnabled: false })).toEqual({
       telemetryEnabled: false,
     })
+    expect(settingsPatchSchema.parse({ startMinimized: true })).toEqual({ startMinimized: true })
   })
 
   it('rejects empty and unknown-only patches', () => {

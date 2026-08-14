@@ -234,6 +234,7 @@ const en = {
     title: 'Settings',
     general: 'General',
     display: 'Display',
+    tray: 'Tray',
     updates: 'Updates',
     telemetry: 'Telemetry',
     logging: 'Logging',
@@ -266,6 +267,9 @@ const en = {
     showTrayIconDescription: 'Show AI Chat in the system tray.',
     minimizeToTray: 'Minimize to tray on close',
     minimizeToTrayDescription: 'Keep the application running when the window closes.',
+    startMinimized: 'Start minimized',
+    startMinimizedDescription:
+      'Start the application hidden in the system tray instead of showing its window.',
     trayUnavailable: 'System tray integration is unavailable on Linux.',
     alwaysOnTop: 'Always on top',
     checkUpdatesOnStartup: 'Check for updates on startup',

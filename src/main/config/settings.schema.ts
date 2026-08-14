@@ -22,6 +22,7 @@ const settingsFieldsSchema = z.object({
   alwaysOnTop: z.boolean(),
   showTrayIcon: z.boolean(),
   minimizeToTray: z.boolean(),
+  startMinimized: z.boolean(),
   autoUpdate: z.boolean(),
   telemetryEnabled: z.boolean(),
   logLevel: z.enum(LOG_LEVELS),
@@ -33,6 +34,13 @@ export const settingsSchema = settingsFieldsSchema.superRefine((settings, contex
       code: 'custom',
       path: ['minimizeToTray'],
       message: 'Minimize to tray requires the tray icon to be enabled.',
+    })
+  }
+  if (settings.startMinimized && !settings.showTrayIcon) {
+    context.addIssue({
+      code: 'custom',
+      path: ['startMinimized'],
+      message: 'Start minimized requires the tray icon to be enabled.',
     })
   }
 })

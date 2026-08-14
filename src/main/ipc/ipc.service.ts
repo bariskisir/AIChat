@@ -71,6 +71,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
     if (process.platform === 'linux') {
       settings.showTrayIcon = false
       settings.minimizeToTray = false
+      settings.startMinimized = false
     }
     window.webContents.setZoomFactor(settings.pageZoom)
     let conversations = await services.storage.listConversations()
@@ -95,6 +96,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
     if (process.platform === 'linux') {
       delete patch.showTrayIcon
       delete patch.minimizeToTray
+      delete patch.startMinimized
     }
     const saved = await services.storage.updateSettings(patch)
     window.setAlwaysOnTop(saved.alwaysOnTop)

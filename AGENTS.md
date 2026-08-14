@@ -129,8 +129,8 @@ aichat/
 │           │   └── settings/
 │           │       ├── SettingsPage.tsx    # Settings layout: section tabs + content
 │           │       ├── components/SettingLabel.tsx
-│           │       └── sections/            # 8 sections: General, Providers, Catalog modal,
-│           │                                # QuickModel, Display, Updates, Logging, About
+│           │       └── sections/            # 9 sections: General, Providers, Catalog modal,
+│           │                                # QuickModel, Display, Tray, Updates, Logging, About
 │           ├── components/
 │           │   ├── app/
 │           │   │   ├── Titlebar.tsx, AppSidebar.tsx, WindowControls.tsx
@@ -265,7 +265,7 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
 - **AttachmentService** -- Opens the native file picker, validates size/extensions (max 10 files, 20 MB each, 50 MB total), copies files into per-conversation private app storage, extracts text (250k chars cap) from text/code files and PDF/Office documents via `officeparser`, and builds image data URLs.
 - **WebSearchService / SearchWindowService** -- Runs up to three queries per search (Google, Bing, or DuckDuckGo) in parallel with bounded concurrency, extracts organic links, and converts article HTML to markdown with Readability + Turndown in hidden sandboxed windows (Safari user agent for engines, Chrome UA for articles). With the per-conversation `useWebSearchFallback` toggle (default on), a query that yields zero results tries DuckDuckGo first and then the remaining engines alphabetically. Content HTML is delivered as a base64 data URL capped under Chromium's 2 MB URL limit (`MAX_PAGE_BYTES = 1.4 MB`); every found result becomes a citation (`MAX_CITATIONS = 15`).
 - **LoggerService** -- Creates two `electron-log` instances (general + error-only). Daily rotation, 10 MB max per file, automatic pruning (30 days general, 60 days error). Receives renderer log entries via the `LogWrite` IPC channel.
-- **TrayService** -- Optional system tray icon (`process.resourcesPath/icon.png` when packaged, `build/icon.png` in dev, resized to 16 px on non-Windows), Open/Settings/Exit menu, click-to-show, and minimize-to-tray behavior driven by settings.
+- **TrayService** -- Optional system tray icon (`process.resourcesPath/icon.png` when packaged, `build/icon.png` in dev, resized to 16 px on non-Windows), Open/Settings/Exit menu, click-to-show, and minimize-to-tray behavior driven by settings. Tray-related settings default to off, and Linux disables tray behavior at the IPC boundary.
 - **AppUpdater / GitHubReleaseClient** -- Polls the GitHub Releases API (5-minute cache, Zod-validated, semver comparison), downloads the architecture-specific NSIS installer (`ai-chat-<v>-windows-<arch>-setup.exe`), verifies SHA-256 and size, and launches it silently (`/S --updated --force-run`). Linux/unpacked builds report "available" without downloading.
 
 ## Coding Conventions
@@ -336,7 +336,7 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
 
 - **Framework**: Vitest 4.1 with `environment: 'node'`.
 - **Path aliases**: `@main/*`, `@shared/*`, `@renderer/*` resolved in `vitest.config.mts`.
-- **Test files**: 20 test files in `tests/` covering:
+- **Test files**: 32 test files in `tests/` covering:
   - `AppSlice.test.ts` -- Redux reducer state transitions
   - `ChatGptProtocol.test.ts` -- Codex request, model, usage, and SSE parsing
   - `ChatService.test.ts` -- Chat streaming service behavior and error parsing
@@ -357,6 +357,7 @@ Main-process code is organized in feature folders with kebab-case filenames, eac
   - `TokenEstimation.test.ts` -- Token-count heuristics
   - `TrayService.test.ts` -- Tray icon and menu configuration
   - `WindowState.test.ts` -- Persisted window bounds parsing and display clamping
+  - `WindowService.test.ts` -- Main-window startup visibility, including start-minimized
 - **Important**: after the services refactor, 18 of the 20 test files still import pre-refactor paths (`src/shared/*`, `src/main/services/*`, `@main/reasoningParameters`) and need their imports migrated (2 files reference classes that no longer exist). Fixing these is pending; do not rely on `npm test` passing until the suite is migrated.
 - Services that depend on external I/O are designed with injectable constructors so unit tests can supply mocks without `vi.mock` on globals. Tests mocking Node built-ins (`fs/promises`, `crypto`) use `vi.mock` at the top of the test file.
 - Run with `npm test` (single run) or `npm run test:watch` (watch mode).

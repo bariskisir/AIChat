@@ -236,6 +236,7 @@ const de = {
     title: 'Einstellungen',
     general: 'Allgemein',
     display: 'Anzeige',
+    tray: 'Infobereich',
     updates: 'Updates',
     telemetry: 'Telemetrie',
     logging: 'Protokollierung',
@@ -269,6 +270,9 @@ const de = {
     minimizeToTray: 'Beim Schließen in den Infobereich minimieren',
     minimizeToTrayDescription:
       'Das Fenster beim Schließen im Infobereich ausblenden, statt die Anwendung zu beenden.',
+    startMinimized: 'Minimiert starten',
+    startMinimizedDescription:
+      'Startet die Anwendung im Infobereich ausgeblendet, ohne das Fenster anzuzeigen.',
     trayUnavailable: 'Die Infobereich-Integration ist unter Linux nicht verfügbar.',
     alwaysOnTop: 'Immer im Vordergrund',
     checkUpdatesOnStartup: 'Beim Start nach Updates suchen',
