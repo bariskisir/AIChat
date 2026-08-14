@@ -23,6 +23,12 @@ describe('isTrustedRendererNavigation', () => {
       expect(isTrustedRendererNavigation(url.href, PACKAGED_PATH)).toBe(true)
     })
 
+    it('allows the renderer path with query parameters', () => {
+      const url = pathToFileURL(PACKAGED_PATH)
+      url.search = '?tab=settings&section=providers'
+      expect(isTrustedRendererNavigation(url.href, PACKAGED_PATH)).toBe(true)
+    })
+
     it('rejects a different file in the same directory', () => {
       expect(
         isTrustedRendererNavigation(

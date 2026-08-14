@@ -147,3 +147,47 @@ export const fitSvgToContainerWidth = (element: Element): Element => {
 
   return element
 }
+
+/** Bakes rotation and flip transformations into a new PNG blob. */
+export const transformImageToPng = async (
+  blob: Blob,
+  transform: { flipX?: boolean; flipY?: boolean; rotation?: number },
+): Promise<Blob> => {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const rotation = (((transform.rotation ?? 0) % 360) + 360) % 360
+    const radians = (rotation * Math.PI) / 180
+    const canvas = document.createElement('canvas')
+    if (rotation % 90 === 0) {
+      const swapsDimensions = rotation === 90 || rotation === 270
+      canvas.width = swapsDimensions ? bitmap.height : bitmap.width
+      canvas.height = swapsDimensions ? bitmap.width : bitmap.height
+    } else {
+      const sine = Math.abs(Math.sin(radians))
+      const cosine = Math.abs(Math.cos(radians))
+      canvas.width = Math.ceil(bitmap.width * cosine + bitmap.height * sine)
+      canvas.height = Math.ceil(bitmap.width * sine + bitmap.height * cosine)
+    }
+    const context = canvas.getContext('2d')
+    if (!context) {
+      throw new Error('Failed to get canvas context')
+    }
+
+    context.translate(canvas.width / 2, canvas.height / 2)
+    context.rotate(radians)
+    context.scale(transform.flipX ? -1 : 1, transform.flipY ? -1 : 1)
+    context.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+
+    return await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((pngBlob) => {
+        if (pngBlob) {
+          resolve(pngBlob)
+        } else {
+          reject(new Error('Failed to transform image to png'))
+        }
+      }, 'image/png')
+    })
+  } finally {
+    bitmap.close()
+  }
+}

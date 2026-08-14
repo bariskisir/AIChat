@@ -136,4 +136,16 @@ describe('WebSearchService fetch fallback', () => {
 
     expect(result).toBeNull()
   })
+
+  it('returns empty results immediately when queries are empty or whitespace', async () => {
+    const service = new WebSearchService(fakeLogger)
+    const result = await service.search(
+      'duckduckgo',
+      ['', '   '],
+      'en',
+      true,
+      new AbortController().signal,
+    )
+    expect(result).toEqual({ citations: [], context: '' })
+  })
 })

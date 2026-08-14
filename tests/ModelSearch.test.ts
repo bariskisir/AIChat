@@ -1,6 +1,7 @@
 /** Verifies fuzzy model search matching and ranking tiers. */
 
 import { describe, expect, it } from 'vitest'
+import { getModelLogoById } from '@renderer/utils/modelLogos'
 import { getSearchMatchScore, type ModelSearchField } from '@renderer/utils/modelSearch'
 
 describe('modelSearch', () => {
@@ -89,5 +90,13 @@ describe('modelSearch', () => {
     expect(scoreNameAbbr).not.toBeNull()
     expect(scoreDescRaw).not.toBeNull()
     expect(scoreNameAbbr as number).toBeLessThan(scoreDescRaw as number)
+  })
+
+  it('resolves brand logos for vendor model ids including bare Kimi K3', () => {
+    expect(getModelLogoById('k3')).toBeDefined()
+    expect(getModelLogoById('k3-256k')).toBeDefined()
+    expect(getModelLogoById('k3po')).toBeUndefined()
+    expect(getModelLogoById('deepseek-chat')).toBeDefined()
+    expect(getModelLogoById('claude-3-7-sonnet')).toBeDefined()
   })
 })

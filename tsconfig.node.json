@@ -37,7 +37,10 @@
     "src/renderer/src/utils/image.ts",
     "src/renderer/src/utils/streamingProjection.ts",
     "src/renderer/src/utils/modelSearch.ts",
+    "src/renderer/src/utils/modelLogos.ts",
+    "src/renderer/src/utils/selection.ts",
     "src/renderer/src/context/ThemeProvider.tsx",
+
     "src/renderer/src/types/global.d.ts",
     "src/renderer/src/hooks/inputHistoryNavigation.ts",
     "src/renderer/src/components/chat/useMinimumDisplayDuration.ts",

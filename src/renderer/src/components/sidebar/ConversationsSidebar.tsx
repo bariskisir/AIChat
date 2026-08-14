@@ -247,11 +247,12 @@ const ConversationsSidebar = (): React.JSX.Element => {
         <Input
           className={styles.renameInput}
           value={renameValue}
-          maxLength={200}
-          autoFocus
           placeholder={t('conversations.renameConversation')}
           onChange={(event) => setRenameValue(event.target.value)}
-          onPressEnter={() => void commitRename()}
+          onPressEnter={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return
+            void commitRename()
+          }}
         />
       </Modal>
     </>

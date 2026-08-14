@@ -5,9 +5,11 @@
 
 import {
   REASONING_EFFORTS,
+  parseDataUrl,
   type ProviderModelDefinition,
   type ReasoningEffort,
 } from '@shared/index'
+
 import type { ClaudeSseDelta, ClaudeStreamOutput, ClaudeWebAccount } from './claude-web.types'
 
 /** Claude.ai web origin used by every conversation and bootstrap request. */
@@ -267,13 +269,16 @@ const contentToText = (
       if (record.type === 'image_url') {
         const imageUrl = asObject(record.image_url)
         const url = imageUrl ? readString(imageUrl.url) : undefined
-        const match = url?.match(/^data:(image\/[a-z+.-]+);base64,([A-Za-z0-9+/=]+)$/)
-        if (match?.[1] && match?.[2]) {
-          images.push({ mediaType: match[1], data: match[2] })
-          return ['[Image attached]']
+        if (url) {
+          const parsed = parseDataUrl(url)
+          if (parsed?.isBase64 && parsed.mediaType?.startsWith('image/') && parsed.data) {
+            images.push({ mediaType: parsed.mediaType, data: parsed.data })
+            return ['[Image attached]']
+          }
         }
         return []
       }
+
       return []
     })
     .join('\n')

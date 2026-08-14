@@ -71,8 +71,9 @@ export const FAMILY_PATTERNS: Readonly<Record<ModelFamily, RegExp>> = Object.fre
   glm45to47: /glm-4\.[567]/,
   glmZ1: /glm-z1/,
   kimiK25Plus: /kimi-k2\.[5-9]\d*/,
-  kimiK3Plus: /kimi-k[3-9]\d*/,
+  kimiK3Plus: /(?:kimi-k[3-9]\d*|^k[3-9](?:[-_.]|$))/,
   kimiK27Code: /^kimi-k2\.7-code(?:-[\w-]+)?$/,
+
   kimiK2Thinking: /^kimi-k2-thinking(?:-turbo)?$/,
   minimaxM1: /minimax-m1/,
   minimaxM2: /minimax-m2/,

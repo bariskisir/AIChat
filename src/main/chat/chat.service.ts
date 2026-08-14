@@ -36,6 +36,7 @@ type Emit = (event: ChatStreamEvent) => void
 interface CompatibleMessage {
   role: 'system' | 'user' | 'assistant'
   content: string | Array<Record<string, unknown>>
+  reasoning_content?: string
 }
 
 /** Reference prompt that teaches models to cite search sources with [number]. */
@@ -626,7 +627,16 @@ export default class ChatService {
     return messages.slice(lastBoundary + 1).flatMap((message): CompatibleMessage[] => {
       if (message.role !== 'user' && message.role !== 'assistant' && message.role !== 'system')
         return []
-      if (message.role !== 'user' || !message.attachments?.length) {
+      if (message.role === 'assistant') {
+        return [
+          {
+            role: 'assistant',
+            content: message.content,
+            ...(message.reasoning ? { reasoning_content: message.reasoning } : {}),
+          },
+        ]
+      }
+      if (message.role === 'system' || !message.attachments?.length) {
         return [{ role: message.role, content: message.content }]
       }
       const parts: Array<Record<string, unknown>> = [{ type: 'text', text: message.content }]

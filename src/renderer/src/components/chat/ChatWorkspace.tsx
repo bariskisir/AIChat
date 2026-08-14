@@ -971,11 +971,15 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
             isComposingRef.current = false
           }}
           onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229 || isComposingRef.current) {
+              return
+            }
             if (event.key === 'Enter' && !event.shiftKey) {
               event.preventDefault()
               void sendDraft()
               return
             }
+
             if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
             const textArea = inputRef.current?.resizableTextArea?.textArea
             const isAllSelected =

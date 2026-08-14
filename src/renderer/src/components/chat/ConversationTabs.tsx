@@ -176,7 +176,10 @@ const ConversationTabs = ({ expanded }: ConversationTabsProps): React.JSX.Elemen
           autoFocus
           placeholder={t('conversations.renameConversation')}
           onChange={(event) => setRenameValue(event.target.value)}
-          onPressEnter={() => void commitRename()}
+          onPressEnter={(event) => {
+            if (event.nativeEvent.isComposing || event.keyCode === 229) return
+            void commitRename()
+          }}
         />
       </Modal>
     </nav>

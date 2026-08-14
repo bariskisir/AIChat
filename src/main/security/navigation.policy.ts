@@ -28,7 +28,8 @@ export const isTrustedRendererNavigation = (
       )
     }
     return (
-      candidate.protocol === 'file:' && pathsMatch(fileURLToPath(candidate), packagedRendererPath)
+      candidate.protocol === 'file:' &&
+      pathsMatch(fileURLToPath(new URL(candidate.pathname, 'file:')), packagedRendererPath)
     )
   } catch {
     return false

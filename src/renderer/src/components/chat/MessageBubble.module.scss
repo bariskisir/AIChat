@@ -135,6 +135,10 @@
 
   p {
     margin: 0 0 10px;
+    /* Model output uses \n as a line break; without pre-line, in-paragraph
+     * newlines collapse into a single space. Code blocks keep their own
+     * pre/code rules below. */
+    white-space: pre-line;
   }
 
   p:last-child {
@@ -377,8 +381,15 @@
 }
 
 .markdown .codeBlockWrap {
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+}
+
+.markdown .codeBlockWrap .codeBlockCode {
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
 }
 
 .codeBlockCode {

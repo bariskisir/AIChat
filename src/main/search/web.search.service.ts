@@ -166,8 +166,15 @@ export default class WebSearchService {
     signal: AbortSignal,
     onProgress?: (query: string, engine: string, count: number, done: boolean) => void,
   ): Promise<WebSearchResult> {
+    const sanitizedQueries = queries
+      .filter((query): query is string => typeof query === 'string' && query.trim().length > 0)
+      .map((query) => query.trim())
+    if (sanitizedQueries.length === 0) {
+      return { citations: [], context: '' }
+    }
+
     const settled = await Promise.allSettled(
-      queries.slice(0, MAX_QUERIES).map(async (query) => {
+      sanitizedQueries.slice(0, MAX_QUERIES).map(async (query) => {
         if (signal.aborted) throw abortError()
         const links = await this.searchWithEngineFallback(
           engine,

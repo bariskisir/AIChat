@@ -244,11 +244,24 @@ describe('buildReasoningParameters', () => {
     })
   })
 
-  it('toggles Gemma 4 thinking through the Ollama think parameter', () => {
+  it('toggles thinking through the Ollama think parameter', () => {
     const ollama = { id: 'ollama', baseUrl: 'http://localhost:11434' }
     expect(buildReasoningParameters('gemma-4-31b-it', 'auto', ollama)).toEqual({ think: true })
-    expect(buildReasoningParameters('gemma-4-31b-it', 'high', ollama)).toEqual({ think: true })
+    expect(buildReasoningParameters('gemma-4-31b-it', 'high', ollama)).toEqual({ think: 'high' })
     expect(buildReasoningParameters('gemma-4-31b-it', 'off', ollama)).toEqual({ think: false })
+  })
+
+  it('recognizes bare Kimi K3 model IDs', () => {
+    expect(getModelSupportedReasoningEffortOptions({ id: 'k3' })).toEqual([
+      'default',
+      'off',
+      'auto',
+    ])
+    expect(getModelSupportedReasoningEffortOptions({ id: 'k3-256k' })).toEqual([
+      'default',
+      'off',
+      'auto',
+    ])
   })
 
   it('keeps the Gemini thinking-config wire for Google-hosted Gemma 4', () => {

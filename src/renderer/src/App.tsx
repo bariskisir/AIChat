@@ -2,7 +2,7 @@
  * Composes the reusable desktop shell, workspace, settings, and update notice.
  */
 
-import { lazy, Suspense } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { Button, Spin } from 'antd'
 import { Download } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -15,6 +15,7 @@ import { useDesktopActions } from '@renderer/hooks/useDesktopActions'
 import { useSettingsActions } from '@renderer/hooks/useSettingsActions'
 import HomePage from '@renderer/pages/home/HomePage'
 import { useAppSelector } from '@renderer/store'
+import { extractSelectedTextWithKatex } from '@renderer/utils/selection'
 
 const SettingsPage = lazy(() => import('@renderer/pages/settings/SettingsPage'))
 
@@ -32,6 +33,22 @@ const App = (): React.JSX.Element => {
   const desktopActions = useDesktopActions()
   const settingsActions = useSettingsActions()
   const { t } = useTranslation()
+
+  useEffect(() => {
+    const handleCopy = (event: ClipboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA') return
+      const selection = window.getSelection()
+      if (!selection || selection.isCollapsed) return
+      const extracted = extractSelectedTextWithKatex(selection)
+      if (extracted && extracted !== selection.toString()) {
+        event.preventDefault()
+        event.clipboardData?.setData('text/plain', extracted)
+      }
+    }
+    document.addEventListener('copy', handleCopy)
+    return () => document.removeEventListener('copy', handleCopy)
+  }, [])
 
   if (!initialized) {
     return (

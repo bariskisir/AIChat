@@ -47,8 +47,9 @@ export function getModelLogoById(modelId: string): string | undefined {
     '(hermes|nous)': NousResearchModelLogo,
     '(llama|meta)': MetaModelLogo,
     '(mistral|mixtral|magistral)': MistralModelLogo,
-    '(moonshot|kimi)': MoonshotAiModelLogo,
+    '(moonshot|kimi|^k[3-9](?:[-_.]|$))': MoonshotAiModelLogo,
     '(phi|wizardlm|orca|microsoft)': MicrosoftModelLogo,
+
     '(cohere|command)': CohereModelLogo,
     '(grok|xai)': XAiModelLogo,
     '(hunyuan|tencent)': TencentModelLogo,

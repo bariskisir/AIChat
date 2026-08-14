@@ -24,7 +24,6 @@ import {
 import {
   GEMINI_FLASH_MODEL_REGEX,
   isGemini3ThinkingTokenModel,
-  isHostedGemma4ThinkingModel,
   isSupportedThinkingTokenGeminiModel,
 } from './families/gemini'
 import { isGrok4FastReasoningModel } from './families/grok'
@@ -103,7 +102,7 @@ export const buildReasoningParameters = (
   if (effort === 'default') return null
 
   if (effort === 'off') {
-    if (kind === 'ollama' && isHostedGemma4ThinkingModel(model, provider)) {
+    if (kind === 'ollama') {
       return { think: false }
     }
 
@@ -373,7 +372,10 @@ export const buildReasoningParameters = (
     return { reasoning_effort: 'high' }
   }
 
-  if (kind === 'ollama' && isHostedGemma4ThinkingModel(model, provider)) {
+  if (kind === 'ollama') {
+    if (effort === 'low' || effort === 'medium' || effort === 'high') {
+      return { think: effort }
+    }
     return { think: true }
   }
 
