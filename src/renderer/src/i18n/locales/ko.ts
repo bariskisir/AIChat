@@ -40,6 +40,8 @@ const ko = {
     fetchFailed: '모델 목록을 가져오지 못했습니다. URL과 API 키를 확인하세요.',
     copyApiKey: 'API 키 복사',
     apiKeyCopied: 'API 키를 복사했습니다.',
+    customHeaders: '사용자 지정 헤더',
+    customHeadersInvalid: '잘못된 JSON이거나 지원되지 않는 헤더 값입니다.',
     fetchModelList: '모델 목록 가져오기',
     manualModel: '모델 수동 추가',
     manualModelTitle: '수동 모델 추가',

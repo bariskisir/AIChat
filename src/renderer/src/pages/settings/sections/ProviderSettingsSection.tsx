@@ -47,6 +47,25 @@ interface ProviderFormValues {
   name: string
   baseUrl?: string
   apiKey?: string
+  customHeadersJson?: string
+}
+
+/** Parses the JSON header draft into a string record, or returns null when invalid. */
+const parseCustomHeadersJson = (value: string): Record<string, string> | null => {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(value) as unknown
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+  const entries = Object.entries(parsed as Record<string, unknown>)
+  if (entries.length === 0) return {}
+  const valid = entries.every(
+    ([key, item]) => key.trim().length > 0 && typeof item === 'string' && item.trim().length > 0,
+  )
+  if (!valid) return null
+  return Object.fromEntries(entries) as Record<string, string>
 }
 
 /** Draft values accepted by the manual-model popup. */
@@ -294,7 +313,13 @@ const ProviderSettingsSection = (): React.JSX.Element => {
   /** Opens a blank provider form that can fetch models before the provider is saved. */
   const beginAdd = (): void => {
     form.resetFields()
-    form.setFieldsValue({ type: 'openai-compatible', name: '', baseUrl: '', apiKey: '' })
+    form.setFieldsValue({
+      type: 'openai-compatible',
+      name: '',
+      baseUrl: '',
+      apiKey: '',
+      customHeadersJson: '',
+    })
     setCatalogModels([])
     setSelectedModelIds([])
     setCatalogOpen(false)
@@ -313,6 +338,10 @@ const ProviderSettingsSection = (): React.JSX.Element => {
         name: data.name,
         baseUrl: data.baseUrl ?? '',
         apiKey: data.apiKey ?? '',
+        customHeadersJson:
+          data.customHeaders && Object.keys(data.customHeaders).length > 0
+            ? JSON.stringify(data.customHeaders)
+            : '',
       })
       setCatalogModels(data.catalogModels)
       setSelectedModelIds(data.selectedModelIds)
@@ -335,12 +364,30 @@ const ProviderSettingsSection = (): React.JSX.Element => {
     } catch {
       return null
     }
+    const customHeaders = values.customHeadersJson?.trim()
+      ? parseCustomHeadersJson(values.customHeadersJson)
+      : {}
+    if (customHeaders === null) {
+      void message.error(t('providers.customHeadersInvalid'))
+      return null
+    }
+    const containsNonAscii = (text: string): boolean =>
+      [...text].some((char) => char.charCodeAt(0) > 0xff)
+    if (
+      Object.entries(customHeaders).some(
+        ([key, value]) => containsNonAscii(key) || containsNonAscii(value),
+      )
+    ) {
+      void message.error(t('providers.customHeadersInvalid'))
+      return null
+    }
     return {
       ...(editingProvider ? { id: editingProvider.id } : {}),
       type: values.type,
       name: values.name,
       ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
       ...(values.apiKey ? { apiKey: values.apiKey } : {}),
+      ...(Object.keys(customHeaders).length > 0 ? { customHeaders } : {}),
     }
   }
 
@@ -638,7 +685,7 @@ const ProviderSettingsSection = (): React.JSX.Element => {
           form={form}
           className={styles.providerEditorForm ?? ''}
           labelAlign="left"
-          labelCol={{ flex: '84px' }}
+          labelCol={{ flex: '120px' }}
           wrapperCol={{ flex: 1 }}
           requiredMark={false}
         >
@@ -674,6 +721,9 @@ const ProviderSettingsSection = (): React.JSX.Element => {
                     onClick={() => void copyApiKey()}
                   />
                 </Space.Compact>
+              </Form.Item>
+              <Form.Item name="customHeadersJson" label={t('providers.customHeaders')}>
+                <Input placeholder='{"User-Agent": "opencode"}' spellCheck={false} />
               </Form.Item>
             </>
           )}

@@ -31,6 +31,7 @@ interface ProviderRecord {
   name: string
   type: ProviderType
   baseUrl: string
+  customHeaders: Record<string, string>
   builtin: boolean
   enabled: boolean
   apiKey: string
@@ -46,7 +47,23 @@ interface ProviderFile {
   lastUsedModel: ModelReference | null
   quickModel: ModelReference | null
   titleGenerationEnabled: boolean
+  /** Tracks the highest applied provider-document migration step for existing installs. */
+  migrationVersion: number
 }
+
+/** One ordered provider-document migration applied once to documents from earlier releases. */
+type ProviderFileMigration = (state: ProviderFile) => void
+
+/** Ordered migration steps; indexes match the migrationVersion they upgrade to. */
+const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
+  /** Migration 1: gives the built-in OpenCode provider its User-Agent header once. */
+  (state) => {
+    const opencode = state.providers.find((provider) => provider.id === 'opencode')
+    if (opencode && Object.keys(opencode.customHeaders).length === 0) {
+      opencode.customHeaders = { 'User-Agent': 'opencode' }
+    }
+  },
+]
 
 /** One built-in preset shipped with the application. */
 interface BuiltinProviderPreset {
@@ -56,6 +73,7 @@ interface BuiltinProviderPreset {
   baseUrl?: string
   defaultApiKey?: string
   enabledByDefault?: boolean
+  customHeaders?: Record<string, string>
 }
 
 const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
@@ -66,6 +84,7 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
     baseUrl: 'https://opencode.ai/zen/v1',
     defaultApiKey: 'public',
     enabledByDefault: true,
+    customHeaders: { 'User-Agent': 'opencode' },
   },
   {
     id: 'deepseek',
@@ -129,6 +148,10 @@ const modelSchema = z.object({
   reasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional(),
 })
 const providerTypeSchema = z.enum(PROVIDER_TYPES)
+const customHeadersSchema = z.record(
+  z.string().trim().min(1).max(200),
+  z.string().trim().min(1).max(10_000),
+)
 const connectionSchema = z
   .object({
     id: z.string().min(1).optional(),
@@ -136,6 +159,7 @@ const connectionSchema = z
     name: z.string().trim().min(1).max(100),
     baseUrl: z.string().max(2000).optional(),
     apiKey: z.string().max(10_000).optional(),
+    customHeaders: customHeadersSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.type !== 'openai-compatible') return
@@ -165,6 +189,7 @@ const recordSchema = z.object({
   name: z.string().min(1),
   type: providerTypeSchema,
   baseUrl: z.string().max(2000),
+  customHeaders: customHeadersSchema,
   builtin: z.boolean(),
   enabled: z.boolean(),
   apiKey: z.string().max(10_000),
@@ -178,7 +203,25 @@ const fileSchema = z.object({
   lastUsedModel: referenceSchema.nullable(),
   quickModel: referenceSchema.nullable(),
   titleGenerationEnabled: z.boolean(),
+  migrationVersion: z.number().int().nonnegative(),
 })
+
+/** Returns true when a parsed JSON value is a plain record of string values. */
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  Boolean(
+    value &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.entries(value).every(
+      ([key, item]) =>
+        typeof key === 'string' &&
+        key.trim().length > 0 &&
+        key.length <= 200 &&
+        typeof item === 'string' &&
+        item.trim().length > 0 &&
+        item.length <= 10_000,
+    ),
+  )
 
 /** Supplies a stable family label to catalogs migrated before model groups were persisted. */
 const inferModelGroup = (modelId: string, ownedBy?: string): string => {
@@ -326,6 +369,9 @@ const normalizeProviderFile = (input: unknown): unknown => {
                 ? (storedType as ProviderType)
                 : 'openai-compatible',
             baseUrl: provider.baseUrl ?? '',
+            customHeaders: isStringRecord(provider.customHeaders)
+              ? (provider.customHeaders as Record<string, string>)
+              : {},
             builtin: provider.builtin,
             enabled: provider.enabled,
             apiKey: typeof provider.apiKey === 'string' ? provider.apiKey : '',
@@ -347,6 +393,12 @@ const normalizeProviderFile = (input: unknown): unknown => {
     lastUsedModel: value.lastUsedModel ?? value.defaultModel ?? null,
     quickModel: value.quickModel ?? null,
     titleGenerationEnabled: value.titleGenerationEnabled ?? true,
+    migrationVersion:
+      typeof value.migrationVersion === 'number' &&
+      Number.isInteger(value.migrationVersion) &&
+      value.migrationVersion >= 0
+        ? value.migrationVersion
+        : 0,
   }
 }
 
@@ -406,6 +458,7 @@ export class ProviderRegistry {
       lastUsedModel: null,
       quickModel: null,
       titleGenerationEnabled: true,
+      migrationVersion: 0,
     }
     for (const preset of BUILTIN_PROVIDERS) {
       if (!current.providers.some((provider) => provider.id === preset.id)) {
@@ -414,6 +467,7 @@ export class ProviderRegistry {
           name: preset.name,
           type: preset.type,
           baseUrl: preset.baseUrl ?? '',
+          customHeaders: preset.customHeaders ?? {},
           builtin: true,
           enabled: preset.enabledByDefault ?? false,
           apiKey: preset.defaultApiKey ?? '',
@@ -424,11 +478,29 @@ export class ProviderRegistry {
     }
     const ollama = current.providers.find((provider) => provider.id === 'ollama')
     if (ollama?.builtin && ollama.name === 'Ollama') ollama.name = 'Ollama Local'
+    this.applyMigrations(current)
     if (isCleanInstall) this.importEnvironmentApiKeys(current.providers)
     this.state = current
     if (isCleanInstall) await this.initializeOpenCodeDefaults()
     this.removeInvalidPreferences()
     await this.persist()
+  }
+
+  /** Applies every pending provider-document migration in order and records the new version. */
+  private applyMigrations(state: ProviderFile): void {
+    const from = state.migrationVersion
+    while (state.migrationVersion < PROVIDER_FILE_MIGRATIONS.length) {
+      const migration = PROVIDER_FILE_MIGRATIONS[state.migrationVersion]
+      if (!migration) break
+      migration(state)
+      state.migrationVersion += 1
+    }
+    if (state.migrationVersion > from) {
+      this.logger.info('ProviderRegistry', 'Applied provider document migrations.', {
+        from,
+        to: state.migrationVersion,
+      })
+    }
   }
 
   /** Imports matching OpenAI-compatible credentials once and enables each matched preset. */
@@ -459,6 +531,9 @@ export class ProviderRegistry {
       name: provider.name,
       type: provider.type,
       baseUrl: provider.baseUrl,
+      ...(Object.keys(provider.customHeaders).length > 0
+        ? { customHeaders: provider.customHeaders }
+        : {}),
       builtin: provider.builtin,
       enabled: provider.enabled,
       hasApiKey: provider.apiKey.length > 0,
@@ -503,6 +578,9 @@ export class ProviderRegistry {
       type: provider.type,
       baseUrl: provider.baseUrl,
       apiKey: provider.apiKey,
+      ...(Object.keys(provider.customHeaders).length > 0
+        ? { customHeaders: provider.customHeaders }
+        : {}),
       catalogModels: provider.models,
       selectedModelIds: provider.selectedModelIds,
     }
@@ -541,6 +619,7 @@ export class ProviderRegistry {
       type: parsed.type,
       baseUrl:
         parsed.type === 'openai-compatible' ? (parsed.baseUrl ?? '').replace(/\/+$/, '') : '',
+      customHeaders: parsed.type === 'openai-compatible' ? (parsed.customHeaders ?? {}) : {},
       builtin: existing?.builtin ?? false,
       enabled: existing?.enabled ?? true,
       apiKey: parsed.type === 'openai-compatible' ? (parsed.apiKey ?? '') : '',
@@ -692,6 +771,9 @@ export class ProviderRegistry {
         name: provider.name,
         type: provider.type,
         baseUrl: provider.baseUrl,
+        ...(Object.keys(provider.customHeaders).length > 0
+          ? { customHeaders: provider.customHeaders }
+          : {}),
         builtin: provider.builtin,
         enabled: provider.enabled,
         hasApiKey: provider.apiKey.length > 0,
@@ -713,7 +795,9 @@ export class ProviderRegistry {
   private async fetchModels(provider: ProviderConnectionInput): Promise<ProviderModelDefinition[]> {
     if (!provider.baseUrl) throw new Error('API URL is required for OpenAI-compatible providers.')
     const baseUrl = normalizeOpenAiBaseUrl(provider.baseUrl)
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {
+      ...(provider.customHeaders ?? {}),
+    }
     if (provider.apiKey) {
       headers.Authorization = `Bearer ${provider.apiKey}`
       headers['x-api-key'] = provider.apiKey
@@ -821,6 +905,9 @@ export class ProviderRegistry {
         name: provider.name,
         baseUrl: provider.baseUrl,
         apiKey: provider.apiKey,
+        ...(Object.keys(provider.customHeaders).length > 0
+          ? { customHeaders: provider.customHeaders }
+          : {}),
       })
       /** Returns searchable catalog text for case-insensitive default-model matching. */
       const searchableText = (model: ProviderModelDefinition): string =>

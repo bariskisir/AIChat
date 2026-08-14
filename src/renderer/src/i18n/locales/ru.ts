@@ -40,6 +40,8 @@ const ru = {
     fetchFailed: 'Не удалось получить список. Проверьте URL и API-ключ.',
     copyApiKey: 'Копировать API-ключ',
     apiKeyCopied: 'API-ключ скопирован.',
+    customHeaders: 'Свой заголовок',
+    customHeadersInvalid: 'Недопустимый JSON или неподдерживаемые значения заголовков.',
     fetchModelList: 'Получить список моделей',
     manualModel: 'Добавить модель вручную',
     manualModelTitle: 'Добавить модель вручную',

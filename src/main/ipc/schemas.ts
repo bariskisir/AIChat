@@ -92,6 +92,9 @@ export const providerConnectionSchema = z.object({
   name: z.string().trim().min(1).max(100),
   baseUrl: z.string().max(2000).optional(),
   apiKey: z.string().max(10_000).optional(),
+  customHeaders: z
+    .record(z.string().trim().min(1).max(200), z.string().trim().min(1).max(10_000))
+    .optional(),
 })
 
 export const providerUsageFetchSchema = z.object({ providerId: idSchema })

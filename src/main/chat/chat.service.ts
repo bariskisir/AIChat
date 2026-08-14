@@ -259,7 +259,7 @@ export default class ChatService {
       throw new Error('Image generation requires an OpenAI-compatible provider.')
     const response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
       method: 'POST',
-      headers: this.headers(apiKey),
+      headers: this.headers(apiKey, provider.customHeaders),
       body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
       signal,
     })
@@ -341,7 +341,7 @@ export default class ChatService {
     const sendRequest = (): Promise<Response> =>
       fetch(endpoint, {
         method: 'POST',
-        headers: this.headers(apiKey),
+        headers: this.headers(apiKey, provider.customHeaders),
         body: JSON.stringify(body),
         signal,
       })
@@ -608,7 +608,7 @@ export default class ChatService {
     const { apiKey } = this.providers.resolve(model)
     const response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`, {
       method: 'POST',
-      headers: this.headers(apiKey),
+      headers: this.headers(apiKey, provider.customHeaders),
       body: JSON.stringify({ model: model.modelId, messages, stream: false, temperature: 0.2 }),
       signal,
     })
@@ -654,10 +654,14 @@ export default class ChatService {
     })
   }
 
-  /** Creates JSON request headers with optional dual-compatible authentication. */
-  private headers(apiKey: string): Record<string, string> {
+  /** Creates JSON request headers with optional dual-compatible authentication and custom headers. */
+  private headers(
+    apiKey: string,
+    customHeaders?: Record<string, string> | undefined,
+  ): Record<string, string> {
     return {
       'Content-Type': 'application/json',
+      ...(customHeaders ?? {}),
       ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
     }
   }

@@ -40,6 +40,8 @@ const ja = {
     fetchFailed: 'モデル一覧を取得できませんでした。URL と API キーを確認してください。',
     copyApiKey: 'API キーをコピー',
     apiKeyCopied: 'API キーをコピーしました。',
+    customHeaders: '任意ヘッダー',
+    customHeadersInvalid: 'JSON が無効か、サポートされていないヘッダー値です。',
     fetchModelList: 'モデル一覧を取得',
     manualModel: 'モデルを手動で追加',
     manualModelTitle: '手動モデルを追加',

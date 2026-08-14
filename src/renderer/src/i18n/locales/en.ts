@@ -46,6 +46,8 @@ const en = {
     fetchFailed: 'The model list could not be fetched. Check the current URL and API key.',
     copyApiKey: 'Copy API key',
     apiKeyCopied: 'API key copied.',
+    customHeaders: 'Custom Header',
+    customHeadersInvalid: 'Invalid JSON or unsupported header values.',
     fetchModelList: 'Get Model List',
     manualModel: 'Add model manually',
     manualModelTitle: 'Add manual model',

@@ -20,6 +20,7 @@ export interface ProviderSummary {
   name: string
   type: ProviderType
   baseUrl: string
+  customHeaders?: Record<string, string> | undefined
   builtin: boolean
   enabled: boolean
   hasApiKey: boolean
@@ -51,6 +52,7 @@ export interface ProviderConnectionInput {
   name: string
   baseUrl?: string | undefined
   apiKey?: string | undefined
+  customHeaders?: Record<string, string> | undefined
 }
 
 /** Input accepted when adding or editing a provider. */

@@ -40,6 +40,8 @@ const tr = {
     fetchFailed: 'Model listesi alınamadı. Geçerli URL ve API key’i kontrol edin.',
     copyApiKey: 'API key’i kopyala',
     apiKeyCopied: 'API key kopyalandı.',
+    customHeaders: 'Özel Başlık',
+    customHeadersInvalid: 'Geçersiz JSON veya desteklenmeyen başlık değerleri.',
     fetchModelList: 'Model Listesini Getir',
     manualModel: 'Elle model ekle',
     manualModelTitle: 'Manuel model ekle',

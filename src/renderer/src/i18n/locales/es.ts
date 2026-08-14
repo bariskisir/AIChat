@@ -41,6 +41,8 @@ const es = {
     fetchFailed: 'No se pudo obtener la lista. Comprueba la URL y la clave de API.',
     copyApiKey: 'Copiar clave de API',
     apiKeyCopied: 'Clave de API copiada.',
+    customHeaders: 'Header custom',
+    customHeadersInvalid: 'JSON no válido o valores de cabecera no admitidos.',
     fetchModelList: 'Obtener lista de modelos',
     manualModel: 'Añadir modelo manualmente',
     manualModelTitle: 'Añadir modelo manual',

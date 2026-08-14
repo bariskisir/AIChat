@@ -70,7 +70,11 @@ describe('ProviderRegistry', () => {
     expect(fetch).toHaveBeenCalledWith(
       'https://opencode.ai/zen/v1/models',
       expect.objectContaining({
-        headers: { Authorization: 'Bearer public', 'x-api-key': 'public' },
+        headers: {
+          Authorization: 'Bearer public',
+          'User-Agent': 'opencode',
+          'x-api-key': 'public',
+        },
       }),
     )
     expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 1 })
@@ -128,6 +132,52 @@ describe('ProviderRegistry', () => {
       providerId: 'opencode',
       modelId: 'custom/model',
     })
+  })
+
+  it('applies the OpenCode User-Agent header once to existing installs that lack it', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        providers: [
+          {
+            id: 'opencode',
+            name: 'OpenCode',
+            type: 'openai-compatible',
+            baseUrl: 'https://opencode.ai/zen/v1',
+            builtin: true,
+            enabled: true,
+            apiKey: 'public',
+            models: [],
+            selectedModelIds: [],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    vi.mocked(fetch).mockClear()
+
+    const upgraded = await createRegistry()
+    expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'User-Agent': 'opencode' })
+
+    const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
+    expect(persisted.migrationVersion).toBe(1)
+
+    await upgraded.save({
+      id: 'opencode',
+      type: 'openai-compatible',
+      name: 'OpenCode',
+      baseUrl: 'https://opencode.ai/zen/v1',
+      apiKey: 'public',
+      catalogModels: [],
+      selectedModelIds: [],
+    })
+
+    const relaunched = await createRegistry()
+    expect(relaunched.getEditorData('opencode').customHeaders).toBeUndefined()
   })
 
   it('appends new providers without testing their URL and stores the API key as plaintext', async () => {

@@ -40,6 +40,8 @@ const fr = {
     fetchFailed: 'La liste n’a pas pu être chargée. Vérifiez l’URL et la clé API.',
     copyApiKey: 'Copier la clé API',
     apiKeyCopied: 'Clé API copiée.',
+    customHeaders: 'En-tête custom',
+    customHeadersInvalid: 'JSON invalide ou valeurs d’en-tête non prises en charge.',
     fetchModelList: 'Obtenir la liste des modèles',
     manualModel: 'Ajouter un modèle manuellement',
     manualModelTitle: 'Ajouter un modèle manuel',

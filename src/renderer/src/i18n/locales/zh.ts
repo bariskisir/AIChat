@@ -40,6 +40,8 @@ const zh = {
     fetchFailed: '无法获取模型列表。请检查当前 URL 和 API 密钥。',
     copyApiKey: '复制 API 密钥',
     apiKeyCopied: 'API 密钥已复制。',
+    customHeaders: '自定义请求头',
+    customHeadersInvalid: 'JSON 无效或存在不支持的请求头值。',
     fetchModelList: '获取模型列表',
     manualModel: '手动添加模型',
     manualModelTitle: '添加手动模型',

@@ -41,6 +41,8 @@ const de = {
     fetchFailed: 'Modellliste konnte nicht geladen werden. URL und API-Schlüssel prüfen.',
     copyApiKey: 'API-Schlüssel kopieren',
     apiKeyCopied: 'API-Schlüssel kopiert.',
+    customHeaders: 'Eigener Header',
+    customHeadersInvalid: 'Ungültiges JSON oder nicht unterstützte Header-Werte.',
     fetchModelList: 'Modellliste abrufen',
     manualModel: 'Modell manuell hinzufügen',
     manualModelTitle: 'Manuelles Modell hinzufügen',

@@ -30,7 +30,9 @@ export class OpenAiCompatibleFamily implements ProviderFamily {
   ): Promise<ProviderModelDefinition[]> {
     if (!connection.baseUrl) throw new Error('API URL is required for OpenAI-compatible providers.')
     const baseUrl = normalizeOpenAiBaseUrl(connection.baseUrl)
-    const headers: Record<string, string> = {}
+    const headers: Record<string, string> = {
+      ...(connection.customHeaders ?? {}),
+    }
     if (connection.apiKey) {
       headers.Authorization = `Bearer ${connection.apiKey}`
       headers['x-api-key'] = connection.apiKey
