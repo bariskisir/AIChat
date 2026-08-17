@@ -27,6 +27,7 @@ export enum IpcChannel {
   ChatStop = 'chat:stop',
   ChatStream = 'event:chat-stream',
   AttachmentsSelect = 'attachments:select',
+  AttachmentsCreateText = 'attachments:create-text',
   WindowAlwaysOnTop = 'window:always-on-top',
   WindowMinimize = 'window:minimize',
   WindowToggleMaximize = 'window:toggle-maximize',

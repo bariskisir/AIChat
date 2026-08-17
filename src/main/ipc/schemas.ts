@@ -24,8 +24,14 @@ export const attachmentSchema = z.object({
     .max(20 * 1024 * 1024),
   localPath: z.string().min(1),
   kind: z.enum(['image', 'text', 'document']),
-  extractedText: z.string().max(250_000).optional(),
+  extractedText: z.string().max(10_000_000).optional(),
   dataUrl: z.string().max(30_000_000).optional(),
+})
+
+/** Bounds one pasted-text attachment to the extracted-text budget every provider gets. */
+export const createTextAttachmentSchema = z.object({
+  conversationId: conversationIdSchema,
+  text: z.string().min(1).max(10_000_000),
 })
 
 export const citationSchema = z.object({

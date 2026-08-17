@@ -1,6 +1,6 @@
 /** Renders one message with Markdown, reasoning, citations, token usage, and direct actions. */
 
-import { memo, useMemo } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
 import { Button, Image as AntImage, Tooltip } from 'antd'
 import { Bot, Copy, GitBranch, Pencil, RefreshCw, Trash2, User, Users } from 'lucide-react'
 import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
@@ -14,6 +14,12 @@ import remarkMath from 'remark-math'
 import { useTranslation } from 'react-i18next'
 import { estimateTextTokens, type ChatMessage } from '@shared/index'
 import { withCitationTags } from '@renderer/utils/citations'
+import {
+  clampText,
+  COLLAPSED_PREVIEW_CHARACTERS,
+  formatCharacterCount,
+  isOverlongMessage,
+} from '@renderer/utils/largeText'
 import { convertLatexDelimiters, stripBlankLinesInSvg } from '@renderer/utils/markdown'
 import { getModelLogo } from '@renderer/utils/modelLogos'
 import { createStreamingTextProjection } from '@renderer/utils/streamingProjection'
@@ -78,7 +84,24 @@ const MessageBubble = ({
     ? getModelLogo(message.model ? { modelId: message.model.modelId } : undefined)
     : undefined
 
+  // A message streamed in this session stays open: collapsing text the reader is
+  // already following the moment the stream ends would be worse than the cost of
+  // rendering it. Reloaded history has no such context and starts collapsed.
+  const streamedHereRef = useRef(false)
+  if (message.status === 'streaming') streamedHereRef.current = true
+  const [showFullContent, setShowFullContent] = useState(false)
+  const collapsed =
+    !showFullContent && !streamedHereRef.current && isOverlongMessage(message.content)
+
+  const collapsedPreview = useMemo(
+    () => (collapsed ? clampText(message.content, COLLAPSED_PREVIEW_CHARACTERS) : ''),
+    [collapsed, message.content],
+  )
+
   const markdownContent = useMemo(() => {
+    // Skipping every transform while collapsed is the point: none of them should
+    // ever run across a multi-hundred-kilobyte body just to render a summary.
+    if (collapsed) return ''
     const padded = withCitationTags(message.content, message.citations ?? [])
     const viewContent =
       message.status === 'streaming'
@@ -91,7 +114,7 @@ const MessageBubble = ({
           )
         : padded
     return stripBlankLinesInSvg(convertLatexDelimiters(viewContent))
-  }, [message.content, message.citations, message.status, t])
+  }, [collapsed, message.content, message.citations, message.status, t])
 
   const remarkPlugins = useMemo<PluggableList>(
     () => [
@@ -117,9 +140,10 @@ const MessageBubble = ({
 
   /** True when the message renders multiple images, enabling grouped prev/next preview. */
   const hasMultipleImages = useMemo(() => {
+    if (collapsed) return false
     const images = message.content.match(/!\[[^\]]*\]\([^)]*\)/g) ?? []
     return images.length > 1
-  }, [message.content])
+  }, [collapsed, message.content])
 
   /** Copies only the readable message content to the system clipboard. */
   const copyMessage = async (): Promise<void> => {
@@ -169,7 +193,14 @@ const MessageBubble = ({
         {message.attachments && message.attachments.length > 0 && (
           <div className={styles.attachments}>
             {message.attachments.map((attachment) => (
-              <span key={attachment.id}>{attachment.name}</span>
+              <span key={attachment.id}>
+                {attachment.name}
+                {attachment.kind === 'text' && attachment.extractedText
+                  ? ` · ${t('chat.attachmentCharacters', {
+                      characters: formatCharacterCount(attachment.extractedText.length),
+                    })}`
+                  : ''}
+              </span>
             ))}
           </div>
         )}
@@ -190,12 +221,35 @@ const MessageBubble = ({
           />
         )}
         <div className={styles.markdown}>
-          {message.content ? (
-            hasMultipleImages ? (
-              <AntImage.PreviewGroup>{markdownElement}</AntImage.PreviewGroup>
-            ) : (
-              markdownElement
-            )
+          {collapsed ? (
+            <div className={styles.longText}>
+              <pre className={styles.longTextPreview}>{collapsedPreview}</pre>
+              <div className={styles.longTextBar}>
+                <span>
+                  {t('chat.longTextCollapsed', {
+                    characters: formatCharacterCount(message.content.length),
+                  })}
+                </span>
+                <Button type="link" size="small" onClick={() => setShowFullContent(true)}>
+                  {t('chat.showFullText')}
+                </Button>
+              </div>
+            </div>
+          ) : message.content ? (
+            <>
+              {hasMultipleImages ? (
+                <AntImage.PreviewGroup>{markdownElement}</AntImage.PreviewGroup>
+              ) : (
+                markdownElement
+              )}
+              {showFullContent && (
+                <div className={styles.longTextBar}>
+                  <Button type="link" size="small" onClick={() => setShowFullContent(false)}>
+                    {t('chat.hideFullText')}
+                  </Button>
+                </div>
+              )}
+            </>
           ) : message.status === 'streaming' ? (
             <span className={styles.cursor}>●</span>
           ) : null}

@@ -17,6 +17,7 @@ import {
   conversationIdSchema,
   conversationRenameSchema,
   conversationSchema,
+  createTextAttachmentSchema,
   favoriteSchema,
   fileSaveSchema,
   idSchema,
@@ -204,6 +205,11 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   ipcMain.handle(IpcChannel.AttachmentsSelect, (event, input: unknown) => {
     assertSender(event.sender)
     return services.attachments.select(window, conversationIdSchema.parse(input))
+  })
+  ipcMain.handle(IpcChannel.AttachmentsCreateText, (event, input: unknown) => {
+    assertSender(event.sender)
+    const { conversationId, text } = createTextAttachmentSchema.parse(input)
+    return services.attachments.createFromText(conversationId, text)
   })
   ipcMain.handle(IpcChannel.WindowAlwaysOnTop, (event, enabled: unknown) => {
     assertSender(event.sender)

@@ -39,6 +39,12 @@ import {
   setTitleGeneratingConversationId,
 } from '@renderer/store/appSlice'
 import { toConversationSummary } from '@renderer/utils/formatters'
+import {
+  clampText,
+  formatCharacterCount,
+  MAX_PASTED_TEXT_CHARACTERS,
+  shouldAttachPastedText,
+} from '@renderer/utils/largeText'
 import MessageBubble from './MessageBubble'
 import ModelSelect, { modelReferenceKey } from './ModelSelect'
 import ReasoningControl from './ReasoningControl'
@@ -47,6 +53,8 @@ import styles from './ChatWorkspace.module.scss'
 
 const logger = createLogger('ChatWorkspace')
 const FALLBACK_REASONING: ReasoningEffort[] = ['default', 'off', 'low', 'medium', 'high']
+/** Attachments one message may carry, matching the persisted and IPC bounds. */
+const MAX_ATTACHMENTS = 10
 
 interface ActiveRequest {
   messageId: string
@@ -666,9 +674,44 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     const conversation = conversationRef.current
     if (!conversation) return
     try {
-      setAttachments(await window.app.selectAttachments(conversation.id))
+      const selected = await window.app.selectAttachments(conversation.id)
+      if (selected.length === 0) return
+      setAttachments((items) => [...items, ...selected].slice(0, MAX_ATTACHMENTS))
     } catch (error) {
       logger.error('Attachments could not be prepared.', error)
+      void message.error(t('chat.attachmentFailed'))
+    }
+  }
+
+  /**
+   * Moves an oversized paste into a text attachment. Keeping it out of the
+   * composer value is what stops the auto-sizing textarea from re-measuring a
+   * huge string on every keystroke and stops the message body from being handed
+   * to the Markdown renderer as one enormous inline block.
+   */
+  const attachPastedText = async (text: string): Promise<void> => {
+    const conversation = conversationRef.current
+    if (!conversation) return
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      void message.warning(t('chat.attachmentLimitReached', { count: MAX_ATTACHMENTS }))
+      return
+    }
+    const clamped = clampText(text, MAX_PASTED_TEXT_CHARACTERS)
+    try {
+      const attachment = await window.app.createTextAttachment(conversation.id, clamped)
+      setAttachments((items) => [...items, attachment].slice(0, MAX_ATTACHMENTS))
+      void message.success(
+        t('chat.pastedTextAttached', { characters: formatCharacterCount(clamped.length) }),
+      )
+      if (clamped.length < text.length) {
+        void message.warning(
+          t('chat.pastedTextTruncated', {
+            characters: formatCharacterCount(MAX_PASTED_TEXT_CHARACTERS),
+          }),
+        )
+      }
+    } catch (error) {
+      logger.error('Pasted text could not be attached.', error)
       void message.error(t('chat.attachmentFailed'))
     }
   }
@@ -945,6 +988,13 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
             {attachments.map((attachment) => (
               <span key={attachment.id}>
                 {attachment.name}
+                {attachment.kind === 'text' && attachment.extractedText ? (
+                  <em className={styles.chipMeta}>
+                    {t('chat.attachmentCharacters', {
+                      characters: formatCharacterCount(attachment.extractedText.length),
+                    })}
+                  </em>
+                ) : null}
                 <button
                   type="button"
                   onClick={() =>
@@ -964,6 +1014,12 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
           autoSize={{ minRows: 2, maxRows: 8 }}
           placeholder={t('chat.placeholder')}
           onChange={(event) => setDraft(event.target.value)}
+          onPaste={(event) => {
+            const pasted = event.clipboardData.getData('text/plain')
+            if (!shouldAttachPastedText(pasted)) return
+            event.preventDefault()
+            void attachPastedText(pasted)
+          }}
           onCompositionStart={() => {
             isComposingRef.current = true
           }}

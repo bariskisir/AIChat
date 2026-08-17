@@ -86,6 +86,8 @@ export interface ApiBridge {
   stopChat(requestId: string): Promise<void>
   /** Opens the native picker and prepares private attachment copies. */
   selectAttachments(conversationId: string): Promise<ChatAttachment[]>
+  /** Stores an oversized paste as one private text attachment. */
+  createTextAttachment(conversationId: string, text: string): Promise<ChatAttachment>
   /** Changes the native always-on-top state. */
   setAlwaysOnTop(enabled: boolean): Promise<void>
   /** Minimizes the main application window. */

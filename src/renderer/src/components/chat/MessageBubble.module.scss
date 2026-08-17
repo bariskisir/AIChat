@@ -126,6 +126,38 @@
   font: 10px var(--font-family);
 }
 
+/* Collapsed rendering for an over-long body: a bounded plain-text preview that
+ * never reaches the Markdown or raw-HTML pipeline, so neither the layout nor the
+ * render cost can scale with the message length. */
+.longText {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.longTextPreview {
+  max-height: 260px;
+  margin: 0;
+  padding: 10px 12px;
+  overflow: hidden;
+  border: 0.5px solid var(--color-border);
+  border-radius: 9px;
+  color: var(--color-text-2);
+  background: var(--color-background-soft);
+  font: 12px/1.6 var(--font-family);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  mask-image: linear-gradient(to bottom, #000 62%, transparent 100%);
+}
+
+.longTextBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-3);
+  font-size: 11px;
+}
+
 .markdown {
   color: var(--color-text-1);
   font-size: 14px;

@@ -76,6 +76,9 @@ const api: ApiBridge = {
   /** Opens the native attachment picker for one conversation. */
   selectAttachments: (conversationId) =>
     ipcRenderer.invoke(IpcChannel.AttachmentsSelect, conversationId),
+  /** Stores one oversized paste as a private text attachment. */
+  createTextAttachment: (conversationId, text) =>
+    ipcRenderer.invoke(IpcChannel.AttachmentsCreateText, { conversationId, text }),
   /** Changes the native always-on-top state. */
   setAlwaysOnTop: (enabled) => ipcRenderer.invoke(IpcChannel.WindowAlwaysOnTop, enabled),
   /** Minimizes the main application window. */

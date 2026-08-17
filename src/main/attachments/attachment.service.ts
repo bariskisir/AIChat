@@ -1,7 +1,7 @@
 /** Selects, validates, copies, and prepares chat attachments inside private app storage. */
 
 import { randomUUID } from 'node:crypto'
-import { copyFile, readFile, stat } from 'node:fs/promises'
+import { copyFile, readFile, stat, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import { dialog, type BrowserWindow } from 'electron'
 import type { ChatAttachment } from '@shared/index'
@@ -10,6 +10,8 @@ import type StorageService from '../persistence/storage.service'
 
 const MAX_FILES = 10
 const MAX_FILE_BYTES = 20 * 1024 * 1024
+/** File name given to text that was pasted into the composer rather than picked. */
+const PASTED_TEXT_ATTACHMENT_NAME = 'pasted-text.txt'
 const MAX_TOTAL_BYTES = 50 * 1024 * 1024
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp'])
 const DOCUMENT_EXTENSIONS = new Set([
@@ -141,6 +143,27 @@ export default class AttachmentService {
     )
   }
 
+  /**
+   * Stores one oversized paste as a private text attachment. Keeping the text out
+   * of the message body is what stops a huge paste from stalling the composer and
+   * from being handed to the Markdown renderer as inline content.
+   */
+  public async createFromText(conversationId: string, text: string): Promise<ChatAttachment> {
+    const directory = await this.storage.ensureAttachmentDirectory(conversationId)
+    const id = randomUUID()
+    const localPath = join(directory, `${id}.txt`)
+    await writeFile(localPath, text, 'utf8')
+    return {
+      id,
+      name: PASTED_TEXT_ATTACHMENT_NAME,
+      mimeType: 'text/plain',
+      size: Buffer.byteLength(text, 'utf8'),
+      localPath,
+      kind: 'text',
+      extractedText: text,
+    }
+  }
+
   /** Copies one file and prepares either an image data URL or bounded readable text. */
   private async prepareFile(
     filePath: string,
@@ -166,7 +189,7 @@ export default class AttachmentService {
       }
     }
     if (TEXT_EXTENSIONS.has(extension)) {
-      const text = (await readFile(localPath, 'utf8')).slice(0, 250_000)
+      const text = (await readFile(localPath, 'utf8')).slice(0, 10_000_000)
       return {
         id,
         name,
@@ -187,14 +210,14 @@ export default class AttachmentService {
           size,
           localPath,
           kind: 'text',
-          extractedText: decoded.slice(0, 250_000),
+          extractedText: decoded.slice(0, 10_000_000),
         }
       }
     }
     let extractedText = 'This document is attached, but no plain-text preview was available.'
     if (EXTRACTABLE_DOCUMENT_EXTENSIONS.has(extension)) {
       try {
-        extractedText = (await parseOffice(localPath)).toText().slice(0, 250_000)
+        extractedText = (await parseOffice(localPath)).toText().slice(0, 10_000_000)
       } catch {
         // Unsupported or damaged documents remain attached with a safe metadata fallback.
       }
