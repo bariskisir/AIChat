@@ -33,6 +33,22 @@ import { buildTitlePrompt, fallbackTitle, sanitizeTitle } from './title.generato
 
 type Emit = (event: ChatStreamEvent) => void
 
+/** Reasoning-effort used by internal one-shot Quick Model calls, which never need thinking. */
+const UTILITY_REASONING_EFFORT = 'off' as const
+
+/** Removes every provider reasoning key so a rejected body can be retried without thinking. */
+const stripReasoningParameters = (body: Record<string, unknown>): void => {
+  delete body.thinking
+  delete body.enable_thinking
+  delete body.reasoning_effort
+  delete body.reasoning
+  delete body.disable_reasoning
+  delete body.chat_template_kwargs
+  delete body.thinking_budget
+  delete body.extra_body
+  delete body.incremental_output
+}
+
 interface CompatibleMessage {
   role: 'system' | 'user' | 'assistant'
   content: string | Array<Record<string, unknown>>
@@ -353,15 +369,7 @@ export default class ChatService {
     }
     if (!response.ok && (response.status === 400 || response.status === 422)) {
       await response.body?.cancel()
-      delete body.thinking
-      delete body.enable_thinking
-      delete body.reasoning_effort
-      delete body.reasoning
-      delete body.disable_reasoning
-      delete body.chat_template_kwargs
-      delete body.thinking_budget
-      delete body.extra_body
-      delete body.incremental_output
+      stripReasoningParameters(body)
       response = await sendRequest()
     }
     if (!response.ok) throw await createProviderError(response)
@@ -560,7 +568,7 @@ export default class ChatService {
   ): Promise<string> {
     const { provider } = this.providers.resolve(model)
     if (provider.type === 'chatgpt') {
-      const body = buildResponsesRequest(messages, model.modelId, 'medium', false)
+      const body = buildResponsesRequest(messages, model.modelId, UTILITY_REASONING_EFFORT, false)
       const response = await this.chatgpt.fetchWithCredentials(provider.id, (credentials) =>
         fetch(CHATGPT_RESPONSES_URL, {
           method: 'POST',
@@ -606,12 +614,39 @@ export default class ChatService {
       }
     }
     const { apiKey } = this.providers.resolve(model)
-    const response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`, {
-      method: 'POST',
-      headers: this.headers(apiKey, provider.customHeaders),
-      body: JSON.stringify({ model: model.modelId, messages, stream: false, temperature: 0.2 }),
-      signal,
+    // Quick Model utility turns are short and throwaway, so thinking is disabled explicitly
+    // instead of inheriting the provider default on a reasoning-capable model.
+    const reasoningParameters = buildReasoningParameters(model.modelId, UTILITY_REASONING_EFFORT, {
+      id: provider.id,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
     })
+    const body: Record<string, unknown> = {
+      model: model.modelId,
+      messages,
+      stream: false,
+      temperature: 0.2,
+      ...(reasoningParameters ?? {}),
+    }
+    const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
+    /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
+    const sendRequest = (): Promise<Response> =>
+      fetch(endpoint, {
+        method: 'POST',
+        headers: this.headers(apiKey, provider.customHeaders),
+        body: JSON.stringify(body),
+        signal,
+      })
+    let response = await sendRequest()
+    if (
+      !response.ok &&
+      reasoningParameters &&
+      (response.status === 400 || response.status === 422)
+    ) {
+      await response.body?.cancel()
+      stripReasoningParameters(body)
+      response = await sendRequest()
+    }
     if (!response.ok) throw await createProviderError(response)
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>
