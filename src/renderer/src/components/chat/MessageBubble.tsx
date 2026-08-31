@@ -53,10 +53,13 @@ export interface MessageBubbleProps {
 }
 
 /** Allows regular safe Markdown URLs plus generated in-memory image data URLs. */
-const transformUrl = (url: string): string =>
-  url.startsWith('data:image/png') || url.startsWith('data:image/jpeg')
-    ? url
-    : defaultUrlTransform(url)
+const transformUrl = (url: string): string => {
+  if (url.startsWith('data:image/png') || url.startsWith('data:image/jpeg')) return url
+  const transformed = defaultUrlTransform(url)
+  // Cherry 2.0.10: stop rewriting unlinkable links/images into [blocked]; keep http(s) hrefs.
+  if (!transformed && /^https?:\/\//i.test(url)) return url
+  return transformed
+}
 
 /** Displays a durable user or assistant message and its context-sensitive direct actions. */
 const MessageBubble = ({

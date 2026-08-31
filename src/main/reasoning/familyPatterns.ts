@@ -24,6 +24,7 @@ export type ModelFamily =
   | 'hunyuanT1'
   | 'glm5'
   | 'glm45to47'
+  | 'glm53'
   | 'glmZ1'
   | 'kimiK25Plus'
   | 'kimiK3Plus'
@@ -42,6 +43,9 @@ export type ModelFamily =
   | 'ring'
   | 'baichuanM2'
   | 'baichuanM3'
+  | 'nemotron'
+  | 'museGlimmer'
+  | 'solarPro'
   | 'gemma4'
   | 'gemini3'
   | 'geminiFlashLatest'
@@ -88,6 +92,10 @@ export const FAMILY_PATTERNS: Readonly<Record<ModelFamily, RegExp>> = Object.fre
   ring: /ring-(?:1t|mini|flash)/,
   baichuanM2: /^baichuan-m2$/,
   baichuanM3: /^baichuan-m3$/,
+  nemotron: /(?:llama-3-1-)?nemotron-(?:\d+(?:-\d+)*-)?(?:nano|super|ultra|lightning)/,
+  museGlimmer: /^muse-glimmer/,
+  solarPro: /^solar-pro-?[2-9]/,
+  glm53: /glm-5[.-]3(?:-|$)/,
   gemma4: /gemma4|gemma-4/,
   gemini3: /gemini-3/,
   geminiFlashLatest: /^gemini-flash-latest$/,

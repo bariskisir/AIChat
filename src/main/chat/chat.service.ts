@@ -10,6 +10,7 @@ import type {
 } from '@shared/index'
 import { clampSurrogateBoundary } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
+import { isKimi25OrNewerModel } from '../reasoning/families/chinese'
 import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
 import { normalizeOpenAiBaseUrl } from '../providers/openai-compatible/openai-compatible.base-url'
@@ -281,12 +282,21 @@ export default class ChatService {
     if (!prompt) throw new Error('An image prompt is required.')
     if (provider.type !== 'openai-compatible')
       throw new Error('Image generation requires an OpenAI-compatible provider.')
-    const response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
+    let response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
       method: 'POST',
       headers: this.headers(apiKey, provider.customHeaders),
       body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
       signal,
     })
+    if (!response.ok && response.status === 400) {
+      await response.body?.cancel().catch(() => undefined)
+      response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
+        method: 'POST',
+        headers: this.headers(apiKey, provider.customHeaders),
+        body: JSON.stringify({ model: request.model.modelId, prompt }),
+        signal,
+      })
+    }
     if (!response.ok) throw await createProviderError(response)
     const payload = (await response.json()) as { data?: Array<{ b64_json?: string; url?: string }> }
     const image = payload.data?.[0]
@@ -624,12 +634,33 @@ export default class ChatService {
       name: provider.name,
       baseUrl: provider.baseUrl,
     })
+    const isKimiModel = isKimi25OrNewerModel({ id: modelId })
     const body: Record<string, unknown> = {
       model: modelId,
       messages,
       stream: false,
-      temperature: 0.2,
+      ...(isKimiModel ? {} : { temperature: 0.2 }),
       ...(reasoningParameters ?? {}),
+    }
+    // OpenAI reasoning models (o1/o3/o4-mini/gpt-5 non-chat) require max_completion_tokens instead of max_tokens.
+    const isOpenAIReasoningModelId = (id: string): boolean => {
+      const lower = id.toLowerCase()
+      return (
+        lower.startsWith('o1') ||
+        lower.startsWith('o3') ||
+        lower.startsWith('o4-mini') ||
+        (lower.startsWith('gpt-5') && !lower.startsWith('gpt-5-chat'))
+      )
+    }
+    if (isOpenAIReasoningModelId(modelId) && body.max_tokens != null) {
+      const { max_tokens, ...rest } = body as Record<string, unknown> & { max_tokens?: unknown }
+      if ((body as Record<string, unknown>).max_completion_tokens == null) {
+        Object.assign(body, { ...rest, max_completion_tokens: max_tokens })
+        delete (body as Record<string, unknown>).max_tokens
+      } else {
+        Object.assign(body, rest)
+        delete (body as Record<string, unknown>).max_tokens
+      }
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current body so a provider rejecting the reasoning keys can be retried. */

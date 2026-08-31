@@ -6,6 +6,7 @@ import {
   isDoubaoSeed18Model,
   isDoubaoSeedAfter251015,
   isDoubaoThinkingAutoModel,
+  isGlm53Model,
   isDeepSeekHybridInferenceModel,
   isDeepSeekV4PlusModel,
   isKimiK27CodeModel,
@@ -285,7 +286,15 @@ export const buildReasoningParameters = (
   }
 
   if (isDeepSeekV4PlusModel(model)) {
-    const effortValue = effort === 'xhigh' ? 'max' : 'high'
+    const effortValue = effort === 'xhigh' ? 'max' : effort === 'low' ? 'low' : 'high'
+    return {
+      thinking: { type: 'enabled' as const },
+      reasoning_effort: effortValue,
+    }
+  }
+
+  if (isGlm53Model(model)) {
+    const effortValue = effort === 'xhigh' ? 'max' : (effort as string)
     return {
       thinking: { type: 'enabled' as const },
       reasoning_effort: effortValue,
@@ -337,7 +346,10 @@ export const buildReasoningParameters = (
   }
 
   if (isQwenReasoningModel(model)) {
-    const supportEnableThinking = isSupportEnableThinkingProvider(provider)
+    const isGenericOpenAiCompatible =
+      kind === 'generic' && Boolean(provider?.baseUrl?.startsWith('http'))
+    const supportEnableThinking =
+      isSupportEnableThinkingProvider(provider) || isGenericOpenAiCompatible
     const enableThinkingConfig = isQwenAlwaysThinkModel(model) ? {} : { enable_thinking: true }
     if (supportEnableThinking) {
       return {

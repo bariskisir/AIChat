@@ -79,6 +79,9 @@ export function isReasoningModel(
     modelId.includes('gemma-4') ||
     modelId.includes('gemma4') ||
     modelId.includes('muse-spark') ||
+    modelId.includes('muse-glimmer') ||
+    modelId.includes('nemotron') ||
+    modelId.includes('solar-pro') ||
     REASONING_REGEX.test(modelId)
   )
 }

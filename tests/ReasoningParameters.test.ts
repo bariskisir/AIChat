@@ -44,6 +44,7 @@ describe('getModelSupportedReasoningEffortOptions', () => {
     expect(getModelSupportedReasoningEffortOptions({ id: 'deepseek-v4' })).toEqual([
       'default',
       'off',
+      'low',
       'high',
       'xhigh',
     ])

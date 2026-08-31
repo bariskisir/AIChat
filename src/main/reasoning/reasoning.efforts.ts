@@ -10,6 +10,7 @@ import {
   isDoubaoSeed18Model,
   isDoubaoSeedAfter251015,
   isDoubaoThinkingAutoModel,
+  isGlm53Model,
   isSupportedThinkingTokenDoubaoModel,
   isSupportedThinkingTokenHunyuanModel,
   isSupportedThinkingTokenKimiModel,
@@ -88,9 +89,10 @@ export const MODEL_SUPPORTED_REASONING_EFFORT = {
   hunyuan: ['auto'] as const,
   mimo: ['auto'] as const,
   zhipu: ['auto'] as const,
+  glm53: ['low', 'high', 'xhigh'] as const,
   perplexity: ['low', 'medium', 'high'] as const,
   deepseek_hybrid: ['auto'] as const,
-  deepseek_v4: ['high', 'xhigh'] as const,
+  deepseek_v4: ['low', 'high', 'xhigh'] as const,
   kimi_k2_5: ['none', 'auto'] as const,
   kimi_always_think: ['auto'] as const,
   claude: ['low', 'medium', 'high'] as const,
@@ -138,6 +140,7 @@ export const MODEL_SUPPORTED_OPTIONS = {
   mimo: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.mimo] as const,
   hunyuan: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.hunyuan] as const,
   zhipu: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.zhipu] as const,
+  glm53: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.glm53] as const,
   perplexity: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.perplexity] as const,
   deepseek_hybrid: [
     'default',
@@ -239,7 +242,7 @@ const getThinkModelTypeId = (
   } else if (isSupportedReasoningEffortPerplexityModel(model)) {
     thinkingModelType = 'perplexity'
   } else if (isSupportedThinkingTokenZhipuModel(model)) {
-    thinkingModelType = 'zhipu'
+    thinkingModelType = isGlm53Model(model) ? 'glm53' : 'zhipu'
   } else if (isDeepSeekV4PlusModel(model)) {
     thinkingModelType = 'deepseek_v4'
   } else if (isDeepSeekHybridInferenceModel(model)) {

@@ -141,7 +141,14 @@ export const isHunyuanReasoningModel = (model?: ReasoningModelLike): boolean => 
 /** Zhipu (GLM) models with thinking-token control (GLM-4.5+, GLM-5+). */
 export const isSupportedThinkingTokenZhipuModel = (model: ReasoningModelLike): boolean => {
   const modelId = getLowerBaseModelName(model.id, '/')
-  return belongsToAnyFamily(modelId, ['glm5', 'glm45to47'])
+  return belongsToAnyFamily(modelId, ['glm5', 'glm45to47', 'glm53'])
+}
+
+/** GLM-5.3-Flash: dedicated effort low/high/max without toggle. */
+export const isGlm53Model = (model?: ReasoningModelLike): boolean => {
+  if (!model) return false
+  const modelId = getLowerBaseModelName(model.id, '/')
+  return belongsToFamily(modelId, 'glm53')
 }
 
 /** Zhipu reasoning models. */
