@@ -78,6 +78,7 @@ export function isReasoningModel(
     modelId.includes('deepseek-v3.2-speciale') ||
     modelId.includes('gemma-4') ||
     modelId.includes('gemma4') ||
+    modelId.includes('muse-spark') ||
     REASONING_REGEX.test(modelId)
   )
 }
@@ -88,6 +89,8 @@ export function isSupportedReasoningEffortModel(
   provider?: ReasoningProviderLike,
 ): boolean {
   if (!model) return false
+  const modelId = getLowerBaseModelName(model.id)
+  if (modelId.includes('muse-spark')) return true
   return (
     isSupportedReasoningEffortOpenAIModel(model) ||
     isSupportedReasoningEffortGrokModel(model, provider) ||

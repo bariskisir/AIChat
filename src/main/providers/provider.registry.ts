@@ -916,8 +916,7 @@ export class ProviderRegistry {
         (model) => model.capabilities.chat && searchableText(model).includes('free'),
       )
       const selected =
-        freeChatModels.find((model) => searchableText(model).includes('deepseek')) ??
-        freeChatModels[0]
+        freeChatModels.find((model) => searchableText(model).includes('muse')) ?? freeChatModels[0]
       if (!selected) {
         this.logger.warn(
           'ProviderRegistry',

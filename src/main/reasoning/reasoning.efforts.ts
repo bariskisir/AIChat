@@ -56,6 +56,7 @@ import type { ReasoningModelLike, ReasoningProviderLike } from './reasoning.type
 
 /** Supported reasoning-effort values per model type. */
 export const MODEL_SUPPORTED_REASONING_EFFORT = {
+  muse_spark: ['low', 'medium', 'high', 'xhigh'] as const,
   default: ['low', 'medium', 'high'] as const,
   o: ['low', 'medium', 'high'] as const,
   openai_deep_research: ['medium'] as const,
@@ -99,6 +100,7 @@ export const MODEL_SUPPORTED_REASONING_EFFORT = {
 
 /** Full effort-option list per model type, including 'default' and 'none'. */
 export const MODEL_SUPPORTED_OPTIONS = {
+  muse_spark: ['default', 'off', ...MODEL_SUPPORTED_REASONING_EFFORT.muse_spark] as const,
   default: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.default] as const,
   o: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.o] as const,
   openai_deep_research: [
@@ -160,6 +162,7 @@ const getThinkModelTypeId = (
 ): ThinkModelType => {
   let thinkingModelType: ThinkModelType = 'default'
   const modelId = getLowerBaseModelName(model.id)
+  if (modelId.includes('muse-spark')) return 'muse_spark'
   if (isClaudeReasoningModel(model)) {
     thinkingModelType = 'claude'
     if (isClaude46SeriesModel(model) || isSupportAdaptiveThinkingClaudeModel(model)) {

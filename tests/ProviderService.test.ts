@@ -47,6 +47,7 @@ beforeEach(async () => {
           JSON.stringify({
             data: [
               { id: 'meta/llama-free', name: 'Llama Free' },
+              { id: 'muse-spark-1.2-contributor-free', name: 'Muse Spark 1.2 Contributor Free' },
               { id: 'deepseek/deepseek-v3-free', name: 'DeepSeek V3 Free' },
             ],
           }),
@@ -80,16 +81,16 @@ describe('ProviderRegistry', () => {
     expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 1 })
     expect(registry.getEditorData('opencode')).toMatchObject({
       apiKey: 'public',
-      selectedModelIds: ['deepseek/deepseek-v3-free'],
+      selectedModelIds: ['muse-spark-1.2-contributor-free'],
     })
     expect(snapshot.lastUsedModel).toEqual({
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     })
     expect(snapshot.quickModel).toEqual(snapshot.lastUsedModel)
   })
 
-  it('falls back to the first free OpenCode chat model when DeepSeek is unavailable', async () => {
+  it('falls back to the first free OpenCode chat model when Muse is unavailable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -429,18 +430,18 @@ describe('ProviderRegistry', () => {
   it('resolves a selected model with its plaintext key for chat requests', () => {
     const resolved = registry.resolve({
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     })
 
     expect(resolved.apiKey).toBe('public')
     expect(resolved.provider).toMatchObject({ id: 'opencode', enabled: true })
-    expect(resolved.modelDefinition).toMatchObject({ modelId: 'deepseek/deepseek-v3-free' })
+    expect(resolved.modelDefinition).toMatchObject({ modelId: 'muse-spark-1.2-contributor-free' })
   })
 
   it('persists favorites and the last-used model for selected models', async () => {
     const reference: ModelReference = {
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     }
     await registry.setFavorite(reference, true)
     expect(registry.snapshot().favorites).toEqual([reference])

@@ -78,6 +78,8 @@ Please respond in the same language as the user's question.`
 export default class ChatService {
   private readonly active = new Map<string, AbortController>()
   private readonly webSearch: WebSearchService
+  private readonly compatibleEndpointCache = new Map<string, 'chat' | 'responses'>()
+  private readonly logger: LoggerService
 
   /** Creates a chat orchestrator from provider, auth, storage, logging, and web-search services. */
   public constructor(
@@ -87,7 +89,13 @@ export default class ChatService {
     private readonly storage: StorageService,
     logger: LoggerService,
   ) {
+    this.logger = logger
     this.webSearch = new WebSearchService(logger)
+  }
+
+  /** Produces an in-memory cache key for one OpenAI-compatible model endpoint choice. */
+  private compatibleCacheKey(providerId: string, modelId: string): string {
+    return `${providerId}\u0000${modelId}`
   }
 
   /** Runs one request and emits isolated incremental events until completion or failure. */
@@ -340,13 +348,137 @@ export default class ChatService {
       )
       return
     }
-    const reasoningParameters = buildReasoningParameters(model.modelId, reasoningEffort, {
+    await this.streamOpenAiCompatibleWithFallback(
+      provider,
+      apiKey,
+      model.modelId,
+      messages,
+      reasoningEffort,
+      signal,
+      requestId,
+      emit,
+    )
+  }
+
+  /** Streams one OpenAI-compatible completion, defaulting to chat and falling back to responses. */
+  private async streamOpenAiCompatibleWithFallback(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+    requestId: string,
+    emit: Emit,
+  ): Promise<void> {
+    const key = this.compatibleCacheKey(provider.id, modelId)
+    const preferred = this.compatibleEndpointCache.get(key)
+
+    /** Attempts one streaming endpoint and records the successful choice in memory. */
+    const tryResponsesFirst = async (): Promise<void> => {
+      try {
+        await this.streamOpenAiCompatibleResponses(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+        )
+        this.compatibleEndpointCache.set(key, 'responses')
+        this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn(
+          'ChatService',
+          `Responses failed for ${provider.id}/${modelId}, trying chat.`,
+          error,
+        )
+        await this.streamOpenAiCompatibleChat(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+        )
+        this.compatibleEndpointCache.set(key, 'chat')
+        this.logger.info('ChatService', `Cached chat endpoint for ${provider.id}/${modelId}`)
+      }
+    }
+
+    /** Attempts chat first, then falls back to responses on any non-abort failure. */
+    const tryChatFirst = async (): Promise<void> => {
+      try {
+        await this.streamOpenAiCompatibleChat(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+        )
+        this.compatibleEndpointCache.set(key, 'chat')
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn(
+          'ChatService',
+          `Chat completions failed for ${provider.id}/${modelId}, trying responses.`,
+          error,
+        )
+        await this.streamOpenAiCompatibleResponses(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+        )
+        this.compatibleEndpointCache.set(key, 'responses')
+        this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
+      }
+    }
+
+    if (preferred === 'responses') await tryResponsesFirst()
+    else await tryChatFirst()
+  }
+
+  /** Streams one OpenAI-compatible chat completions request with 400/422 retries. */
+  private async streamOpenAiCompatibleChat(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+    requestId: string,
+    emit: Emit,
+  ): Promise<void> {
+    const reasoningParameters = buildReasoningParameters(modelId, reasoningEffort, {
       id: provider.id,
       name: provider.name,
       baseUrl: provider.baseUrl,
     })
     const body: Record<string, unknown> = {
-      model: model.modelId,
+      model: modelId,
       messages,
       stream: true,
       stream_options: { include_usage: true },
@@ -374,6 +506,185 @@ export default class ChatService {
     }
     if (!response.ok) throw await createProviderError(response)
     await this.readSseStream(response, (line) => this.emitSseLine(line, requestId, emit))
+  }
+
+  /** Streams one OpenAI-compatible responses request and emits via the shared Responses parser. */
+  private async streamOpenAiCompatibleResponses(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+    requestId: string,
+    emit: Emit,
+  ): Promise<void> {
+    const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
+    const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: this.headers(apiKey, provider.customHeaders),
+      body: JSON.stringify(body),
+      signal,
+    })
+    if (!response.ok) throw await createProviderError(response)
+    await this.readSseStream(response, (line) => this.emitResponsesLine(line, requestId, emit))
+  }
+
+  /** Completes one OpenAI-compatible request, preferring cached endpoint and falling back. */
+  private async completeOpenAiCompatibleWithFallback(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    modelId: string,
+    messages: CompatibleMessage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const key = this.compatibleCacheKey(provider.id, modelId)
+    const preferred = this.compatibleEndpointCache.get(key)
+
+    /** Tries responses first, then chat on failure. */
+    const tryResponsesFirst = async (): Promise<string> => {
+      try {
+        const content = await this.completeOpenAiCompatibleResponses(
+          provider,
+          modelId,
+          messages,
+          signal,
+        )
+        this.compatibleEndpointCache.set(key, 'responses')
+        this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
+        return content
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn(
+          'ChatService',
+          `Responses quick call failed for ${provider.id}/${modelId}, trying chat.`,
+          error,
+        )
+        const content = await this.completeOpenAiCompatibleChat(provider, modelId, messages, signal)
+        this.compatibleEndpointCache.set(key, 'chat')
+        this.logger.info('ChatService', `Cached chat endpoint for ${provider.id}/${modelId}`)
+        return content
+      }
+    }
+
+    /** Tries chat first, then responses on any non-abort failure. */
+    const tryChatFirst = async (): Promise<string> => {
+      try {
+        const content = await this.completeOpenAiCompatibleChat(provider, modelId, messages, signal)
+        this.compatibleEndpointCache.set(key, 'chat')
+        return content
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn(
+          'ChatService',
+          `Chat quick call failed for ${provider.id}/${modelId}, trying responses.`,
+          error,
+        )
+        const content = await this.completeOpenAiCompatibleResponses(
+          provider,
+          modelId,
+          messages,
+          signal,
+        )
+        this.compatibleEndpointCache.set(key, 'responses')
+        this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
+        return content
+      }
+    }
+
+    if (preferred === 'responses') return tryResponsesFirst()
+    return tryChatFirst()
+  }
+
+  /** Performs one non-streaming chat completions Quick Model call. */
+  private async completeOpenAiCompatibleChat(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    modelId: string,
+    messages: CompatibleMessage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
+    const reasoningParameters = buildReasoningParameters(modelId, UTILITY_REASONING_EFFORT, {
+      id: provider.id,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+    })
+    const body: Record<string, unknown> = {
+      model: modelId,
+      messages,
+      stream: false,
+      temperature: 0.2,
+      ...(reasoningParameters ?? {}),
+    }
+    const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
+    /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
+    const sendRequest = (): Promise<Response> =>
+      fetch(endpoint, {
+        method: 'POST',
+        headers: this.headers(apiKey, provider.customHeaders),
+        body: JSON.stringify(body),
+        signal,
+      })
+    let response = await sendRequest()
+    if (
+      !response.ok &&
+      reasoningParameters &&
+      (response.status === 400 || response.status === 422)
+    ) {
+      await response.body?.cancel()
+      stripReasoningParameters(body)
+      response = await sendRequest()
+    }
+    if (!response.ok) throw await createProviderError(response)
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>
+    }
+    const content = payload.choices?.[0]?.message?.content
+    if (typeof content !== 'string') throw new Error('Quick Model returned no text.')
+    return content
+  }
+
+  /** Performs one non-streaming responses Quick Model call. */
+  private async completeOpenAiCompatibleResponses(
+    provider: {
+      id: string
+      name: string
+      baseUrl: string
+      customHeaders?: Record<string, string> | undefined
+    },
+    modelId: string,
+    messages: CompatibleMessage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
+    const body = buildResponsesRequest(messages, modelId, UTILITY_REASONING_EFFORT, false)
+    const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: this.headers(apiKey, provider.customHeaders),
+      body: JSON.stringify(body),
+      signal,
+    })
+    if (!response.ok) throw await createProviderError(response)
+    const json = (await response.json()) as Record<string, unknown>
+    const text = extractResponsesText(json)
+    if (!text) throw new Error('Quick Model returned no text.')
+    return text
   }
 
   /** Streams one ChatGPT Responses API completion through live account credentials. */
@@ -613,47 +924,7 @@ export default class ChatService {
         void this.claude.deleteConversation(provider.id, organizationId, conversationId)
       }
     }
-    const { apiKey } = this.providers.resolve(model)
-    // Quick Model utility turns are short and throwaway, so thinking is disabled explicitly
-    // instead of inheriting the provider default on a reasoning-capable model.
-    const reasoningParameters = buildReasoningParameters(model.modelId, UTILITY_REASONING_EFFORT, {
-      id: provider.id,
-      name: provider.name,
-      baseUrl: provider.baseUrl,
-    })
-    const body: Record<string, unknown> = {
-      model: model.modelId,
-      messages,
-      stream: false,
-      temperature: 0.2,
-      ...(reasoningParameters ?? {}),
-    }
-    const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
-    /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
-    const sendRequest = (): Promise<Response> =>
-      fetch(endpoint, {
-        method: 'POST',
-        headers: this.headers(apiKey, provider.customHeaders),
-        body: JSON.stringify(body),
-        signal,
-      })
-    let response = await sendRequest()
-    if (
-      !response.ok &&
-      reasoningParameters &&
-      (response.status === 400 || response.status === 422)
-    ) {
-      await response.body?.cancel()
-      stripReasoningParameters(body)
-      response = await sendRequest()
-    }
-    if (!response.ok) throw await createProviderError(response)
-    const payload = (await response.json()) as {
-      choices?: Array<{ message?: { content?: unknown } }>
-    }
-    const content = payload.choices?.[0]?.message?.content
-    if (typeof content !== 'string') throw new Error('Quick Model returned no text.')
-    return content
+    return this.completeOpenAiCompatibleWithFallback(provider, model.modelId, messages, signal)
   }
 
   /** Converts durable messages, attachments, and context boundaries into provider messages. */
@@ -692,7 +963,7 @@ export default class ChatService {
   /** Creates JSON request headers with optional dual-compatible authentication and custom headers. */
   private headers(
     apiKey: string,
-    customHeaders?: Record<string, string> | undefined,
+    customHeaders?: Record<string, string> | undefined | undefined,
   ): Record<string, string> {
     return {
       'Content-Type': 'application/json',
