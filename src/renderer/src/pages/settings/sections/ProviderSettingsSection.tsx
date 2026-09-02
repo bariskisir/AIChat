@@ -3,7 +3,19 @@
 import type { DropResult } from '@hello-pangea/dnd'
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, App, Button, Form, Input, Modal, Progress, Select, Space, Switch } from 'antd'
+import {
+  Alert,
+  App,
+  Button,
+  Form,
+  Input,
+  InputNumber,
+  Modal,
+  Progress,
+  Select,
+  Space,
+  Switch,
+} from 'antd'
 import {
   Brain,
   Copy,
@@ -46,9 +58,14 @@ interface ProviderFormValues {
   type: ProviderType
   name: string
   baseUrl?: string
+  batchUrl?: string
+  batchPollIntervalSeconds?: number
+  batchModelRegex?: string
   apiKey?: string
   customHeadersJson?: string
 }
+
+const BATCH_POLL_INTERVAL_LIMITS = { min: 1, max: 3600 } as const
 
 /** Parses the JSON header draft into a string record, or returns null when invalid. */
 const parseCustomHeadersJson = (value: string): Record<string, string> | null => {
@@ -295,6 +312,7 @@ const ProviderSettingsSection = (): React.JSX.Element => {
   const [loadingEditorId, setLoadingEditorId] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
   const editingProvider = editing === 'new' ? null : editing
+  const isEditingOpenRouter = editingProvider?.id === 'openrouter'
   const selectedType = Form.useWatch('type', form) ?? 'openai-compatible'
   const selectedModels = useMemo(() => {
     const selected = new Set(selectedModelIds)
@@ -337,6 +355,9 @@ const ProviderSettingsSection = (): React.JSX.Element => {
         type: data.type,
         name: data.name,
         baseUrl: data.baseUrl ?? '',
+        batchUrl: data.batchUrl ?? '',
+        batchPollIntervalSeconds: data.batchPollIntervalSeconds ?? 30,
+        batchModelRegex: data.batchModelRegex ?? 'batch',
         apiKey: data.apiKey ?? '',
         customHeadersJson:
           data.customHeaders && Object.keys(data.customHeaders).length > 0
@@ -386,6 +407,13 @@ const ProviderSettingsSection = (): React.JSX.Element => {
       type: values.type,
       name: values.name,
       ...(values.baseUrl ? { baseUrl: values.baseUrl } : {}),
+      ...(isEditingOpenRouter && values.batchUrl ? { batchUrl: values.batchUrl } : {}),
+      ...(isEditingOpenRouter && values.batchPollIntervalSeconds
+        ? { batchPollIntervalSeconds: values.batchPollIntervalSeconds }
+        : {}),
+      ...(isEditingOpenRouter && values.batchModelRegex
+        ? { batchModelRegex: values.batchModelRegex }
+        : {}),
       ...(values.apiKey ? { apiKey: values.apiKey } : {}),
       ...(Object.keys(customHeaders).length > 0 ? { customHeaders } : {}),
     }
@@ -710,6 +738,45 @@ const ProviderSettingsSection = (): React.JSX.Element => {
               >
                 <Input placeholder={t('providers.baseUrlPlaceholder')} />
               </Form.Item>
+              {isEditingOpenRouter && (
+                <>
+                  <Form.Item
+                    name="batchUrl"
+                    label={t('providers.batchUrl')}
+                    rules={[{ type: 'url' }]}
+                  >
+                    <Input placeholder={t('providers.batchUrlPlaceholder')} />
+                  </Form.Item>
+                  <Form.Item label={t('models.batchPollInterval')}>
+                    <Space.Compact>
+                      <Form.Item
+                        name="batchPollIntervalSeconds"
+                        noStyle
+                        rules={[{ required: true }]}
+                      >
+                        <InputNumber
+                          className={styles.durationInput ?? ''}
+                          min={BATCH_POLL_INTERVAL_LIMITS.min}
+                          max={BATCH_POLL_INTERVAL_LIMITS.max}
+                        />
+                      </Form.Item>
+                      <Input
+                        className={styles.durationUnit ?? ''}
+                        value={t('models.seconds')}
+                        readOnly
+                        tabIndex={-1}
+                      />
+                    </Space.Compact>
+                  </Form.Item>
+                  <Form.Item
+                    name="batchModelRegex"
+                    label={t('models.batchModelRegex')}
+                    rules={[{ required: true }]}
+                  >
+                    <Input />
+                  </Form.Item>
+                </>
+              )}
               <Form.Item label={t('providers.apiKey')}>
                 <Space.Compact block>
                   <Form.Item name="apiKey" noStyle>

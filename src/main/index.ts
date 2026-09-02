@@ -3,6 +3,7 @@
  */
 
 import { app, BrowserWindow } from 'electron'
+import { IpcChannel, type ChatStreamEvent } from '@shared/index'
 import { configureApplicationPaths } from './config/application.paths'
 import { registerIpc } from './ipc/ipc.service'
 import AppUpdater from './updates/app.updater'
@@ -71,6 +72,8 @@ const openApplicationWindow = async (): Promise<void> => {
     window.hide()
   })
   registerIpc(window, { storage, providers, chat, attachments, tray, updater, logger })
+  await chat.startBatchQueue((streamEvent) => sendChatStream(window, streamEvent))
+  window.once('closed', () => chat.dispose())
 
   logger.info('Application', 'AI Chat desktop started.', {
     version: app.getVersion(),
@@ -81,6 +84,11 @@ const openApplicationWindow = async (): Promise<void> => {
       logger.warn('Application', 'Startup update check failed.', error)
     })
   }
+}
+
+/** Delivers queued-batch updates once the main window is still available. */
+const sendChatStream = (window: BrowserWindow, event: ChatStreamEvent): void => {
+  if (!window.isDestroyed()) window.webContents.send(IpcChannel.ChatStream, event)
 }
 
 /** Opens a replacement macOS window and records initialization failures. */

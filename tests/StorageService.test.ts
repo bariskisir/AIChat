@@ -72,6 +72,89 @@ describe('StorageService', () => {
     expect(loaded.messages[0]?.reasoningStartedAt).toBe(reasoningStartedAt)
   })
 
+  it('persists submitted batch jobs until their assistant result is written', async () => {
+    const created = await storage.createConversation()
+    const job = {
+      batchId: 'batch-1',
+      customId: 'request-1',
+      requestId: 'c4c29553-3134-4998-830b-ac8ccb426900',
+      conversationId: created.id,
+      assistantMessageId: '5b2a29b7-2c21-4567-b292-8e5d2f333900',
+      providerId: 'provider',
+      modelId: 'vendor/model:batch',
+      batchUrl: 'https://provider.example/api/batches',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      missingPolls: 0,
+    }
+
+    await storage.ensureStreamingBatchMessage(
+      job.conversationId,
+      job.assistantMessageId,
+      job.createdAt,
+      [
+        {
+          id: '3fed0dd2-a76f-4a6f-801a-b8a4550a3900',
+          role: 'user',
+          content: '2 + 2',
+          createdAt: job.createdAt,
+          status: 'complete',
+        },
+      ],
+      { providerId: job.providerId, modelId: job.modelId },
+    )
+    await storage.saveBatchJob(job)
+    await storage.updateBatchJobMissingPolls(job.batchId, 1)
+
+    expect(await storage.listBatchJobs()).toEqual([{ ...job, missingPolls: 1 }])
+    expect((await storage.getConversation(created.id)).messages.at(-1)?.status).toBe('streaming')
+
+    await storage.completeBatchMessage(job, {
+      content: '4',
+      reasoning: '',
+      usage: { promptTokens: 3, completionTokens: 1, totalTokens: 4 },
+    })
+    await storage.removeBatchJob(job.batchId)
+
+    expect(await storage.listBatchJobs()).toEqual([])
+    expect((await storage.getConversation(created.id)).messages.at(-1)).toMatchObject({
+      content: '4',
+      status: 'complete',
+    })
+  })
+
+  it('keeps completed batch output when a delayed renderer checkpoint is still streaming', async () => {
+    const created = await storage.createConversation()
+    const assistantId = '5b2a29b7-2c21-4567-b292-8e5d2f333901'
+    await storage.ensureStreamingBatchMessage(
+      created.id,
+      assistantId,
+      '2026-01-01T00:00:00.000Z',
+      [],
+      { providerId: 'provider', modelId: 'vendor/model:batch' },
+    )
+    const stale = await storage.getConversation(created.id)
+    const job = {
+      batchId: 'batch-2',
+      customId: 'request-2',
+      requestId: 'c4c29553-3134-4998-830b-ac8ccb426901',
+      conversationId: created.id,
+      assistantMessageId: assistantId,
+      providerId: 'provider',
+      modelId: 'vendor/model:batch',
+      batchUrl: 'https://provider.example/api/batches',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      missingPolls: 0,
+    }
+
+    await storage.completeBatchMessage(job, { content: '4', reasoning: '', usage: null })
+    await storage.saveConversation(stale)
+
+    expect((await storage.getConversation(created.id)).messages.at(-1)).toMatchObject({
+      content: '4',
+      status: 'complete',
+    })
+  })
+
   it('returns null when the renderer asks for a conversation file that was already removed', async () => {
     const created = await storage.createConversation()
     await rm(join(rootPath, 'conversations', `${created.id}.json`))

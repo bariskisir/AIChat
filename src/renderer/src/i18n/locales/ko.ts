@@ -32,6 +32,8 @@ const ko = {
     name: '이름',
     baseUrl: 'API URL',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'Batch API URL',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'API 키',
     save: '저장',
     saveFailed: '제공자를 저장하지 못했습니다.',
@@ -90,6 +92,14 @@ const ko = {
   models: {
     title: '기본 모델',
     description: '가벼운 내부 작업에 사용할 Quick Model을 선택하세요.',
+    batch: '배치',
+    batchDescription: '배치 전용 모델 라우팅 및 결과 폴링을 구성합니다.',
+    batchPollInterval: '폴링 간격',
+    batchPollIntervalDescription: '대기 중인 배치 결과를 이 간격으로 확인합니다.',
+    batchModelRegex: '배치 모델 정규식',
+    batchModelRegexDescription:
+      '이 대소문자 구분 없는 식과 일치하는 OpenAI 호환 모델 ID는 Batch API를 사용합니다.',
+    seconds: '초',
     quickModel: '빠른 모델',
     quickDescription: '제목 생성과 웹 검색어 계획에 사용합니다.',
     titleGeneration: '제목 생성',

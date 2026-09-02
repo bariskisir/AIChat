@@ -20,6 +20,9 @@ export interface ProviderSummary {
   name: string
   type: ProviderType
   baseUrl: string
+  batchUrl?: string | undefined
+  batchPollIntervalSeconds?: number | undefined
+  batchModelRegex?: string | undefined
   customHeaders?: Record<string, string> | undefined
   builtin: boolean
   enabled: boolean
@@ -51,6 +54,9 @@ export interface ProviderConnectionInput {
   type: ProviderType
   name: string
   baseUrl?: string | undefined
+  batchUrl?: string | undefined
+  batchPollIntervalSeconds?: number | undefined
+  batchModelRegex?: string | undefined
   apiKey?: string | undefined
   customHeaders?: Record<string, string> | undefined
 }

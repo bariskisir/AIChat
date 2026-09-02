@@ -32,6 +32,8 @@ const tr = {
     name: 'Ad',
     baseUrl: 'API adresi',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'Batch API adresi',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'API anahtarı',
     save: 'Kaydet',
     saveFailed: 'Provider kaydedilemedi.',
@@ -90,6 +92,15 @@ const tr = {
   models: {
     title: 'Varsayılan Modeller',
     description: 'Hafif dahili görevlerde kullanılacak Quick Modeli seçin.',
+    batch: 'Batch',
+    batchDescription:
+      'Yalnızca Batch API destekleyen modellerin yönlendirmesini ve sonuç kontrolünü ayarlayın.',
+    batchPollInterval: 'Kontrol aralığı',
+    batchPollIntervalDescription: 'Kuyruktaki batch sonuçlarını bu aralıkla kontrol edin.',
+    batchModelRegex: 'Batch model regexi',
+    batchModelRegexDescription:
+      'Bu büyük/küçük harf duyarsız ifadeyle eşleşen OpenAI uyumlu model kimlikleri Batch API kullanır.',
+    seconds: 'saniye',
     quickModel: 'Hızlı Model',
     quickDescription: 'Başlık üretimi ve web arama sorgusu planlamasında kullanılır.',
     titleGeneration: 'Başlık Üretimi',

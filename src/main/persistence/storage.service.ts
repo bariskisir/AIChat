@@ -7,9 +7,12 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import type {
   AppSettings,
   AppSettingsPatch,
+  ChatMessage,
   Conversation,
   ConversationSummary,
   DeleteConversationResult,
+  ModelReference,
+  TokenUsage,
 } from '@shared/index'
 import { MAX_CHAT_ERROR_LENGTH, REASONING_EFFORTS, WEB_SEARCH_MODES } from '@shared/index'
 import { clampSurrogateBoundary } from '@shared/index'
@@ -76,6 +79,40 @@ const conversationSchema = z.object({
   reasoningEffort: z.enum(REASONING_EFFORTS),
 })
 
+/** Stores one submitted asynchronous batch request until its final result is persisted. */
+export interface PersistedBatchJob {
+  batchId: string
+  customId: string
+  requestId: string
+  conversationId: string
+  assistantMessageId: string
+  providerId: string
+  modelId: string
+  batchUrl: string
+  createdAt: string
+  missingPolls: number
+}
+
+/** Holds the versioned local queue of submitted provider batch jobs. */
+interface BatchJobFile {
+  revision: 1
+  jobs: PersistedBatchJob[]
+}
+
+const batchJobSchema = z.object({
+  batchId: z.string().min(1).max(2_000),
+  customId: z.string().min(1).max(2_000),
+  requestId: z.uuid(),
+  conversationId: z.uuid(),
+  assistantMessageId: z.uuid(),
+  providerId: z.string().min(1).max(200),
+  modelId: z.string().min(1).max(500),
+  batchUrl: z.url().max(2_000),
+  createdAt: z.iso.datetime(),
+  missingPolls: z.number().int().nonnegative(),
+})
+const batchJobFileSchema = z.object({ revision: z.literal(1), jobs: z.array(batchJobSchema) })
+
 const DEFAULT_CONVERSATION_TITLE = 'New Chat'
 
 /** Adds conversation defaults to sparse documents written by the former generic shell. */
@@ -108,6 +145,7 @@ export default class StorageService {
   private readonly settingsPath: string
   private readonly conversationsPath: string
   private readonly attachmentsPath: string
+  private readonly batchJobsPath: string
   private readonly fileOperationTails = new Map<string, Promise<void>>()
   private readonly conversationWrites = new Set<string>()
 
@@ -116,6 +154,7 @@ export default class StorageService {
     this.settingsPath = join(rootPath, 'settings.json')
     this.conversationsPath = join(rootPath, 'conversations')
     this.attachmentsPath = join(rootPath, 'attachments')
+    this.batchJobsPath = join(rootPath, 'batch-jobs.json')
   }
 
   /** Creates all durable directories. */
@@ -212,18 +251,130 @@ export default class StorageService {
 
   /** Validates and persists a complete conversation after renderer state changes. */
   public async saveConversation(conversation: Conversation): Promise<Conversation> {
-    const validated = conversationSchema.parse({
-      ...conversation,
-      updatedAt: new Date().toISOString(),
-    })
-    this.assertAttachmentPaths(validated)
-    const filePath = this.conversationPath(validated.id)
-    if (!existsSync(filePath) && !this.conversationWrites.has(validated.id)) {
+    const filePath = this.conversationPath(conversation.id)
+    return this.withFileLock(filePath, async () => {
+      const normalized = conversationSchema.parse({
+        ...conversation,
+        updatedAt: new Date().toISOString(),
+      })
+      if (!existsSync(filePath) && !this.conversationWrites.has(normalized.id)) {
+        return normalized
+      }
+      let persisted: Conversation | null = null
+      try {
+        persisted = await this.readConversationUnlocked(filePath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      const validated = persisted
+        ? conversationSchema.parse(this.mergeCompletedBatchMessages(normalized, persisted))
+        : normalized
+      this.assertAttachmentPaths(validated)
+      this.conversationWrites.delete(validated.id)
+      await this.writeJsonFileUnlocked(filePath, validated)
       return validated
+    })
+  }
+
+  /** Lists every submitted batch job that still awaits its final provider result. */
+  public async listBatchJobs(): Promise<PersistedBatchJob[]> {
+    return this.withFileLock(
+      this.batchJobsPath,
+      async () => (await this.readBatchJobsUnlocked()).jobs,
+    )
+  }
+
+  /** Persists a submitted batch job before it is first eligible for polling. */
+  public async saveBatchJob(job: PersistedBatchJob): Promise<void> {
+    const validated = batchJobSchema.parse(job)
+    await this.withFileLock(this.batchJobsPath, async () => {
+      const file = await this.readBatchJobsUnlocked()
+      file.jobs = [...file.jobs.filter((item) => item.batchId !== validated.batchId), validated]
+      await this.writeJsonFileUnlocked(this.batchJobsPath, batchJobFileSchema.parse(file))
+    })
+  }
+
+  /** Updates the count of consecutive not-found responses while a new batch becomes visible. */
+  public async updateBatchJobMissingPolls(batchId: string, missingPolls: number): Promise<void> {
+    await this.withFileLock(this.batchJobsPath, async () => {
+      const file = await this.readBatchJobsUnlocked()
+      const job = file.jobs.find((item) => item.batchId === batchId)
+      if (!job) return
+      job.missingPolls = missingPolls
+      await this.writeJsonFileUnlocked(this.batchJobsPath, batchJobFileSchema.parse(file))
+    })
+  }
+
+  /** Removes a settled or intentionally abandoned batch job from the local queue. */
+  public async removeBatchJob(batchId: string): Promise<void> {
+    await this.withFileLock(this.batchJobsPath, async () => {
+      const file = await this.readBatchJobsUnlocked()
+      const jobs = file.jobs.filter((item) => item.batchId !== batchId)
+      if (jobs.length === file.jobs.length) return
+      await this.writeJsonFileUnlocked(this.batchJobsPath, { ...file, jobs })
+    })
+  }
+
+  /** Restores the durable request and its assistant placeholder before a batch result is available. */
+  public async ensureStreamingBatchMessage(
+    conversationId: string,
+    assistantMessageId: string,
+    createdAt: string,
+    messages: ChatMessage[],
+    model: ModelReference,
+  ): Promise<Conversation | null> {
+    try {
+      return await this.updateConversation(conversationId, (conversation) => {
+        const messageIds = new Set(conversation.messages.map((message) => message.id))
+        for (const message of messages) {
+          if (!messageIds.has(message.id)) conversation.messages.push(message)
+        }
+        const assistant = conversation.messages.find((message) => message.id === assistantMessageId)
+        if (assistant) {
+          assistant.status = 'streaming'
+          delete assistant.error
+          return
+        }
+        conversation.messages.push({
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          model,
+          createdAt,
+          status: 'streaming',
+        })
+      })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
     }
-    this.conversationWrites.delete(validated.id)
-    await this.writeJsonFile(filePath, validated)
-    return validated
+  }
+
+  /** Writes a completed batch response directly into its durable assistant message. */
+  public async completeBatchMessage(
+    job: PersistedBatchJob,
+    result: { content: string; reasoning: string; usage: TokenUsage | null },
+  ): Promise<Conversation | null> {
+    return this.updateBatchMessage(job, (message) => {
+      message.content = result.content
+      if (result.reasoning) message.reasoning = result.reasoning
+      if (result.usage) message.usage = result.usage
+      message.status = 'complete'
+      message.durationMs = Math.max(0, Date.now() - Date.parse(message.createdAt))
+      delete message.error
+    })
+  }
+
+  /** Writes a terminal batch failure directly into its durable assistant message. */
+  public async failBatchMessage(
+    job: PersistedBatchJob,
+    error: string,
+  ): Promise<Conversation | null> {
+    return this.updateBatchMessage(job, (message) => {
+      message.status = 'error'
+      message.error = error.slice(0, MAX_CHAT_ERROR_LENGTH)
+      message.durationMs = Math.max(0, Date.now() - Date.parse(message.createdAt))
+    })
   }
 
   /** Lists compact conversation summaries ordered by most recent update. */
@@ -318,11 +469,65 @@ export default class StorageService {
     })
   }
 
+  /** Keeps completed batch output when a delayed renderer checkpoint still describes it as streaming. */
+  private mergeCompletedBatchMessages(
+    incoming: Conversation,
+    persisted: Conversation,
+  ): Conversation {
+    const completedById = new Map(
+      persisted.messages
+        .filter(
+          (message) =>
+            message.role === 'assistant' &&
+            (message.status === 'complete' || message.status === 'error'),
+        )
+        .map((message) => [message.id, message]),
+    )
+    if (completedById.size === 0) return incoming
+    const messages = incoming.messages.map((message) => {
+      const completed = completedById.get(message.id)
+      return message.status === 'streaming' && completed ? completed : message
+    })
+    const incomingIds = new Set(messages.map((message) => message.id))
+    for (const completed of completedById.values()) {
+      if (!incomingIds.has(completed.id)) messages.push(completed)
+    }
+    return { ...incoming, messages }
+  }
+
+  /** Applies one durable batch-message mutation unless its conversation was deleted. */
+  private async updateBatchMessage(
+    job: PersistedBatchJob,
+    update: (message: ChatMessage) => void,
+  ): Promise<Conversation | null> {
+    try {
+      return await this.updateConversation(job.conversationId, (conversation) => {
+        const message = conversation.messages.find((item) => item.id === job.assistantMessageId)
+        if (!message) return
+        update(message)
+      })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
+      throw error
+    }
+  }
+
   /** Reads and normalizes a conversation while its caller owns the file lock. */
   private async readConversationUnlocked(filePath: string): Promise<Conversation> {
     return conversationSchema.parse(
       normalizeConversation(JSON.parse(await readFile(filePath, 'utf8')) as unknown),
     )
+  }
+
+  /** Reads the durable batch queue while its caller owns the batch-queue lock. */
+  private async readBatchJobsUnlocked(): Promise<BatchJobFile> {
+    try {
+      return batchJobFileSchema.parse(
+        JSON.parse(await readFile(this.batchJobsPath, 'utf8')) as unknown,
+      )
+    } catch {
+      return { revision: 1, jobs: [] }
+    }
   }
 
   /** Resolves a validated conversation identifier to its durable JSON path. */

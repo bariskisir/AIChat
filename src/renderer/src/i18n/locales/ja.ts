@@ -32,6 +32,8 @@ const ja = {
     name: '名前',
     baseUrl: 'API URL',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'Batch API URL',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'API キー',
     save: '保存',
     saveFailed: 'プロバイダーを保存できませんでした。',
@@ -90,6 +92,14 @@ const ja = {
   models: {
     title: 'デフォルトモデル',
     description: '軽量な内部タスクに使用する Quick Model を選択します。',
+    batch: 'バッチ',
+    batchDescription: 'バッチ専用モデルのルーティングと結果ポーリングを設定します。',
+    batchPollInterval: 'ポーリング間隔',
+    batchPollIntervalDescription: 'キューに入ったバッチ結果をこの間隔で確認します。',
+    batchModelRegex: 'バッチモデル正規表現',
+    batchModelRegexDescription:
+      'この大文字と小文字を区別しない式に一致する OpenAI 互換モデル ID は Batch API を使用します。',
+    seconds: '秒',
     quickModel: 'クイックモデル',
     quickDescription: 'タイトル生成とウェブ検索クエリの計画に使用します。',
     titleGeneration: 'タイトル生成',

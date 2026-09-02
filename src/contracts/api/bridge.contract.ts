@@ -30,6 +30,7 @@ export interface BootstrapData {
   conversations: ConversationSummary[]
   currentConversation: Conversation
   providers: ProviderSnapshot
+  generatingConversationIds: string[]
   platform: DesktopPlatform
   version: string
 }

@@ -32,6 +32,8 @@ const fr = {
     name: 'Nom',
     baseUrl: 'URL de l’API',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'URL de l’API Batch',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'Clé API',
     save: 'Enregistrer',
     saveFailed: 'Le fournisseur n’a pas pu être enregistré.',
@@ -90,6 +92,14 @@ const fr = {
   models: {
     title: 'Modèles par défaut',
     description: 'Choisissez le Quick Model utilisé pour les tâches internes légères.',
+    batch: 'Batch',
+    batchDescription: 'Configurez le routage des modèles batch et la vérification des résultats.',
+    batchPollInterval: 'Intervalle de vérification',
+    batchPollIntervalDescription: 'Vérifiez les résultats batch à cet intervalle.',
+    batchModelRegex: 'Regex de modèle batch',
+    batchModelRegexDescription:
+      'Les identifiants de modèle compatibles OpenAI correspondant à cette expression insensible à la casse utilisent la Batch API.',
+    seconds: 'secondes',
     quickModel: 'Modèle rapide',
     quickDescription: 'Utilisé pour les titres et la planification des recherches web.',
     titleGeneration: 'Génération de titres',

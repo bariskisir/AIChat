@@ -370,7 +370,10 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
         case 'content': {
           const target = conversation.messages.find((item) => item.id === messageId)
           if (!target) return conversation
-          return mapMessage((item) => ({ ...item, content: item.content + event.delta }))
+          return mapMessage((item) => ({
+            ...item,
+            content: event.replace ? event.delta : item.content + event.delta,
+          }))
         }
         case 'reasoning': {
           const target = conversation.messages.find((item) => item.id === messageId)
@@ -497,7 +500,11 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
         }
         return
       }
-      const active = activeRequests.current.get(event.requestId)
+      const resumedBatch =
+        'assistantMessageId' in event && event.conversationId && event.assistantMessageId
+          ? { conversationId: event.conversationId, messageId: event.assistantMessageId }
+          : undefined
+      const active = activeRequests.current.get(event.requestId) ?? resumedBatch
       if (!active) return
       if (event.type === 'status') {
         return
@@ -559,7 +566,12 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
         return
       }
       if (event.type === 'content') {
-        queueStreamDelta(active.messageId, { content: event.delta })
+        if (event.replace) {
+          flushPendingDeltas()
+          updateMessage(active.messageId, (item) => ({ ...item, content: event.delta }))
+        } else {
+          queueStreamDelta(active.messageId, { content: event.delta })
+        }
       } else if (event.type === 'reasoning') {
         queueStreamDelta(active.messageId, { reasoning: event.delta })
       } else if (event.type === 'citations') {

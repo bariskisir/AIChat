@@ -83,9 +83,35 @@ export type ChatStreamEvent =
       done: boolean
     }
   | { requestId: string; type: 'citations'; citations: Citation[] }
-  | { requestId: string; type: 'reasoning'; delta: string }
-  | { requestId: string; type: 'content'; delta: string }
-  | { requestId: string; type: 'usage'; usage: TokenUsage }
+  | {
+      requestId: string
+      type: 'reasoning'
+      delta: string
+      conversationId?: string
+      assistantMessageId?: string
+    }
+  | {
+      requestId: string
+      type: 'content'
+      delta: string
+      /** Replaces accumulated content instead of appending a streaming delta. */
+      replace?: boolean
+      conversationId?: string
+      assistantMessageId?: string
+    }
+  | {
+      requestId: string
+      type: 'usage'
+      usage: TokenUsage
+      conversationId?: string
+      assistantMessageId?: string
+    }
   | { requestId: string; type: 'title'; title: string; conversationId?: string }
-  | { requestId: string; type: 'complete' }
-  | { requestId: string; type: 'error'; message: string }
+  | { requestId: string; type: 'complete'; conversationId?: string; assistantMessageId?: string }
+  | {
+      requestId: string
+      type: 'error'
+      message: string
+      conversationId?: string
+      assistantMessageId?: string
+    }

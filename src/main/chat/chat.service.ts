@@ -1,6 +1,7 @@
 /** Orchestrates multi-type chat streaming: OpenAI-compatible, ChatGPT, and Claude Web. */
 
 import { randomUUID } from 'node:crypto'
+import { clampSurrogateBoundary } from '@shared/index'
 import type {
   ChatMessage,
   ChatRequest,
@@ -8,7 +9,6 @@ import type {
   ModelReference,
   WebSearchMode,
 } from '@shared/index'
-import { clampSurrogateBoundary } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
 import { isKimi25OrNewerModel } from '../reasoning/families/chinese'
 import type LoggerService from '../logging/logger.service'
@@ -27,6 +27,7 @@ import {
   resolveClaudeThinking,
 } from '../providers/claude-web/claude-web.protocol'
 import type StorageService from '../persistence/storage.service'
+import type { PersistedBatchJob } from '../persistence/storage.service'
 import type { WebSearchResult } from '../search/web.search.service'
 import WebSearchService from '../search/web.search.service'
 import { createProviderError, parseTokenUsage, readReasoningDelta } from './chat.errors'
@@ -36,6 +37,39 @@ type Emit = (event: ChatStreamEvent) => void
 
 /** Reasoning-effort used by internal one-shot Quick Model calls, which never need thinking. */
 const UTILITY_REASONING_EFFORT = 'off' as const
+
+/** Allows newly-created batch jobs time to become visible to distributed status endpoints. */
+const MAX_BATCH_NOT_FOUND_RETRIES = 6
+
+/** Removes a batch routing suffix from the model sent inside a batch job. */
+const batchModelId = (modelId: string): string => modelId.replace(/:batch$/i, '')
+
+/** Narrows an unknown JSON value to a non-array record. */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+/** Extracts response text from common OpenAI-compatible message content shapes. */
+const readBatchContent = (value: unknown): string => {
+  if (typeof value === 'string') return value
+  if (!Array.isArray(value)) return ''
+  return value
+    .flatMap((item) => {
+      if (!isRecord(item)) return []
+      if (typeof item.text === 'string') return [item.text]
+      if (typeof item.content === 'string') return [item.content]
+      return []
+    })
+    .join('')
+}
+
+/** Reads a human-safe batch failure message from a provider result. */
+const readBatchError = (value: unknown): string => {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (!isRecord(value)) return 'The batch request failed.'
+  if (typeof value.message === 'string' && value.message.trim()) return value.message.trim()
+  if (isRecord(value.error)) return readBatchError(value.error)
+  return 'The batch request failed.'
+}
 
 /** Removes every provider reasoning key so a rejected body can be retried without thinking. */
 const stripReasoningParameters = (body: Record<string, unknown>): void => {
@@ -54,6 +88,33 @@ interface CompatibleMessage {
   role: 'system' | 'user' | 'assistant'
   content: string | Array<Record<string, unknown>>
   reasoning_content?: string
+}
+
+/** Holds the OpenAI-compatible provider fields needed to make completion requests. */
+interface CompatibleProvider {
+  id: string
+  name: string
+  baseUrl: string
+  batchUrl?: string | undefined
+  batchPollIntervalSeconds?: number | undefined
+  batchModelRegex?: string | undefined
+  customHeaders?: Record<string, string> | undefined
+}
+
+/** Supplies durable conversation context for one user-visible batch request. */
+interface BatchRequestContext {
+  requestId: string
+  conversationId: string
+  assistantMessageId: string
+  model: ModelReference
+  messages: ChatMessage[]
+}
+
+/** Resolves or rejects the chat request that is awaiting one queued batch job. */
+interface BatchWaiter {
+  resolve: () => void
+  reject: (error: Error) => void
+  cleanup: () => void
 }
 
 /** Reference prompt that teaches models to cite search sources with [number]. */
@@ -80,6 +141,12 @@ export default class ChatService {
   private readonly active = new Map<string, AbortController>()
   private readonly webSearch: WebSearchService
   private readonly compatibleEndpointCache = new Map<string, 'chat' | 'responses'>()
+  private readonly activeBatchPolls = new Set<string>()
+  private readonly batchPollControllers = new Map<string, AbortController>()
+  private readonly batchWaiters = new Map<string, BatchWaiter>()
+  private batchPollIntervalMs = 30_000
+  private batchQueueTimer: ReturnType<typeof setInterval> | null = null
+  private batchEmitter: Emit | null = null
   private readonly logger: LoggerService
 
   /** Creates a chat orchestrator from provider, auth, storage, logging, and web-search services. */
@@ -97,6 +164,52 @@ export default class ChatService {
   /** Produces an in-memory cache key for one OpenAI-compatible model endpoint choice. */
   private compatibleCacheKey(providerId: string, modelId: string): string {
     return `${providerId}\u0000${modelId}`
+  }
+
+  /** Starts the durable batch worker and immediately checks jobs recovered from a prior launch. */
+  public async startBatchQueue(emit: Emit): Promise<void> {
+    this.batchEmitter = emit
+    this.refreshBatchQueue()
+    if (!this.batchQueueTimer) this.startBatchQueueTimer()
+    await this.pollQueuedBatches()
+  }
+
+  /** Refreshes the durable queue cadence from the saved OpenRouter provider configuration. */
+  public refreshBatchQueue(): void {
+    const openrouter = this.providers
+      .snapshot()
+      .providers.find((provider) => provider.id === 'openrouter')
+    this.batchPollIntervalMs = (openrouter?.batchPollIntervalSeconds ?? 30) * 1000
+    if (!this.batchQueueTimer) return
+    clearInterval(this.batchQueueTimer)
+    this.startBatchQueueTimer()
+  }
+
+  /** Starts the queue interval with the current batch-poll preference. */
+  private startBatchQueueTimer(): void {
+    this.batchQueueTimer = setInterval(() => {
+      void this.pollQueuedBatches()
+    }, this.batchPollIntervalMs)
+  }
+
+  /** Tests an OpenRouter model identifier against its case-insensitive batch routing expression. */
+  private isBatchModel(provider: CompatibleProvider, modelId: string): boolean {
+    if (provider.id !== 'openrouter') return false
+    return new RegExp(provider.batchModelRegex ?? 'batch', 'i').test(modelId)
+  }
+
+  /** Lists conversations with an outstanding batch so bootstrap can restore their generating state. */
+  public async getQueuedBatchConversationIds(): Promise<string[]> {
+    return [...new Set((await this.storage.listBatchJobs()).map((job) => job.conversationId))]
+  }
+
+  /** Stops this window-bound worker while leaving submitted batch jobs durable for the next window. */
+  public dispose(): void {
+    if (this.batchQueueTimer) clearInterval(this.batchQueueTimer)
+    this.batchQueueTimer = null
+    this.batchEmitter = null
+    for (const controller of this.batchPollControllers.values()) controller.abort()
+    this.batchPollControllers.clear()
   }
 
   /** Runs one request and emits isolated incremental events until completion or failure. */
@@ -208,6 +321,7 @@ export default class ChatService {
   public stop(requestId: string): void {
     this.active.get(requestId)?.abort()
     this.active.delete(requestId)
+    void this.abandonQueuedBatches(requestId)
   }
 
   /** Resolves optional web-search context and streams an OpenAI-compatible completion. */
@@ -252,6 +366,13 @@ export default class ChatService {
       signal,
       request.requestId,
       emit,
+      {
+        requestId: request.requestId,
+        conversationId: request.conversationId,
+        assistantMessageId: request.assistantMessageId,
+        model: request.model,
+        messages: request.messages,
+      },
     )
   }
 
@@ -331,6 +452,7 @@ export default class ChatService {
     signal: AbortSignal,
     requestId: string,
     emit: Emit,
+    batchContext: BatchRequestContext,
   ): Promise<void> {
     const { provider, apiKey, modelDefinition } = this.providers.resolve(model)
     if (provider.type === 'chatgpt') {
@@ -367,17 +489,13 @@ export default class ChatService {
       signal,
       requestId,
       emit,
+      batchContext,
     )
   }
 
   /** Streams one OpenAI-compatible completion, defaulting to chat and falling back to responses. */
   private async streamOpenAiCompatibleWithFallback(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     apiKey: string,
     modelId: string,
     messages: CompatibleMessage[],
@@ -385,7 +503,22 @@ export default class ChatService {
     signal: AbortSignal,
     requestId: string,
     emit: Emit,
+    batchContext: BatchRequestContext,
   ): Promise<void> {
+    if (provider.batchUrl && this.isBatchModel(provider, modelId)) {
+      await this.streamOpenAiCompatibleBatch(
+        provider,
+        apiKey,
+        modelId,
+        messages,
+        reasoningEffort,
+        signal,
+        requestId,
+        emit,
+        batchContext,
+      )
+      return
+    }
     const key = this.compatibleCacheKey(provider.id, modelId)
     const preferred = this.compatibleEndpointCache.get(key)
 
@@ -468,12 +601,7 @@ export default class ChatService {
 
   /** Streams one OpenAI-compatible chat completions request with 400/422 retries. */
   private async streamOpenAiCompatibleChat(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     apiKey: string,
     modelId: string,
     messages: CompatibleMessage[],
@@ -520,12 +648,7 @@ export default class ChatService {
 
   /** Streams one OpenAI-compatible responses request and emits via the shared Responses parser. */
   private async streamOpenAiCompatibleResponses(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     apiKey: string,
     modelId: string,
     messages: CompatibleMessage[],
@@ -546,18 +669,393 @@ export default class ChatService {
     await this.readSseStream(response, (line) => this.emitResponsesLine(line, requestId, emit))
   }
 
+  /** Submits an OpenAI-compatible chat request to the durable batch queue. */
+  private async streamOpenAiCompatibleBatch(
+    provider: CompatibleProvider,
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+    requestId: string,
+    _emit: Emit,
+    batchContext: BatchRequestContext,
+  ): Promise<void> {
+    const createdAt = new Date().toISOString()
+    await this.storage.ensureStreamingBatchMessage(
+      batchContext.conversationId,
+      batchContext.assistantMessageId,
+      createdAt,
+      batchContext.messages,
+      batchContext.model,
+    )
+    const { created, customId } = await this.createOpenAiCompatibleBatch(
+      provider,
+      apiKey,
+      modelId,
+      messages,
+      reasoningEffort,
+      signal,
+    )
+    const batchId = created.id
+    if (typeof batchId !== 'string' || !batchId) {
+      throw new Error('Batch API returned no batch identifier.')
+    }
+    const job: PersistedBatchJob = {
+      batchId,
+      customId,
+      requestId,
+      conversationId: batchContext.conversationId,
+      assistantMessageId: batchContext.assistantMessageId,
+      providerId: provider.id,
+      modelId,
+      batchUrl: provider.batchUrl ?? '',
+      createdAt,
+      missingPolls: 0,
+    }
+    await this.storage.saveBatchJob(job)
+    await this.waitForQueuedBatch(job, signal)
+  }
+
+  /** Runs one internal OpenAI-compatible batch request without adding a visible chat placeholder. */
+  private async requestOpenAiCompatibleBatch(
+    provider: CompatibleProvider,
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    const { created, customId } = await this.createOpenAiCompatibleBatch(
+      provider,
+      apiKey,
+      modelId,
+      messages,
+      reasoningEffort,
+      signal,
+    )
+    return this.pollOpenAiCompatibleBatch(provider, apiKey, created, customId, signal)
+  }
+
+  /** Sends a provider batch request and returns the metadata needed to track it. */
+  private async createOpenAiCompatibleBatch(
+    provider: CompatibleProvider,
+    apiKey: string,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+  ): Promise<{ created: Record<string, unknown>; customId: string }> {
+    if (!provider.batchUrl) throw new Error('Batch API URL is required for batch models.')
+    const resolvedModelId = batchModelId(modelId)
+    const reasoningParameters = buildReasoningParameters(resolvedModelId, reasoningEffort, {
+      id: provider.id,
+      name: provider.name,
+      baseUrl: provider.baseUrl,
+    })
+    const completion = {
+      messages,
+      ...(reasoningParameters ?? {}),
+    }
+    const customId = randomUUID()
+    const response = await fetch(provider.batchUrl, {
+      method: 'POST',
+      headers: this.headers(apiKey, provider.customHeaders),
+      body: JSON.stringify({
+        endpoint: '/v1/chat/completions',
+        model: resolvedModelId,
+        requests: [{ custom_id: customId, body: completion }],
+      }),
+      signal,
+    })
+    if (!response.ok) throw await createProviderError(response)
+    const created = (await response.json()) as unknown
+    if (!isRecord(created)) throw new Error('Batch API returned an invalid creation response.')
+    return { created, customId }
+  }
+
+  /** Polls a compatible batch endpoint until the request result is ready or terminally fails. */
+  private async pollOpenAiCompatibleBatch(
+    provider: CompatibleProvider,
+    apiKey: string,
+    created: Record<string, unknown>,
+    customId: string,
+    signal: AbortSignal,
+  ): Promise<Record<string, unknown>> {
+    let batch = created
+    let missingBatchRetries = 0
+    while (true) {
+      const result = this.findBatchResult(batch, customId)
+      if (result) return result
+      const status = typeof batch.status === 'string' ? batch.status.toLowerCase() : ''
+      if (['failed', 'cancelled', 'expired'].includes(status)) {
+        throw new Error(readBatchError(batch.error))
+      }
+      if (status === 'completed') throw new Error('Batch API completed without a result.')
+      const batchId = batch.id
+      if (typeof batchId !== 'string' || !batchId) {
+        throw new Error('Batch API returned no batch identifier.')
+      }
+      await this.waitForDirectBatchPoll(signal)
+      const response = await fetch(`${provider.batchUrl}/${encodeURIComponent(batchId)}`, {
+        headers: this.headers(apiKey, provider.customHeaders),
+        signal,
+      })
+      if (response.status === 404 && missingBatchRetries < MAX_BATCH_NOT_FOUND_RETRIES) {
+        missingBatchRetries += 1
+        await response.body?.cancel()
+        this.logger.warn(
+          'ChatService',
+          `Batch ${batchId} is not visible yet; retrying status check ${missingBatchRetries}/${MAX_BATCH_NOT_FOUND_RETRIES}.`,
+        )
+        continue
+      }
+      if (!response.ok) throw await createProviderError(response)
+      const payload = (await response.json()) as unknown
+      if (!isRecord(payload)) throw new Error('Batch API returned an invalid status response.')
+      batch = payload
+      missingBatchRetries = 0
+    }
+  }
+
+  /** Finds and validates the completed response body for the submitted batch request. */
+  private findBatchResult(
+    batch: Record<string, unknown>,
+    customId: string,
+  ): Record<string, unknown> | null {
+    if (!Array.isArray(batch.results)) return null
+    const results = batch.results
+    if (results.length === 0) return null
+    const matched = results.find(
+      (item) => isRecord(item) && (item.custom_id === customId || results.length === 1),
+    )
+    if (!isRecord(matched)) return null
+    if (matched.error) throw new Error(readBatchError(matched.error))
+    if (!isRecord(matched.response)) throw new Error('Batch API returned an invalid result.')
+    const statusCode = matched.response.status_code
+    if (typeof statusCode === 'number' && (statusCode < 200 || statusCode >= 300)) {
+      throw new Error(readBatchError(matched.response.body))
+    }
+    if (!isRecord(matched.response.body))
+      throw new Error('Batch API returned an invalid response body.')
+    return matched.response.body
+  }
+
+  /** Runs one status check for every durable batch job not already being checked. */
+  private async pollQueuedBatches(): Promise<void> {
+    const jobs = await this.storage.listBatchJobs()
+    await Promise.allSettled(jobs.map((job) => this.pollQueuedBatch(job)))
+  }
+
+  /** Checks one queued batch once and settles its conversation only after a terminal response. */
+  private async pollQueuedBatch(job: PersistedBatchJob): Promise<void> {
+    if (this.activeBatchPolls.has(job.batchId)) return
+    this.activeBatchPolls.add(job.batchId)
+    const controller = new AbortController()
+    this.batchPollControllers.set(job.batchId, controller)
+    try {
+      const { provider, apiKey } = this.providers.resolve({
+        providerId: job.providerId,
+        modelId: job.modelId,
+      })
+      const response = await fetch(`${job.batchUrl}/${encodeURIComponent(job.batchId)}`, {
+        headers: this.headers(apiKey, provider.customHeaders),
+        signal: controller.signal,
+      })
+      if (response.status === 404 && job.missingPolls < MAX_BATCH_NOT_FOUND_RETRIES) {
+        const missingPolls = job.missingPolls + 1
+        await response.body?.cancel()
+        await this.storage.updateBatchJobMissingPolls(job.batchId, missingPolls)
+        this.logger.warn(
+          'ChatService',
+          `Batch ${job.batchId} is not visible yet; retrying status check ${missingPolls}/${MAX_BATCH_NOT_FOUND_RETRIES}.`,
+        )
+        return
+      }
+      if (!response.ok) throw await createProviderError(response)
+      const batch = (await response.json()) as unknown
+      if (!isRecord(batch)) throw new Error('Batch API returned an invalid status response.')
+      const result = this.findBatchResult(batch, job.customId)
+      if (result) {
+        await this.completeQueuedBatch(job, result)
+        return
+      }
+      const status = typeof batch.status === 'string' ? batch.status.toLowerCase() : ''
+      if (['failed', 'cancelled', 'expired'].includes(status)) {
+        throw new Error(readBatchError(batch.error))
+      }
+      if (status === 'completed') throw new Error('Batch API completed without a result.')
+    } catch (error) {
+      if (controller.signal.aborted) return
+      await this.failQueuedBatch(
+        job,
+        error instanceof Error ? error : new Error('The batch request failed.'),
+      )
+    } finally {
+      this.activeBatchPolls.delete(job.batchId)
+      this.batchPollControllers.delete(job.batchId)
+    }
+  }
+
+  /** Persists and broadcasts one completed batch result before releasing its waiting chat request. */
+  private async completeQueuedBatch(
+    job: PersistedBatchJob,
+    result: Record<string, unknown>,
+  ): Promise<void> {
+    const message = this.readBatchCompletionMessage(result)
+    const content = readBatchContent(message.content)
+    if (!content) throw new Error('Batch API returned no response text.')
+    const reasoning = readReasoningDelta(message)
+    const usage = parseTokenUsage(result)
+    await this.storage.completeBatchMessage(job, { content, reasoning, usage })
+    await this.storage.removeBatchJob(job.batchId)
+    if (usage) {
+      this.batchEmitter?.({
+        requestId: job.requestId,
+        type: 'usage',
+        usage,
+        conversationId: job.conversationId,
+        assistantMessageId: job.assistantMessageId,
+      })
+    }
+    if (reasoning) {
+      this.batchEmitter?.({
+        requestId: job.requestId,
+        type: 'reasoning',
+        delta: reasoning,
+        conversationId: job.conversationId,
+        assistantMessageId: job.assistantMessageId,
+      })
+    }
+    this.batchEmitter?.({
+      requestId: job.requestId,
+      type: 'content',
+      delta: content,
+      replace: true,
+      conversationId: job.conversationId,
+      assistantMessageId: job.assistantMessageId,
+    })
+    this.batchEmitter?.({
+      requestId: job.requestId,
+      type: 'complete',
+      conversationId: job.conversationId,
+      assistantMessageId: job.assistantMessageId,
+    })
+    this.resolveBatchWaiter(job.batchId)
+  }
+
+  /** Persists a terminal batch error and rejects its live request when one is still awaiting it. */
+  private async failQueuedBatch(job: PersistedBatchJob, error: Error): Promise<void> {
+    await this.storage.failBatchMessage(job, error.message)
+    await this.storage.removeBatchJob(job.batchId)
+    this.batchEmitter?.({
+      requestId: job.requestId,
+      type: 'error',
+      message: error.message,
+      conversationId: job.conversationId,
+      assistantMessageId: job.assistantMessageId,
+    })
+    const waiter = this.batchWaiters.get(job.batchId)
+    if (!waiter) {
+      this.logger.warn(
+        'ChatService',
+        `Batch ${job.batchId} failed after application restart.`,
+        error,
+      )
+      return
+    }
+    this.batchWaiters.delete(job.batchId)
+    waiter.cleanup()
+    waiter.reject(error)
+  }
+
+  /** Waits for the durable queue worker to settle one submitted user-visible batch request. */
+  private async waitForQueuedBatch(job: PersistedBatchJob, signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new Error('The request was stopped.')
+    await new Promise<void>((resolve, reject) => {
+      /** Removes the abort listener once the batch reaches any local terminal outcome. */
+      const cleanup = (): void => signal.removeEventListener('abort', abort)
+      /** Rejects the live request while leaving the remote batch intact until explicit stop cleanup runs. */
+      const abort = (): void => {
+        this.batchWaiters.delete(job.batchId)
+        cleanup()
+        reject(new Error('The request was stopped.'))
+      }
+      this.batchWaiters.set(job.batchId, { resolve, reject, cleanup })
+      signal.addEventListener('abort', abort, { once: true })
+    })
+  }
+
+  /** Resolves a live request after its queue worker has durably written the completed response. */
+  private resolveBatchWaiter(batchId: string): void {
+    const waiter = this.batchWaiters.get(batchId)
+    if (!waiter) return
+    this.batchWaiters.delete(batchId)
+    waiter.cleanup()
+    waiter.resolve()
+  }
+
+  /** Removes queued batch jobs explicitly stopped by the user without cancelling the remote provider job. */
+  private async abandonQueuedBatches(requestId: string): Promise<void> {
+    const jobs = (await this.storage.listBatchJobs()).filter((job) => job.requestId === requestId)
+    await Promise.all(
+      jobs.map(async (job) => {
+        this.batchPollControllers.get(job.batchId)?.abort()
+        await this.storage.removeBatchJob(job.batchId)
+      }),
+    )
+  }
+
+  /** Waits for the next batch-status check while allowing the user to stop the request. */
+  private async waitForDirectBatchPoll(signal: AbortSignal): Promise<void> {
+    if (signal.aborted) throw new Error('The request was stopped.')
+    await new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      /** Ends the pending timer promptly when the parent chat request is stopped. */
+      const abort = (): void => {
+        if (timer) clearTimeout(timer)
+        signal.removeEventListener('abort', abort)
+        reject(new Error('The request was stopped.'))
+      }
+      /** Advances the poll loop after the configured status-check interval. */
+      const next = (): void => {
+        signal.removeEventListener('abort', abort)
+        resolve()
+      }
+      timer = setTimeout(next, this.batchPollIntervalMs)
+      signal.addEventListener('abort', abort, { once: true })
+    })
+  }
+
+  /** Reads the first valid OpenAI-compatible assistant message from a batch result body. */
+  private readBatchCompletionMessage(result: Record<string, unknown>): Record<string, unknown> {
+    if (!Array.isArray(result.choices) || !isRecord(result.choices[0])) {
+      throw new Error('Batch API returned no completion choices.')
+    }
+    const message = result.choices[0].message
+    if (!isRecord(message)) throw new Error('Batch API returned no assistant message.')
+    return message
+  }
+
   /** Completes one OpenAI-compatible request, preferring cached endpoint and falling back. */
   private async completeOpenAiCompatibleWithFallback(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
   ): Promise<string> {
+    if (provider.batchUrl && this.isBatchModel(provider, modelId)) {
+      return this.completeOpenAiCompatibleBatch(
+        provider,
+        modelId,
+        messages,
+        UTILITY_REASONING_EFFORT,
+        signal,
+      )
+    }
+    if (provider.id === 'opencode') {
+      return this.completeOpenAiCompatibleStream(provider, modelId, messages, signal)
+    }
     const key = this.compatibleCacheKey(provider.id, modelId)
     const preferred = this.compatibleEndpointCache.get(key)
 
@@ -616,14 +1114,56 @@ export default class ChatService {
     return tryChatFirst()
   }
 
+  /** Collects OpenCode quick-model output through its supported streaming chat transport. */
+  private async completeOpenAiCompatibleStream(
+    provider: CompatibleProvider,
+    modelId: string,
+    messages: CompatibleMessage[],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
+    let content = ''
+    await this.streamOpenAiCompatibleChat(
+      provider,
+      apiKey,
+      modelId,
+      messages,
+      UTILITY_REASONING_EFFORT,
+      signal,
+      'quick-opencode',
+      (event) => {
+        if (event.type === 'content') content += event.delta
+      },
+    )
+    if (!content) throw new Error('Quick Model returned no text.')
+    return content
+  }
+
+  /** Completes one internal Quick Model request through its configured batch endpoint. */
+  private async completeOpenAiCompatibleBatch(
+    provider: CompatibleProvider,
+    modelId: string,
+    messages: CompatibleMessage[],
+    reasoningEffort: ChatRequest['reasoningEffort'],
+    signal: AbortSignal,
+  ): Promise<string> {
+    const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
+    const result = await this.requestOpenAiCompatibleBatch(
+      provider,
+      apiKey,
+      modelId,
+      messages,
+      reasoningEffort,
+      signal,
+    )
+    const content = readBatchContent(this.readBatchCompletionMessage(result).content)
+    if (!content) throw new Error('Batch API returned no response text.')
+    return content
+  }
+
   /** Performs one non-streaming chat completions Quick Model call. */
   private async completeOpenAiCompatibleChat(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
@@ -692,12 +1232,7 @@ export default class ChatService {
 
   /** Performs one non-streaming responses Quick Model call. */
   private async completeOpenAiCompatibleResponses(
-    provider: {
-      id: string
-      name: string
-      baseUrl: string
-      customHeaders?: Record<string, string> | undefined
-    },
+    provider: CompatibleProvider,
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,

@@ -53,6 +53,7 @@ describe('appSlice', () => {
       conversations: [conversation('00000000-0000-4000-8000-000000000001')],
       currentConversation: conversation('00000000-0000-4000-8000-000000000001'),
       providers,
+      generatingConversationIds: [],
       platform: 'linux',
       version: '1.0.0',
     }

@@ -165,7 +165,7 @@ describe('ProviderRegistry', () => {
     expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'User-Agent': 'opencode' })
 
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(1)
+    expect(persisted.migrationVersion).toBe(3)
 
     await upgraded.save({
       id: 'opencode',
@@ -179,6 +179,37 @@ describe('ProviderRegistry', () => {
 
     const relaunched = await createRegistry()
     expect(relaunched.getEditorData('opencode').customHeaders).toBeUndefined()
+  })
+
+  it('configures the OpenRouter batch endpoint for existing built-in providers once', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        providers: [
+          {
+            id: 'openrouter',
+            name: 'OpenRouter',
+            type: 'openai-compatible',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            builtin: true,
+            enabled: true,
+            apiKey: 'router-key',
+            models: [],
+            selectedModelIds: [],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+
+    const upgraded = await createRegistry()
+    expect(upgraded.getEditorData('openrouter').batchUrl).toBe(
+      'https://openrouter.ai/api/beta/batches',
+    )
   })
 
   it('appends new providers without testing their URL and stores the API key as plaintext', async () => {
@@ -198,6 +229,33 @@ describe('ProviderRegistry', () => {
     const stored = await readFile(join(rootPath, 'providers.json'), 'utf8')
     expect(stored).toContain('"apiKey": "visible-secret-key"')
     expect(stored).not.toContain('encryptedApiKey')
+  })
+
+  it('persists batch configuration only for the built-in OpenRouter provider', async () => {
+    const snapshot = await registry.save({
+      id: 'openrouter',
+      type: 'openai-compatible',
+      name: 'OpenRouter',
+      baseUrl: 'https://openrouter.ai/api/v1',
+      batchUrl: 'https://openrouter.ai/api/beta/batches/',
+      batchPollIntervalSeconds: 45,
+      batchModelRegex: 'batch-only',
+      apiKey: 'batch-key',
+      catalogModels: [catalogModel('vendor/model:batch')],
+      selectedModelIds: ['vendor/model:batch'],
+    })
+
+    const provider = snapshot.providers.find((item) => item.id === 'openrouter')
+    expect(provider).toMatchObject({
+      batchUrl: 'https://openrouter.ai/api/beta/batches',
+      batchPollIntervalSeconds: 45,
+      batchModelRegex: 'batch-only',
+    })
+    expect(registry.getEditorData('openrouter')).toMatchObject({
+      batchUrl: 'https://openrouter.ai/api/beta/batches',
+      batchPollIntervalSeconds: 45,
+      batchModelRegex: 'batch-only',
+    })
   })
 
   it('persists the exact provider order supplied by drag and drop', async () => {
@@ -370,11 +428,11 @@ describe('ProviderRegistry', () => {
       baseUrl: 'https://integrate.api.nvidia.com/v1',
       builtin: true,
     })
-    expect(byId.get('inferx')).toMatchObject({
-      type: 'openai-compatible',
-      baseUrl: 'https://model.inferx.net/endpoints/v1',
+    expect(byId.get('openrouter')).toMatchObject({
+      batchUrl: 'https://openrouter.ai/api/beta/batches',
       builtin: true,
     })
+    expect(byId.get('inferx')).toBeUndefined()
     expect(byId.get('ollama')).toMatchObject({ name: 'Ollama Local', builtin: true })
     await expect(registry.delete('chatgpt')).rejects.toThrow('Built-in providers')
   })

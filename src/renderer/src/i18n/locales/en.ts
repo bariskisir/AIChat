@@ -38,6 +38,8 @@ const en = {
     },
     baseUrl: 'API URL',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'Batch API URL',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'API Key',
     save: 'Save',
     saveFailed: 'The provider could not be saved.',
@@ -89,6 +91,14 @@ const en = {
   models: {
     title: 'Default Models',
     description: 'Choose the Quick Model used for lightweight internal tasks.',
+    batch: 'Batch',
+    batchDescription: 'Configure batch-only model routing and result polling.',
+    batchPollInterval: 'Polling interval',
+    batchPollIntervalDescription: 'Check queued batch results at this interval.',
+    batchModelRegex: 'Batch model regex',
+    batchModelRegexDescription:
+      'OpenAI-compatible model IDs matching this case-insensitive expression use the Batch API.',
+    seconds: 'seconds',
     quickModel: 'Quick Model',
     quickDescription: 'Used for title generation and web-search query planning.',
     titleGeneration: 'Title Generation',

@@ -87,6 +87,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       conversations,
       currentConversation: await services.storage.getConversation(firstConversation.id),
       providers: services.providers.snapshot(),
+      generatingConversationIds: await services.chat.getQueuedBatchConversationIds(),
       platform: process.platform,
       version: app.getVersion(),
     }
@@ -131,9 +132,11 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
     assertSender(event.sender)
     return services.storage.deleteAllConversations()
   })
-  ipcMain.handle(IpcChannel.ProviderSave, (event, input: unknown) => {
+  ipcMain.handle(IpcChannel.ProviderSave, async (event, input: unknown) => {
     assertSender(event.sender)
-    return services.providers.save(providerInputSchema.parse(input))
+    const snapshot = await services.providers.save(providerInputSchema.parse(input))
+    services.chat.refreshBatchQueue()
+    return snapshot
   })
   ipcMain.handle(IpcChannel.ProviderEditData, (event, input: unknown) => {
     assertSender(event.sender)

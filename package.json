@@ -1,6 +1,6 @@
 {
   "name": "ai-chat",
-  "version": "3.9.0",
+  "version": "3.10.0",
   "description": "Simple multi-provider AI chat desktop application",
   "main": "./out/main/index.js",
   "author": "bariskisir",

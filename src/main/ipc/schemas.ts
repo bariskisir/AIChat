@@ -97,6 +97,9 @@ export const providerConnectionSchema = z.object({
   type: z.enum(PROVIDER_TYPES),
   name: z.string().trim().min(1).max(100),
   baseUrl: z.string().max(2000).optional(),
+  batchUrl: z.string().max(2000).optional(),
+  batchPollIntervalSeconds: z.number().int().min(1).max(3600).optional(),
+  batchModelRegex: z.string().trim().min(1).max(500).optional(),
   apiKey: z.string().max(10_000).optional(),
   customHeaders: z
     .record(z.string().trim().min(1).max(200), z.string().trim().min(1).max(10_000))

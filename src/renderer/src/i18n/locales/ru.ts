@@ -32,6 +32,8 @@ const ru = {
     name: 'Название',
     baseUrl: 'Адрес API',
     baseUrlPlaceholder: 'https://example.com/v1',
+    batchUrl: 'URL пакетного API',
+    batchUrlPlaceholder: 'https://example.com/api/batches',
     apiKey: 'Ключ API',
     save: 'Сохранить',
     saveFailed: 'Не удалось сохранить провайдера.',
@@ -90,6 +92,14 @@ const ru = {
   models: {
     title: 'Модели по умолчанию',
     description: 'Выберите Quick Model для лёгких внутренних задач.',
+    batch: 'Пакетная обработка',
+    batchDescription: 'Настройте маршрутизацию пакетных моделей и опрос результатов.',
+    batchPollInterval: 'Интервал опроса',
+    batchPollIntervalDescription: 'Проверять результаты пакетных заданий с этим интервалом.',
+    batchModelRegex: 'Регулярное выражение пакетной модели',
+    batchModelRegexDescription:
+      'Совместимые с OpenAI идентификаторы моделей, соответствующие этому регистронезависимому выражению, используют Batch API.',
+    seconds: 'секунд',
     quickModel: 'Быстрая модель',
     quickDescription: 'Используется для заголовков и планирования веб-поиска.',
     titleGeneration: 'Создание заголовков',

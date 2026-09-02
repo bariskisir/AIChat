@@ -31,6 +31,9 @@ interface ProviderRecord {
   name: string
   type: ProviderType
   baseUrl: string
+  batchUrl: string
+  batchPollIntervalSeconds: number
+  batchModelRegex: string
   customHeaders: Record<string, string>
   builtin: boolean
   enabled: boolean
@@ -63,6 +66,29 @@ const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
       opencode.customHeaders = { 'User-Agent': 'opencode' }
     }
   },
+  /** Migration 2: configures OpenRouter's built-in Batch API endpoint for existing installs. */
+  (state) => {
+    const openrouter = state.providers.find(
+      (provider) => provider.id === 'openrouter' && provider.builtin,
+    )
+    if (openrouter && !openrouter.batchUrl) {
+      openrouter.batchUrl = 'https://openrouter.ai/api/beta/batches'
+    }
+  },
+  /** Migration 3: scopes Batch API configuration to OpenRouter and supplies its defaults. */
+  (state) => {
+    for (const provider of state.providers) {
+      if (provider.id !== 'openrouter') {
+        provider.batchUrl = ''
+        provider.batchPollIntervalSeconds = 30
+        provider.batchModelRegex = 'batch'
+        continue
+      }
+      if (!provider.batchUrl) provider.batchUrl = 'https://openrouter.ai/api/beta/batches'
+      if (!provider.batchPollIntervalSeconds) provider.batchPollIntervalSeconds = 30
+      if (!provider.batchModelRegex) provider.batchModelRegex = 'batch'
+    }
+  },
 ]
 
 /** One built-in preset shipped with the application. */
@@ -71,6 +97,9 @@ interface BuiltinProviderPreset {
   name: string
   type: ProviderType
   baseUrl?: string
+  batchUrl?: string
+  batchPollIntervalSeconds?: number
+  batchModelRegex?: string
   defaultApiKey?: string
   enabledByDefault?: boolean
   customHeaders?: Record<string, string>
@@ -101,16 +130,13 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
     baseUrl: 'https://integrate.api.nvidia.com/v1',
   },
   {
-    id: 'inferx',
-    name: 'Inferx',
-    type: 'openai-compatible',
-    baseUrl: 'https://model.inferx.net/endpoints/v1',
-  },
-  {
     id: 'openrouter',
     name: 'OpenRouter',
     type: 'openai-compatible',
     baseUrl: 'https://openrouter.ai/api/v1',
+    batchUrl: 'https://openrouter.ai/api/beta/batches',
+    batchPollIntervalSeconds: 30,
+    batchModelRegex: 'batch',
   },
   {
     id: 'lm-studio',
@@ -158,6 +184,9 @@ const connectionSchema = z
     type: providerTypeSchema,
     name: z.string().trim().min(1).max(100),
     baseUrl: z.string().max(2000).optional(),
+    batchUrl: z.string().max(2000).optional(),
+    batchPollIntervalSeconds: z.number().int().min(1).max(3600).optional(),
+    batchModelRegex: z.string().trim().min(1).max(500).optional(),
     apiKey: z.string().max(10_000).optional(),
     customHeaders: customHeadersSchema.optional(),
   })
@@ -179,6 +208,28 @@ const connectionSchema = z
         message: 'API URL must be a valid HTTP(S) URL.',
       })
     }
+    if (value.id !== 'openrouter') return
+    if (value.batchUrl) {
+      const batchUrl = z.url().safeParse(value.batchUrl)
+      if (!batchUrl.success || !/^https?:\/\//i.test(batchUrl.data)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['batchUrl'],
+          message: 'Batch API URL must be a valid HTTP(S) URL.',
+        })
+      }
+    }
+    if (value.batchModelRegex) {
+      try {
+        new RegExp(value.batchModelRegex, 'i')
+      } catch {
+        context.addIssue({
+          code: 'custom',
+          path: ['batchModelRegex'],
+          message: 'Batch model regex must be valid.',
+        })
+      }
+    }
   })
 const providerInputSchema = connectionSchema.extend({
   catalogModels: z.array(modelSchema).max(25_000),
@@ -189,6 +240,9 @@ const recordSchema = z.object({
   name: z.string().min(1),
   type: providerTypeSchema,
   baseUrl: z.string().max(2000),
+  batchUrl: z.string().max(2000),
+  batchPollIntervalSeconds: z.number().int().min(1).max(3600),
+  batchModelRegex: z.string().min(1).max(500),
   customHeaders: customHeadersSchema,
   builtin: z.boolean(),
   enabled: z.boolean(),
@@ -369,6 +423,13 @@ const normalizeProviderFile = (input: unknown): unknown => {
                 ? (storedType as ProviderType)
                 : 'openai-compatible',
             baseUrl: provider.baseUrl ?? '',
+            batchUrl: typeof provider.batchUrl === 'string' ? provider.batchUrl : '',
+            batchPollIntervalSeconds:
+              typeof provider.batchPollIntervalSeconds === 'number'
+                ? provider.batchPollIntervalSeconds
+                : 30,
+            batchModelRegex:
+              typeof provider.batchModelRegex === 'string' ? provider.batchModelRegex : 'batch',
             customHeaders: isStringRecord(provider.customHeaders)
               ? (provider.customHeaders as Record<string, string>)
               : {},
@@ -467,6 +528,9 @@ export class ProviderRegistry {
           name: preset.name,
           type: preset.type,
           baseUrl: preset.baseUrl ?? '',
+          batchUrl: preset.batchUrl ?? '',
+          batchPollIntervalSeconds: preset.batchPollIntervalSeconds ?? 30,
+          batchModelRegex: preset.batchModelRegex ?? 'batch',
           customHeaders: preset.customHeaders ?? {},
           builtin: true,
           enabled: preset.enabledByDefault ?? false,
@@ -531,6 +595,13 @@ export class ProviderRegistry {
       name: provider.name,
       type: provider.type,
       baseUrl: provider.baseUrl,
+      ...(provider.batchUrl ? { batchUrl: provider.batchUrl } : {}),
+      ...(provider.id === 'openrouter'
+        ? {
+            batchPollIntervalSeconds: provider.batchPollIntervalSeconds,
+            batchModelRegex: provider.batchModelRegex,
+          }
+        : {}),
       ...(Object.keys(provider.customHeaders).length > 0
         ? { customHeaders: provider.customHeaders }
         : {}),
@@ -577,6 +648,13 @@ export class ProviderRegistry {
       name: provider.name,
       type: provider.type,
       baseUrl: provider.baseUrl,
+      ...(provider.batchUrl ? { batchUrl: provider.batchUrl } : {}),
+      ...(provider.id === 'openrouter'
+        ? {
+            batchPollIntervalSeconds: provider.batchPollIntervalSeconds,
+            batchModelRegex: provider.batchModelRegex,
+          }
+        : {}),
       apiKey: provider.apiKey,
       ...(Object.keys(provider.customHeaders).length > 0
         ? { customHeaders: provider.customHeaders }
@@ -613,12 +691,19 @@ export class ProviderRegistry {
     const selectedModelIds = [...new Set(parsed.selectedModelIds)].filter((id) =>
       uniqueModels.has(id),
     )
+    const isOpenRouter = existing?.id === 'openrouter'
     const candidate: ProviderRecord = {
       id: existing?.id ?? randomUUID(),
       name: parsed.name,
       type: parsed.type,
       baseUrl:
         parsed.type === 'openai-compatible' ? (parsed.baseUrl ?? '').replace(/\/+$/, '') : '',
+      batchUrl:
+        isOpenRouter && parsed.type === 'openai-compatible'
+          ? (parsed.batchUrl ?? '').replace(/\/+$/, '')
+          : '',
+      batchPollIntervalSeconds: isOpenRouter ? (parsed.batchPollIntervalSeconds ?? 30) : 30,
+      batchModelRegex: isOpenRouter ? (parsed.batchModelRegex ?? 'batch') : 'batch',
       customHeaders: parsed.type === 'openai-compatible' ? (parsed.customHeaders ?? {}) : {},
       builtin: existing?.builtin ?? false,
       enabled: existing?.enabled ?? true,
@@ -771,6 +856,13 @@ export class ProviderRegistry {
         name: provider.name,
         type: provider.type,
         baseUrl: provider.baseUrl,
+        ...(provider.batchUrl ? { batchUrl: provider.batchUrl } : {}),
+        ...(provider.id === 'openrouter'
+          ? {
+              batchPollIntervalSeconds: provider.batchPollIntervalSeconds,
+              batchModelRegex: provider.batchModelRegex,
+            }
+          : {}),
         ...(Object.keys(provider.customHeaders).length > 0
           ? { customHeaders: provider.customHeaders }
           : {}),
