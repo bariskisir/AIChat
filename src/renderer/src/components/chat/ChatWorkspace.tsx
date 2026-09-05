@@ -16,13 +16,13 @@ import {
 import { useTranslation } from 'react-i18next'
 import {
   estimateTextTokens,
+  getProviderReasoningEfforts,
   type ChatAttachment,
   type ChatMessage,
   type ChatRequest,
   type ChatStreamEvent,
   type Conversation,
   type ModelReference,
-  type ReasoningEffort,
   type WebSearchMode,
 } from '@shared/index'
 import { useConversationActions } from '@renderer/hooks/useConversationActions'
@@ -52,7 +52,6 @@ import WebSearchControl from './WebSearchControl'
 import styles from './ChatWorkspace.module.scss'
 
 const logger = createLogger('ChatWorkspace')
-const FALLBACK_REASONING: ReasoningEffort[] = ['default', 'off', 'low', 'medium', 'high']
 /** Attachments one message may carry, matching the persisted and IPC bounds. */
 const MAX_ATTACHMENTS = 10
 
@@ -619,7 +618,13 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       selectedModel !== null &&
       model.providerId === selectedModel.providerId,
   )
-  const reasoningOptions = selectedDescriptor?.reasoningEfforts ?? FALLBACK_REASONING
+  const selectedProvider = snapshot.providers.find(
+    (provider) => provider.id === selectedDescriptor?.providerId,
+  )
+  const reasoningOptions = getProviderReasoningEfforts(
+    selectedProvider?.type,
+    selectedDescriptor?.reasoningEfforts,
+  )
   const activeReasoningEffort = reasoningOptions.includes(
     currentConversation?.reasoningEffort ?? 'default',
   )
@@ -740,7 +745,11 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     const requestDescriptor = snapshot.models.find(
       (item) => item.providerId === model.providerId && item.modelId === model.modelId,
     )
-    const requestReasoningOptions = requestDescriptor?.reasoningEfforts ?? FALLBACK_REASONING
+    const requestProvider = snapshot.providers.find((item) => item.id === model.providerId)
+    const requestReasoningOptions = getProviderReasoningEfforts(
+      requestProvider?.type,
+      requestDescriptor?.reasoningEfforts,
+    )
     const requestReasoningEffort = requestReasoningOptions.includes(conversation.reasoningEffort)
       ? conversation.reasoningEffort
       : 'default'
@@ -1093,17 +1102,15 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
               onClick={() => void selectAttachments()}
             />
           </Tooltip>
-          {selectedDescriptor &&
-            (selectedDescriptor.capabilities.reasoning ||
-              (selectedDescriptor.reasoningEfforts?.length ?? 0) > 0) && (
-              <ReasoningControl
-                options={reasoningOptions}
-                value={activeReasoningEffort}
-                onChange={(reasoningEffort) =>
-                  updateConversation((conversation) => ({ ...conversation, reasoningEffort }))
-                }
-              />
-            )}
+          {selectedDescriptor && reasoningOptions.length > 0 && (
+            <ReasoningControl
+              options={reasoningOptions}
+              value={activeReasoningEffort}
+              onChange={(reasoningEffort) =>
+                updateConversation((conversation) => ({ ...conversation, reasoningEffort }))
+              }
+            />
+          )}
           <WebSearchControl
             value={currentConversation.searchMode}
             onChange={selectWebSearch}

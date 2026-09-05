@@ -19,6 +19,9 @@ import { clampSurrogateBoundary } from '@shared/index'
 import { z } from 'zod'
 import { parsePersistedSettings, settingsSchema } from '../config/settings.schema'
 
+/** Accepts known levels plus future server-supplied extras such as `max`. */
+const reasoningEffortSchema = z.union([z.enum(REASONING_EFFORTS), z.string().min(1).max(50)])
+
 const modelReferenceSchema = z.object({ providerId: z.string().min(1), modelId: z.string().min(1) })
 const attachmentSchema = z.object({
   id: z.uuid(),
@@ -76,7 +79,7 @@ const conversationSchema = z.object({
   searchMode: z.enum(WEB_SEARCH_MODES),
   lastSearchEngine: z.enum(['google', 'bing', 'duckduckgo']),
   useWebSearchFallback: z.boolean(),
-  reasoningEffort: z.enum(REASONING_EFFORTS),
+  reasoningEffort: reasoningEffortSchema,
 })
 
 /** Stores one submitted asynchronous batch request until its final result is persisted. */

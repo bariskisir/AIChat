@@ -11,6 +11,8 @@ import { z } from 'zod'
 
 export const idSchema = z.string().min(1).max(200)
 export const conversationIdSchema = z.uuid()
+/** Accepts known levels plus future server-supplied extras such as `max`. */
+export const reasoningEffortSchema = z.union([z.enum(REASONING_EFFORTS), z.string().min(1).max(50)])
 export const modelReferenceSchema = z.object({ providerId: idSchema, modelId: idSchema })
 
 export const attachmentSchema = z.object({
@@ -84,7 +86,7 @@ export const conversationSchema = z.object({
   searchMode: z.enum(WEB_SEARCH_MODES),
   lastSearchEngine: z.enum(['google', 'bing', 'duckduckgo']),
   useWebSearchFallback: z.boolean(),
-  reasoningEffort: z.enum(REASONING_EFFORTS),
+  reasoningEffort: reasoningEffortSchema,
 })
 
 export const conversationRenameSchema = z.object({
@@ -124,7 +126,7 @@ export const providerModelSchema = z.object({
     imageGeneration: z.boolean(),
     reasoning: z.boolean(),
   }),
-  reasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional(),
+  reasoningEfforts: z.array(reasoningEffortSchema).optional(),
 })
 
 export const providerInputSchema = providerConnectionSchema.extend({
@@ -143,7 +145,7 @@ export const chatRequestSchema = z.object({
   messages: z.array(messageSchema).max(10_000),
   searchMode: z.enum(WEB_SEARCH_MODES),
   useWebSearchFallback: z.boolean(),
-  reasoningEffort: z.enum(REASONING_EFFORTS),
+  reasoningEffort: reasoningEffortSchema,
   imageGeneration: z.boolean(),
 })
 

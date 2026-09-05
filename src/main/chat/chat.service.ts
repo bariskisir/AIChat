@@ -10,7 +10,6 @@ import type {
   WebSearchMode,
 } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
-import { isKimi25OrNewerModel } from '../reasoning/families/chinese'
 import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
 import { normalizeOpenAiBaseUrl } from '../providers/openai-compatible/openai-compatible.base-url'
@@ -1174,35 +1173,11 @@ export default class ChatService {
       name: provider.name,
       baseUrl: provider.baseUrl,
     })
-    const isKimiModel = isKimi25OrNewerModel({ id: modelId })
     const body: Record<string, unknown> = {
       model: modelId,
       messages,
       stream: false,
-      ...(isKimiModel ? {} : { temperature: 0.2 }),
       ...(reasoningParameters ?? {}),
-    }
-    // OpenAI reasoning models (o1/o3/o4-mini/gpt-5/gpt-6 non-chat) require max_completion_tokens instead of max_tokens.
-    const isOpenAIReasoningModelId = (id: string): boolean => {
-      const lower = id.toLowerCase()
-      const base = lower.split('/').at(-1) ?? lower
-      return (
-        base.startsWith('o1') ||
-        base.startsWith('o3') ||
-        base.startsWith('o4-mini') ||
-        (base.startsWith('gpt-5') && !base.startsWith('gpt-5-chat')) ||
-        (base.startsWith('gpt-6') && !base.startsWith('gpt-6-chat'))
-      )
-    }
-    if (isOpenAIReasoningModelId(modelId) && body.max_tokens != null) {
-      const { max_tokens, ...rest } = body as Record<string, unknown> & { max_tokens?: unknown }
-      if ((body as Record<string, unknown>).max_completion_tokens == null) {
-        Object.assign(body, { ...rest, max_completion_tokens: max_tokens })
-        delete (body as Record<string, unknown>).max_tokens
-      } else {
-        Object.assign(body, rest)
-        delete (body as Record<string, unknown>).max_tokens
-      }
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current body so a provider rejecting the reasoning keys can be retried. */

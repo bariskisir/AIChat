@@ -23,6 +23,8 @@ describe('mapResponsesEffort', () => {
     expect(mapResponsesEffort('xhigh')).toBe('xhigh')
     expect(mapResponsesEffort('default')).toBeNull()
     expect(mapResponsesEffort('auto')).toBeNull()
+    expect(mapResponsesEffort('max')).toBe('max')
+    expect(mapResponsesEffort('ultra')).toBe('ultra')
   })
 })
 
@@ -158,7 +160,14 @@ describe('normalizeChatGptModels', () => {
         {
           slug: 'gpt-5',
           display_name: 'GPT-5',
-          supported_reasoning_levels: ['low', 'medium', 'xhigh', 'max'],
+          supported_reasoning_levels: [
+            'low',
+            'medium',
+            'xhigh',
+            'max',
+            { effort: 'ultra' },
+            'bogus level!',
+          ],
           input_modalities: ['text', 'image'],
         },
         { slug: 'gpt-4o', display_name: 'GPT-4o', input_modalities: ['text'] },
@@ -171,7 +180,7 @@ describe('normalizeChatGptModels', () => {
     expect(gpt5?.group).toBe('Codex')
     expect(gpt5?.capabilities.vision).toBe(true)
     expect(gpt5?.capabilities.reasoning).toBe(true)
-    expect(gpt5?.reasoningEfforts).toEqual(['default', 'low', 'medium', 'xhigh'])
+    expect(gpt5?.reasoningEfforts).toEqual(['default', 'low', 'medium', 'xhigh', 'max', 'ultra'])
     expect(models.find((model) => model.modelId === 'gpt-4o')?.capabilities.reasoning).toBe(false)
   })
 })

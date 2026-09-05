@@ -4,7 +4,7 @@
  */
 
 import {
-  REASONING_EFFORTS,
+  isReasoningEffortValue,
   parseDataUrl,
   type ProviderModelDefinition,
   type ReasoningEffort,
@@ -51,12 +51,21 @@ const parseEffortOptions = (value: unknown): ReasoningEffort[] => {
   for (const item of value) {
     const option = asObject(item)
     const raw = option ? firstString(option, ['id', 'value']) : undefined
-    const normalized = raw === 'max' ? 'xhigh' : raw
-    if (normalized && (REASONING_EFFORTS as readonly string[]).includes(normalized)) {
-      efforts.push(normalized as ReasoningEffort)
-    }
+    if (raw && isReasoningEffortValue(raw)) efforts.push(raw)
   }
   return [...new Set(efforts)]
+}
+
+/** Reads mode-toggle ids (e.g. an `off` switch) from one thinking config. */
+const parseModeOptions = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  const modes: string[] = []
+  for (const item of value) {
+    const option = asObject(item)
+    const raw = option ? firstString(option, ['id', 'value']) : undefined
+    if (raw && !modes.includes(raw)) modes.push(raw)
+  }
+  return modes
 }
 
 /** Reads thinking capability and effort options from one bootstrap model entry. */
@@ -70,14 +79,17 @@ const parseThinking = (
   }
   if (type === 'effort_and_mode') {
     const efforts = parseEffortOptions(thinking.effort_options)
+    if (parseModeOptions(thinking.mode_options).includes('off') && !efforts.includes('off')) {
+      efforts.push('off')
+    }
     return {
       supportsThinking: true,
       reasoningEfforts: efforts.length
         ? ['default', ...efforts.filter((effort) => effort !== 'default')]
-        : undefined,
+        : ['default', 'off'],
     }
   }
-  return { supportsThinking: true, reasoningEfforts: undefined }
+  return { supportsThinking: true, reasoningEfforts: ['default', 'off'] }
 }
 
 /** Converts one Claude bootstrap model entry into a provider model definition. */
@@ -85,7 +97,7 @@ const parseModel = (value: unknown): ProviderModelDefinition | undefined => {
   const model = asObject(value)
   if (!model) return undefined
   const modelId = firstString(model, ['id', 'model'])
-  if (!modelId?.startsWith('claude-')) return undefined
+  if (!modelId) return undefined
   if (
     model.inactive === true ||
     model.hidden === true ||

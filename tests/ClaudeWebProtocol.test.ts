@@ -41,6 +41,7 @@ describe('parseClaudeWebModels', () => {
               thinking: {
                 type: 'effort_and_mode',
                 effort_options: [{ id: 'low' }, { value: 'max' }],
+                mode_options: [{ id: 'auto' }, { id: 'off' }],
               },
             },
             { id: 'claude-haiku-4', name: 'Haiku', thinking: { type: 'none' } },
@@ -50,11 +51,16 @@ describe('parseClaudeWebModels', () => {
         },
       ],
     })
-    expect(models.map((model) => model.modelId)).toEqual(['claude-haiku-4', 'claude-opus-5'])
-    const opus = models[1]
+    expect(models.map((model) => model.modelId)).toEqual([
+      'claude-haiku-4',
+      'non-claude-model',
+      'claude-opus-5',
+    ])
+    const opus = models[2]
     expect(opus?.capabilities.reasoning).toBe(true)
-    expect(opus?.reasoningEfforts).toEqual(['default', 'low', 'xhigh'])
+    expect(opus?.reasoningEfforts).toEqual(['default', 'low', 'max', 'off'])
     expect(models[0]?.capabilities.reasoning).toBe(false)
+    expect(models[1]?.capabilities.reasoning).toBe(false)
   })
 
   it('filters tier-gated models below the account plan', () => {

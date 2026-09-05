@@ -64,7 +64,7 @@ afterEach(async () => {
 })
 
 describe('ProviderRegistry', () => {
-  it('configures OpenCode and its preferred free model on a clean install', async () => {
+  it('configures OpenCode with the first free chat model on a clean install', async () => {
     const snapshot = registry.snapshot()
     const opencode = snapshot.providers.find((provider) => provider.id === 'opencode')
 
@@ -81,16 +81,16 @@ describe('ProviderRegistry', () => {
     expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 1 })
     expect(registry.getEditorData('opencode')).toMatchObject({
       apiKey: 'public',
-      selectedModelIds: ['muse-spark-1.2-contributor-free'],
+      selectedModelIds: ['deepseek/deepseek-v3-free'],
     })
     expect(snapshot.lastUsedModel).toEqual({
       providerId: 'opencode',
-      modelId: 'muse-spark-1.2-contributor-free',
+      modelId: 'deepseek/deepseek-v3-free',
     })
     expect(snapshot.quickModel).toEqual(snapshot.lastUsedModel)
   })
 
-  it('falls back to the first free OpenCode chat model when Muse is unavailable', async () => {
+  it('selects the first free OpenCode chat model from a replacement catalog', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -165,7 +165,7 @@ describe('ProviderRegistry', () => {
     expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'User-Agent': 'opencode' })
 
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(3)
+    expect(persisted.migrationVersion).toBe(4)
 
     await upgraded.save({
       id: 'opencode',
@@ -179,6 +179,351 @@ describe('ProviderRegistry', () => {
 
     const relaunched = await createRegistry()
     expect(relaunched.getEditorData('opencode').customHeaders).toBeUndefined()
+  })
+
+  it('refreshes server reasoning levels once when upgrading stored catalogs', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        migrationVersion: 3,
+        providers: [
+          {
+            id: 'openrouter',
+            name: 'OpenRouter',
+            type: 'openai-compatible',
+            baseUrl: 'https://openrouter.ai/api/v1',
+            batchUrl: 'https://openrouter.ai/api/beta/batches',
+            batchPollIntervalSeconds: 30,
+            batchModelRegex: 'batch',
+            customHeaders: {},
+            builtin: true,
+            enabled: true,
+            apiKey: 'router-key',
+            models: [
+              {
+                modelId: 'openai/gpt-6-astra',
+                name: 'GPT-6 Astra',
+                group: 'openai',
+                capabilities: {
+                  chat: true,
+                  vision: false,
+                  imageGeneration: false,
+                  reasoning: true,
+                },
+                reasoningEfforts: ['default', 'minimal'],
+              },
+              {
+                modelId: 'openai/gpt-4o',
+                name: 'GPT-4o',
+                group: 'openai',
+                capabilities: {
+                  chat: true,
+                  vision: false,
+                  imageGeneration: false,
+                  reasoning: false,
+                },
+              },
+            ],
+            selectedModelIds: ['openai/gpt-6-astra', 'openai/gpt-4o'],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: 'openai/gpt-6-astra',
+                  name: 'GPT-6 Astra',
+                  reasoning: { supported_efforts: ['low', 'medium', 'max'] },
+                },
+                { id: 'openai/gpt-4o', name: 'GPT-4o' },
+                { id: 'openai/brand-new-model', name: 'Brand New' },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    )
+
+    const upgraded = await createRegistry()
+    const editor = upgraded.getEditorData('openrouter')
+    const astra = editor.catalogModels.find((model) => model.modelId === 'openai/gpt-6-astra')
+    expect(astra?.reasoningEfforts).toEqual(['default', 'low', 'medium', 'max'])
+    expect(astra?.capabilities.reasoning).toBe(true)
+    // Selections and membership are untouched: no model added, none removed.
+    expect(editor.selectedModelIds).toEqual(['openai/gpt-6-astra', 'openai/gpt-4o'])
+    expect(editor.catalogModels.map((model) => model.modelId)).toEqual([
+      'openai/gpt-6-astra',
+      'openai/gpt-4o',
+    ])
+    const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
+    expect(persisted.migrationVersion).toBe(4)
+
+    // A second launch does not refetch: the stored server levels are kept as-is.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('must not refetch')
+      }),
+    )
+    const relaunched = await createRegistry()
+    expect(
+      relaunched
+        .getEditorData('openrouter')
+        .catalogModels.find((model) => model.modelId === 'openai/gpt-6-astra')?.reasoningEfforts,
+    ).toEqual(['default', 'low', 'medium', 'max'])
+  })
+
+  it('keeps the fixed fallback list when the upgrade refresh cannot reach the server', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        migrationVersion: 3,
+        providers: [
+          {
+            id: 'router',
+            name: 'Router',
+            type: 'openai-compatible',
+            baseUrl: 'https://router.example/v1',
+            batchUrl: '',
+            batchPollIntervalSeconds: 30,
+            batchModelRegex: 'batch',
+            customHeaders: {},
+            builtin: false,
+            enabled: true,
+            apiKey: '',
+            models: [
+              {
+                modelId: 'vendor/model',
+                name: 'Model',
+                group: 'vendor',
+                capabilities: {
+                  chat: true,
+                  vision: false,
+                  imageGeneration: false,
+                  reasoning: true,
+                },
+                reasoningEfforts: ['default', 'minimal'],
+              },
+            ],
+            selectedModelIds: ['vendor/model'],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('offline')
+      }),
+    )
+
+    const upgraded = await createRegistry()
+    const model = upgraded
+      .getEditorData('router')
+      .catalogModels.find((item) => item.modelId === 'vendor/model')
+    expect(model?.reasoningEfforts).toBeUndefined()
+    expect(model?.capabilities.reasoning).toBe(false)
+  })
+
+  it('prunes unlisted ChatGPT models and refreshes levels when upgrading', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        migrationVersion: 3,
+        providers: [
+          {
+            id: 'chatgpt',
+            name: 'ChatGPT',
+            type: 'chatgpt',
+            baseUrl: '',
+            batchUrl: '',
+            batchPollIntervalSeconds: 30,
+            batchModelRegex: 'batch',
+            customHeaders: {},
+            builtin: true,
+            enabled: true,
+            apiKey: '',
+            models: [
+              {
+                modelId: 'gpt-reserve',
+                name: 'GPT-Reserve',
+                group: 'Codex',
+                capabilities: {
+                  chat: true,
+                  vision: false,
+                  imageGeneration: false,
+                  reasoning: true,
+                },
+                reasoningEfforts: ['default', 'low', 'medium', 'xhigh'],
+              },
+              {
+                modelId: 'gpt-5.6-terra',
+                name: 'GPT-5.6-Terra',
+                group: 'Codex',
+                capabilities: {
+                  chat: true,
+                  vision: false,
+                  imageGeneration: false,
+                  reasoning: true,
+                },
+                reasoningEfforts: ['default', 'low', 'medium', 'xhigh'],
+              },
+            ],
+            selectedModelIds: ['gpt-reserve', 'gpt-5.6-terra'],
+          },
+        ],
+        favorites: [{ providerId: 'chatgpt', modelId: 'gpt-reserve' }],
+        lastUsedModel: { providerId: 'chatgpt', modelId: 'gpt-reserve' },
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    const service = new ProviderRegistry(rootPath, createLogger(), {})
+    service.registerFamily({
+      type: 'chatgpt',
+      fetchCatalog: async () => [
+        {
+          modelId: 'gpt-5.6-terra',
+          name: 'GPT-5.6-Terra',
+          group: 'Codex',
+          capabilities: { chat: true, vision: false, imageGeneration: false, reasoning: true },
+          reasoningEfforts: ['default', 'low', 'medium', 'xhigh', 'max', 'ultra'],
+        },
+      ],
+    })
+    await service.initialize()
+
+    const editor = service.getEditorData('chatgpt')
+    expect(editor.catalogModels.map((model) => model.modelId)).toEqual(['gpt-5.6-terra'])
+    expect(editor.selectedModelIds).toEqual(['gpt-5.6-terra'])
+    expect(
+      editor.catalogModels.find((model) => model.modelId === 'gpt-5.6-terra')?.reasoningEfforts,
+    ).toEqual(['default', 'low', 'medium', 'xhigh', 'max', 'ultra'])
+    expect(service.snapshot().favorites).toEqual([])
+    expect(service.snapshot().lastUsedModel).toBeNull()
+  })
+
+  it('skips the upgrade refresh for providers without stored models', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        migrationVersion: 3,
+        providers: [
+          {
+            id: 'opencode',
+            name: 'OpenCode',
+            type: 'openai-compatible',
+            baseUrl: 'https://opencode.ai/zen/v1',
+            batchUrl: '',
+            batchPollIntervalSeconds: 30,
+            batchModelRegex: 'batch',
+            customHeaders: {},
+            builtin: true,
+            enabled: true,
+            apiKey: 'public',
+            models: [],
+            selectedModelIds: [],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    vi.mocked(fetch).mockClear()
+
+    await createRegistry()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('prunes unlisted Claude Web models and refreshes levels when upgrading', async () => {
+    await writeFile(
+      join(rootPath, 'providers.json'),
+      JSON.stringify({
+        revision: 1,
+        migrationVersion: 3,
+        providers: [
+          {
+            id: 'claude-web',
+            name: 'Claude Web',
+            type: 'claude-web',
+            baseUrl: '',
+            batchUrl: '',
+            batchPollIntervalSeconds: 30,
+            batchModelRegex: 'batch',
+            customHeaders: {},
+            builtin: true,
+            enabled: true,
+            apiKey: '',
+            models: [
+              {
+                modelId: 'claude-opus-3',
+                name: 'Opus 3',
+                group: 'Claude Web',
+                capabilities: {
+                  chat: true,
+                  vision: true,
+                  imageGeneration: false,
+                  reasoning: false,
+                },
+              },
+              {
+                modelId: 'claude-sonnet-5',
+                name: 'Sonnet 5',
+                group: 'Claude Web',
+                capabilities: { chat: true, vision: true, imageGeneration: false, reasoning: true },
+                reasoningEfforts: ['default', 'low', 'medium', 'high'],
+              },
+            ],
+            selectedModelIds: ['claude-opus-3', 'claude-sonnet-5'],
+          },
+        ],
+        favorites: [],
+        lastUsedModel: null,
+        quickModel: null,
+        titleGenerationEnabled: true,
+      }),
+    )
+    const service = new ProviderRegistry(rootPath, createLogger(), {})
+    service.registerFamily({
+      type: 'claude-web',
+      fetchCatalog: async () => [
+        {
+          modelId: 'claude-sonnet-5',
+          name: 'Sonnet 5',
+          group: 'Claude Web',
+          capabilities: { chat: true, vision: true, imageGeneration: false, reasoning: true },
+          reasoningEfforts: ['default', 'low', 'medium', 'high', 'xhigh', 'max', 'off'],
+        },
+      ],
+    })
+    await service.initialize()
+
+    const editor = service.getEditorData('claude-web')
+    expect(editor.catalogModels.map((model) => model.modelId)).toEqual(['claude-sonnet-5'])
+    expect(editor.selectedModelIds).toEqual(['claude-sonnet-5'])
+    expect(
+      editor.catalogModels.find((model) => model.modelId === 'claude-sonnet-5')?.reasoningEfforts,
+    ).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max', 'off'])
   })
 
   it('configures the OpenRouter batch endpoint for existing built-in providers once', async () => {
@@ -310,7 +655,7 @@ describe('ProviderRegistry', () => {
     expect(models).toMatchObject([{ modelId: 'vendor/model-one', group: 'vendor' }])
   })
 
-  it('classifies Claude, Fable, and Kimi models as reasoning models with effort options', async () => {
+  it('does not infer reasoning options from OpenAI-compatible model names', async () => {
     const fetchMock = vi.fn(
       async () =>
         new Response(
@@ -337,22 +682,60 @@ describe('ProviderRegistry', () => {
     /** Finds one normalized catalog model by its provider model identifier. */
     const find = (modelId: string): ProviderModelDefinition | undefined =>
       models.find((model) => model.modelId === modelId)
-    expect(find('anthropic/claude-opus-5')?.capabilities.reasoning).toBe(true)
-    expect(find('anthropic/claude-fable-5')?.capabilities.reasoning).toBe(true)
-    // The refactored Kimi predicate requires a doubled 'kimi-k' prefix, so K3
-    // keeps its effort options through thinking-token detection without the flag.
+    expect(find('anthropic/claude-opus-5')?.capabilities.reasoning).toBe(false)
+    expect(find('anthropic/claude-fable-5')?.capabilities.reasoning).toBe(false)
     expect(find('moonshotai/kimi-k3')?.capabilities.reasoning).toBe(false)
     expect(find('openai/gpt-4o')?.capabilities.reasoning).toBe(false)
-    expect(find('anthropic/claude-opus-5')?.reasoningEfforts).toEqual([
-      'default',
-      'off',
-      'low',
-      'medium',
-      'high',
-      'xhigh',
-    ])
-    expect(find('moonshotai/kimi-k3')?.reasoningEfforts).toEqual(['default', 'off', 'auto'])
+    expect(find('anthropic/claude-opus-5')?.reasoningEfforts).toBeUndefined()
+    expect(find('moonshotai/kimi-k3')?.reasoningEfforts).toBeUndefined()
     expect(find('openai/gpt-4o')?.reasoningEfforts).toBeUndefined()
+  })
+
+  it('fills reasoning levels from OpenRouter supported_efforts metadata', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: 'openai/gpt-6-astra',
+                  name: 'OpenAI: GPT-6 Astra',
+                  reasoning: {
+                    mandatory: true,
+                    supported_efforts: ['max', 'xhigh', 'high', 'medium', 'low', 'bogus level!'],
+                  },
+                },
+                { id: 'plain/model', reasoning: { mandatory: false } },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    )
+
+    const models = await registry.fetchModelCatalog({
+      type: 'openai-compatible',
+      name: 'Router',
+      baseUrl: 'https://openrouter.example/api/v1',
+      apiKey: '',
+    })
+
+    /** Finds one normalized catalog model by its provider model identifier. */
+    const find = (modelId: string): ProviderModelDefinition | undefined =>
+      models.find((model) => model.modelId === modelId)
+    expect(find('openai/gpt-6-astra')?.capabilities.reasoning).toBe(true)
+    expect(find('openai/gpt-6-astra')?.reasoningEfforts).toEqual([
+      'default',
+      'max',
+      'xhigh',
+      'high',
+      'medium',
+      'low',
+    ])
+    expect(find('plain/model')?.capabilities.reasoning).toBe(false)
+    expect(find('plain/model')?.reasoningEfforts).toBeUndefined()
   })
 
   it('assigns the openai-compatible type to legacy provider files without a type field', async () => {
@@ -488,18 +871,18 @@ describe('ProviderRegistry', () => {
   it('resolves a selected model with its plaintext key for chat requests', () => {
     const resolved = registry.resolve({
       providerId: 'opencode',
-      modelId: 'muse-spark-1.2-contributor-free',
+      modelId: 'deepseek/deepseek-v3-free',
     })
 
     expect(resolved.apiKey).toBe('public')
     expect(resolved.provider).toMatchObject({ id: 'opencode', enabled: true })
-    expect(resolved.modelDefinition).toMatchObject({ modelId: 'muse-spark-1.2-contributor-free' })
+    expect(resolved.modelDefinition).toMatchObject({ modelId: 'deepseek/deepseek-v3-free' })
   })
 
   it('persists favorites and the last-used model for selected models', async () => {
     const reference: ModelReference = {
       providerId: 'opencode',
-      modelId: 'muse-spark-1.2-contributor-free',
+      modelId: 'deepseek/deepseek-v3-free',
     }
     await registry.setFavorite(reference, true)
     expect(registry.snapshot().favorites).toEqual([reference])

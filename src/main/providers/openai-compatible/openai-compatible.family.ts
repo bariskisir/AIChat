@@ -9,7 +9,7 @@ import type { ProviderFamily } from '../provider.family'
 import {
   inferCapabilities,
   inferModelGroup,
-  inferReasoningEffortsFromPayload,
+  parseCatalogReasoningEfforts,
 } from '../model.qualification'
 import type LoggerService from '../../logging/logger.service'
 
@@ -68,13 +68,9 @@ export class OpenAiCompatibleFamily implements ProviderFamily {
       discoveredModel = true
       const name = typeof raw.name === 'string' ? raw.name : modelId
       const ownedBy = typeof raw.owned_by === 'string' ? raw.owned_by : undefined
-      const providerLike = {
-        id: connection.id,
-        name: connection.name,
-        baseUrl: connection.baseUrl,
-      }
-      const capabilities = inferCapabilities(modelId, providerLike, name)
-      const reasoningEfforts = inferReasoningEffortsFromPayload(raw, modelId, providerLike)
+      const capabilities = inferCapabilities(modelId)
+      const reasoningEfforts = parseCatalogReasoningEfforts(raw)
+      if (reasoningEfforts) capabilities.reasoning = true
       unique.set(modelId, {
         modelId,
         name,

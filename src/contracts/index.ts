@@ -38,7 +38,11 @@ export type {
   DeleteConversationResult,
   WebSearchMode,
 } from './domain/conversations'
-export { PROVIDER_TYPES } from './domain/providers'
+export {
+  getProviderReasoningEfforts,
+  OPENAI_COMPATIBLE_REASONING_EFFORTS,
+  PROVIDER_TYPES,
+} from './domain/providers'
 export type {
   ModelCapabilities,
   ModelDescriptor,
@@ -54,7 +58,7 @@ export type {
   ProviderUsageState,
   ProviderUsageWindow,
 } from './domain/providers'
-export { REASONING_EFFORTS } from './domain/reasoning'
+export { REASONING_EFFORTS, isReasoningEffortValue } from './domain/reasoning'
 export type { ReasoningEffort } from './domain/reasoning'
 export type { DesktopPlatform, LogRecord } from './domain/runtime'
 export type { UpdateStateEvent } from './domain/updates'

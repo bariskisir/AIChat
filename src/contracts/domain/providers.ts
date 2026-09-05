@@ -8,6 +8,32 @@ export const PROVIDER_TYPES = ['openai-compatible', 'chatgpt', 'claude-web'] as 
 /** Identifies one provider protocol family. */
 export type ProviderType = (typeof PROVIDER_TYPES)[number]
 
+/** Lists the reasoning controls offered by every OpenAI-compatible provider. */
+export const OPENAI_COMPATIBLE_REASONING_EFFORTS: ReasoningEffort[] = [
+  'off',
+  'default',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+]
+
+/**
+ * Resolves reasoning controls from the provider family and server-supplied catalog
+ * metadata. OpenAI-compatible providers always offer the fixed list; server levels
+ * absent from it (e.g. OpenRouter `max`) are appended at the end.
+ */
+export const getProviderReasoningEfforts = (
+  providerType: ProviderType | undefined,
+  serverEfforts: ReasoningEffort[] | undefined,
+): ReasoningEffort[] => {
+  if (providerType !== 'openai-compatible') return [...(serverEfforts ?? [])]
+  const extras = [...new Set(serverEfforts ?? [])].filter(
+    (effort) => !OPENAI_COMPATIBLE_REASONING_EFFORTS.includes(effort),
+  )
+  return [...OPENAI_COMPATIBLE_REASONING_EFFORTS, ...extras]
+}
+
 /** A stable provider/model pair that remains unambiguous across catalogs. */
 export interface ModelReference {
   providerId: string

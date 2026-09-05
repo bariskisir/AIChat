@@ -10,7 +10,7 @@ import type {
   ReasoningEffort,
   TokenUsage,
 } from '@shared/index'
-import { REASONING_EFFORTS } from '@shared/index'
+import { isReasoningEffortValue } from '@shared/index'
 
 /** ChatGPT OAuth and backend endpoint inventory. */
 export const CHATGPT_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
@@ -42,10 +42,12 @@ const numericValue = (value: unknown): number | null => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** Maps this app's effort vocabulary to the Responses API reasoning effort. */
-export const mapResponsesEffort = (
-  effort: ReasoningEffort,
-): 'off' | 'low' | 'medium' | 'high' | 'xhigh' | null => {
+/**
+ * Maps this app's effort vocabulary to the Responses API reasoning effort.
+ * Server-advertised extras (e.g. `max`, `ultra`) pass through verbatim because
+ * the backend itself reported them as supported.
+ */
+export const mapResponsesEffort = (effort: ReasoningEffort): string | null => {
   switch (effort) {
     case 'off':
       return 'off'
@@ -58,8 +60,11 @@ export const mapResponsesEffort = (
       return 'high'
     case 'xhigh':
       return 'xhigh'
-    default:
+    case 'default':
+    case 'auto':
       return null
+    default:
+      return effort
   }
 }
 
@@ -249,10 +254,9 @@ export const normalizeChatGptModels = (payload: unknown): ProviderModelDefinitio
             (option
               ? stringValue(option.effort) || stringValue(option.value) || stringValue(option.name)
               : '')
-          const normalized = raw === 'none' ? 'off' : raw === 'max' ? 'xhigh' : raw
-          if (!normalized || !(REASONING_EFFORTS as readonly string[]).includes(normalized))
-            return []
-          return [normalized as ReasoningEffort]
+          const normalized = raw === 'none' ? 'off' : raw
+          if (!isReasoningEffortValue(normalized)) return []
+          return [normalized]
         }),
       ),
     ]

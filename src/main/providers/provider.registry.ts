@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path'
 import {
   PROVIDER_TYPES,
   REASONING_EFFORTS,
+  isReasoningEffortValue,
   type ModelDescriptor,
   type ModelReference,
   type ProviderAuthStatus,
@@ -20,7 +21,7 @@ import {
   type ReasoningEffort,
 } from '@shared/index'
 import { z } from 'zod'
-import { getModelSupportedReasoningEffortOptions, isReasoningModel } from '../reasoning/index'
+import { parseCatalogReasoningEfforts } from './model.qualification'
 import type LoggerService from '../logging/logger.service'
 import { normalizeOpenAiBaseUrl } from './openai-compatible/openai-compatible.base-url'
 import type { ProviderFamily } from './provider.family'
@@ -87,6 +88,20 @@ const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
       if (!provider.batchUrl) provider.batchUrl = 'https://openrouter.ai/api/beta/batches'
       if (!provider.batchPollIntervalSeconds) provider.batchPollIntervalSeconds = 30
       if (!provider.batchModelRegex) provider.batchModelRegex = 'batch'
+    }
+  },
+  /**
+   * Migration 4: drops model-name-derived reasoning metadata from OpenAI-compatible
+   * catalogs. Server levels (e.g. OpenRouter `supported_efforts`) are re-fetched
+   * once at startup by the upgrade refresh.
+   */
+  (state) => {
+    for (const provider of state.providers) {
+      if (provider.type !== 'openai-compatible') continue
+      for (const model of provider.models) {
+        delete model.reasoningEfforts
+        model.capabilities.reasoning = false
+      }
     }
   },
 ]
@@ -158,6 +173,9 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
   },
 ]
 
+/** Accepts known levels plus future server-supplied extras such as `max`. */
+const reasoningEffortSchema = z.union([z.enum(REASONING_EFFORTS), z.string().min(1).max(50)])
+
 const referenceSchema = z.object({ providerId: z.string().min(1), modelId: z.string().min(1) })
 const capabilitiesSchema = z.object({
   chat: z.boolean(),
@@ -171,7 +189,7 @@ const modelSchema = z.object({
   group: z.string().min(1).max(200),
   ownedBy: z.string().max(200).optional(),
   capabilities: capabilitiesSchema,
-  reasoningEfforts: z.array(z.enum(REASONING_EFFORTS)).optional(),
+  reasoningEfforts: z.array(reasoningEffortSchema).optional(),
 })
 const providerTypeSchema = z.enum(PROVIDER_TYPES)
 const customHeadersSchema = z.record(
@@ -282,53 +300,26 @@ const inferModelGroup = (modelId: string, ownedBy?: string): string => {
   const pathOwner = modelId.includes('/') ? modelId.split('/')[0] : undefined
   if (pathOwner) return pathOwner
   if (ownedBy?.trim()) return ownedBy.trim()
-  const id = modelId.toLowerCase()
-  if (/claude/.test(id)) return 'Anthropic'
-  if (/^(gpt|chatgpt|o\d|text-|dall-e)/.test(id)) return 'OpenAI'
-  if (/gemini|gemma/.test(id)) return 'Google'
-  if (/deepseek/.test(id)) return 'DeepSeek'
-  if (/qwen|qwq/.test(id)) return 'Qwen'
-  if (/llama/.test(id)) return 'Meta'
-  if (/mistral|mixtral|codestral/.test(id)) return 'Mistral'
   return 'Other'
 }
 
-/** Returns model capabilities using conservative OpenAI-compatible naming conventions. */
-const inferCapabilities = (
-  modelId: string,
-  provider?: { id?: string | undefined; name?: string | undefined; baseUrl?: string | undefined },
-  modelName?: string | undefined,
-): ModelDescriptor['capabilities'] => {
+/** Returns non-reasoning capabilities using conservative OpenAI-compatible naming conventions. */
+const inferCapabilities = (modelId: string): ProviderModelDefinition['capabilities'] => {
   const id = modelId.toLowerCase()
-  const nonChat = /(embedding|embed-|rerank|moderation|whisper|tts|speech)/.test(id)
+  const nonChat = /(embedding|embed|rerank|moderation|audio|speech)/.test(id)
   return {
-    chat: !nonChat && !/(dall-e|image-)/.test(id),
-    vision: /(vision|vl|gpt-4o|gpt-4\.1|gpt-6|gemini|claude-3|claude-[4-9]|qwen.*vl)/.test(id),
-    imageGeneration: /(dall-e|gpt-image|image-generation|flux)/.test(id),
-    reasoning: isReasoningModel(
-      { id: modelId, ...(modelName ? { name: modelName } : {}) },
-      provider,
-    ),
+    chat: !nonChat && !/image/.test(id),
+    vision: /(vision|multimodal)/.test(id),
+    imageGeneration: /image/.test(id),
+    reasoning: false,
   }
 }
 
-/** Unions persisted reasoning choices with the static port so stale catalogs gain new levels. */
-const mergeReasoningEfforts = (
-  stored: unknown,
-  inferred: ReasoningEffort[] | undefined,
-): ReasoningEffort[] | undefined => {
-  const combined: ReasoningEffort[] = []
-  /** Adds one valid effort without duplicating earlier values. */
-  const push = (value: unknown): void => {
-    if (typeof value !== 'string') return
-    if (!REASONING_EFFORTS.includes(value as ReasoningEffort)) return
-    if (!combined.includes(value as ReasoningEffort)) combined.push(value as ReasoningEffort)
-  }
-  if (Array.isArray(stored)) for (const value of stored) push(value)
-  inferred?.forEach(push)
-  if (combined.length === 0) return undefined
-  if (!combined.includes('default')) return combined
-  return ['default', ...combined.filter((value) => value !== 'default')]
+/** Retains only valid server-supplied reasoning choices while removing duplicates. */
+const normalizeServerReasoningEfforts = (stored: unknown): ReasoningEffort[] | undefined => {
+  if (!Array.isArray(stored)) return undefined
+  const efforts = [...new Set(stored.filter((value) => isReasoningEffortValue(value)))]
+  return efforts.length > 0 ? efforts : undefined
 }
 
 /** Normalizes provider documents with model groups and explicit model selections. */
@@ -349,6 +340,12 @@ const normalizeProviderFile = (input: unknown): unknown => {
         .map((item) => {
           if (!item || typeof item !== 'object' || Array.isArray(item)) return item
           const provider = item as Record<string, unknown>
+          const storedType = provider.type
+          const providerType =
+            typeof storedType === 'string' &&
+            (PROVIDER_TYPES as readonly string[]).includes(storedType)
+              ? (storedType as ProviderType)
+              : 'openai-compatible'
           const models = Array.isArray(provider.models)
             ? provider.models.map((itemModel) => {
                 if (!itemModel || typeof itemModel !== 'object' || Array.isArray(itemModel))
@@ -356,19 +353,18 @@ const normalizeProviderFile = (input: unknown): unknown => {
                 const model = itemModel as Record<string, unknown>
                 const modelId = typeof model.modelId === 'string' ? model.modelId : ''
                 const ownedBy = typeof model.ownedBy === 'string' ? model.ownedBy : undefined
-                const providerLike = {
-                  id: typeof provider.id === 'string' ? provider.id : undefined,
-                  name: typeof provider.name === 'string' ? provider.name : undefined,
-                  baseUrl: typeof provider.baseUrl === 'string' ? provider.baseUrl : undefined,
-                }
-                const modelName = typeof model.name === 'string' ? model.name : undefined
-                const inferredCapabilities = inferCapabilities(modelId, providerLike, modelName)
+                const inferredCapabilities = inferCapabilities(modelId)
                 const storedCapabilities =
                   model.capabilities &&
                   typeof model.capabilities === 'object' &&
                   !Array.isArray(model.capabilities)
                     ? (model.capabilities as Record<string, unknown>)
                     : {}
+                const {
+                  reasoningEfforts: storedReasoningEfforts,
+                  ...modelWithoutReasoningEfforts
+                } = model
+                const reasoningEfforts = normalizeServerReasoningEfforts(storedReasoningEfforts)
                 const capabilities = {
                   chat:
                     typeof storedCapabilities.chat === 'boolean'
@@ -383,22 +379,16 @@ const normalizeProviderFile = (input: unknown): unknown => {
                       ? storedCapabilities.imageGeneration
                       : inferredCapabilities.imageGeneration,
                   reasoning:
-                    storedCapabilities.reasoning === true || inferredCapabilities.reasoning,
+                    reasoningEfforts !== undefined || storedCapabilities.reasoning === true,
                 }
                 return {
-                  ...model,
+                  ...modelWithoutReasoningEfforts,
                   capabilities,
                   group:
                     typeof model.group === 'string' && model.group.trim()
                       ? model.group
                       : inferModelGroup(modelId, ownedBy),
-                  reasoningEfforts: mergeReasoningEfforts(
-                    model.reasoningEfforts,
-                    getModelSupportedReasoningEffortOptions(
-                      { id: modelId, name: modelName },
-                      providerLike,
-                    ),
-                  ),
+                  ...(reasoningEfforts ? { reasoningEfforts } : {}),
                 }
               })
             : []
@@ -413,15 +403,10 @@ const normalizeProviderFile = (input: unknown): unknown => {
           const selectedModelIds = Array.isArray(provider.selectedModelIds)
             ? provider.selectedModelIds
             : inferredIds
-          const storedType = provider.type
           return {
             id: provider.id,
             name: provider.name,
-            type:
-              typeof storedType === 'string' &&
-              (PROVIDER_TYPES as readonly string[]).includes(storedType)
-                ? (storedType as ProviderType)
-                : 'openai-compatible',
+            type: providerType,
             baseUrl: provider.baseUrl ?? '',
             batchUrl: typeof provider.batchUrl === 'string' ? provider.batchUrl : '',
             batchPollIntervalSeconds:
@@ -542,12 +527,84 @@ export class ProviderRegistry {
     }
     const ollama = current.providers.find((provider) => provider.id === 'ollama')
     if (ollama?.builtin && ollama.name === 'Ollama') ollama.name = 'Ollama Local'
+    const migrationFrom = current.migrationVersion
     this.applyMigrations(current)
     if (isCleanInstall) this.importEnvironmentApiKeys(current.providers)
     this.state = current
     if (isCleanInstall) await this.initializeOpenCodeDefaults()
+    else if (migrationFrom < 4 && current.migrationVersion >= 4) {
+      await this.refreshUpgradedCatalogs(current)
+    }
     this.removeInvalidPreferences()
     await this.persist()
+  }
+
+  /**
+   * Re-fetches catalogs once after the reasoning migration so server-supplied
+   * levels appear without a manual refresh. OpenAI-compatible models only gain
+   * levels (membership untouched); ChatGPT and Claude Web models additionally
+   * drop entries the server no longer lists (e.g. hidden placeholders), since
+   * their fetch filters already exclude them. Failures are logged and keep old
+   * data.
+   */
+  private async refreshUpgradedCatalogs(state: ProviderFile): Promise<void> {
+    /** Enriches one provider's stored models with freshly fetched server levels. */
+    const refreshProvider = async (provider: ProviderRecord): Promise<void> => {
+      if (
+        provider.type !== 'openai-compatible' &&
+        provider.type !== 'chatgpt' &&
+        provider.type !== 'claude-web'
+      )
+        return
+      if (!provider.enabled || provider.models.length === 0) return
+      if (provider.type === 'openai-compatible' && !provider.baseUrl) return
+      try {
+        const connection: ProviderConnectionInput = {
+          id: provider.id,
+          type: provider.type,
+          name: provider.name,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          ...(Object.keys(provider.customHeaders).length > 0
+            ? { customHeaders: provider.customHeaders }
+            : {}),
+        }
+        const family = this.familyFor(provider.type)
+        const fetched = family
+          ? await family.fetchCatalog(connection)
+          : await this.fetchModels(connection)
+        if (fetched.length === 0) return
+        const fresh = new Map(fetched.map((model) => [model.modelId, model]))
+        let enriched = 0
+        for (const stored of provider.models) {
+          const match = fresh.get(stored.modelId)
+          if (!match?.reasoningEfforts) continue
+          stored.reasoningEfforts = match.reasoningEfforts
+          stored.capabilities.reasoning = true
+          enriched += 1
+        }
+        let pruned = 0
+        if (provider.type === 'chatgpt' || provider.type === 'claude-web') {
+          const listed = new Set(fetched.map((model) => model.modelId))
+          const before = provider.models.length
+          provider.models = provider.models.filter((model) => listed.has(model.modelId))
+          provider.selectedModelIds = provider.selectedModelIds.filter((id) => listed.has(id))
+          pruned = before - provider.models.length
+        }
+        if (enriched > 0 || pruned > 0) {
+          this.logger.info(
+            'ProviderRegistry',
+            `Upgraded catalog refresh updated ${provider.id}: ${enriched} enriched, ${pruned} removed.`,
+          )
+        }
+      } catch {
+        this.logger.info(
+          'ProviderRegistry',
+          `Upgraded catalog refresh skipped for ${provider.id}; manual refresh still applies server levels.`,
+        )
+      }
+    }
+    await Promise.all(state.providers.map((provider) => refreshProvider(provider)))
   }
 
   /** Applies every pending provider-document migration in order and records the new version. */
@@ -691,6 +748,9 @@ export class ProviderRegistry {
     const selectedModelIds = [...new Set(parsed.selectedModelIds)].filter((id) =>
       uniqueModels.has(id),
     )
+    const selectedModels = [...uniqueModels.values()].filter((model) =>
+      selectedModelIds.includes(model.modelId),
+    )
     const isOpenRouter = existing?.id === 'openrouter'
     const candidate: ProviderRecord = {
       id: existing?.id ?? randomUUID(),
@@ -708,9 +768,18 @@ export class ProviderRegistry {
       builtin: existing?.builtin ?? false,
       enabled: existing?.enabled ?? true,
       apiKey: parsed.type === 'openai-compatible' ? (parsed.apiKey ?? '') : '',
-      models: [...uniqueModels.values()].filter((model) =>
-        selectedModelIds.includes(model.modelId),
-      ),
+      models: selectedModels.map((model) => {
+        const reasoningEfforts = normalizeServerReasoningEfforts(model.reasoningEfforts)
+        const { reasoningEfforts: _dropped, ...rest } = model
+        if (parsed.type !== 'openai-compatible') {
+          return reasoningEfforts ? { ...rest, reasoningEfforts } : { ...rest }
+        }
+        return {
+          ...rest,
+          capabilities: { ...model.capabilities, reasoning: reasoningEfforts !== undefined },
+          ...(reasoningEfforts ? { reasoningEfforts } : {}),
+        }
+      }),
       selectedModelIds,
     }
     const index = state.providers.findIndex((provider) => provider.id === candidate.id)
@@ -925,16 +994,9 @@ export class ProviderRegistry {
       discoveredModel = true
       const name = typeof raw.name === 'string' ? raw.name : modelId
       const ownedBy = typeof raw.owned_by === 'string' ? raw.owned_by : undefined
-      const capabilities = inferCapabilities(
-        modelId,
-        { id: provider.id, name: provider.name, baseUrl: provider.baseUrl },
-        name,
-      )
-      const reasoningEfforts = this.inferReasoningEfforts(raw, modelId, {
-        id: provider.id,
-        name: provider.name,
-        baseUrl: provider.baseUrl,
-      })
+      const capabilities = inferCapabilities(modelId)
+      const reasoningEfforts = parseCatalogReasoningEfforts(raw)
+      if (reasoningEfforts) capabilities.reasoning = true
       unique.set(modelId, {
         modelId,
         name,
@@ -950,40 +1012,6 @@ export class ProviderRegistry {
     if (!discoveredModel) throw new Error('Provider returned no models.')
     return [...unique.values()].sort(
       (left, right) => left.group.localeCompare(right.group) || left.name.localeCompare(right.name),
-    )
-  }
-
-  /** Builds reasoning choices from explicit metadata and known model families. */
-  private inferReasoningEfforts(
-    raw: Record<string, unknown>,
-    modelId: string,
-    provider: { id?: string | undefined; name?: string | undefined; baseUrl?: string | undefined },
-  ): ReasoningEffort[] | undefined {
-    const source = raw.reasoning_efforts ?? raw.reasoningEfforts
-    if (Array.isArray(source)) {
-      const valid = [
-        ...new Set(
-          source.flatMap((value): ReasoningEffort[] => {
-            if (typeof value !== 'string') return []
-            const normalized =
-              value === 'none'
-                ? 'off'
-                : value === 'max' || value === 'extra_high' || value === 'extra-high'
-                  ? 'xhigh'
-                  : value
-            return REASONING_EFFORTS.includes(normalized as ReasoningEffort)
-              ? [normalized as ReasoningEffort]
-              : []
-          }),
-        ),
-      ]
-      if (valid.length > 0) {
-        return ['default', ...valid.filter((value) => value !== 'default')]
-      }
-    }
-    return getModelSupportedReasoningEffortOptions(
-      { id: modelId, name: typeof raw.name === 'string' ? raw.name : undefined },
-      provider,
     )
   }
 
@@ -1007,8 +1035,7 @@ export class ProviderRegistry {
       const freeChatModels = models.filter(
         (model) => model.capabilities.chat && searchableText(model).includes('free'),
       )
-      const selected =
-        freeChatModels.find((model) => searchableText(model).includes('muse')) ?? freeChatModels[0]
+      const selected = freeChatModels[0]
       if (!selected) {
         this.logger.warn(
           'ProviderRegistry',

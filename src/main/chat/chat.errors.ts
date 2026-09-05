@@ -61,7 +61,7 @@ export const parseTokenUsage = (payload: Record<string, unknown>): TokenUsage | 
   }
 }
 
-/** Reads reasoning text from common OpenAI, DeepSeek, OpenRouter, Kimi, and Anthropic fields. */
+/** Reads reasoning text from common compatible streaming fields. */
 export const readReasoningDelta = (record: Record<string, unknown>): string => {
   if (typeof record.reasoning_content === 'string') return record.reasoning_content
   if (typeof record.reasoningContent === 'string') return record.reasoningContent

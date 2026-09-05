@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button, Popover, Tooltip } from 'antd'
 import { Check } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { ReasoningEffort } from '@shared/index'
+import { REASONING_EFFORTS, type ReasoningEffort } from '@shared/index'
 import {
   MdiLightbulbAutoOutline,
   MdiLightbulbOffOutline,
@@ -44,8 +44,18 @@ const reasoningIcon = (effort: ReasoningEffort, size = 18): React.JSX.Element =>
       return <MdiLightbulbOn {...props} />
     case 'auto':
       return <MdiLightbulbAutoOutline {...props} />
+    default:
+      return <MdiLightbulbOn {...props} />
   }
 }
+
+/** Returns true for levels with bundled labels and descriptions. */
+const isKnownEffort = (effort: ReasoningEffort): boolean =>
+  (REASONING_EFFORTS as readonly string[]).includes(effort)
+
+/** Capitalizes the first letter of server-supplied levels shown without translations. */
+const formatExtraEffort = (effort: ReasoningEffort): string =>
+  effort.length > 0 ? `${effort.charAt(0).toUpperCase()}${effort.slice(1)}` : effort
 
 /** Lets the user inspect and select the active model's supported reasoning effort. */
 const ReasoningControl = ({
@@ -78,8 +88,14 @@ const ReasoningControl = ({
         >
           <span className={styles.choiceIcon}>{reasoningIcon(option, 16)}</span>
           <span className={styles.choiceText}>
-            <strong>{t(`chat.reasoningLevels.${option}`)}</strong>
-            <small>{t(`chat.reasoningDescriptions.${option}`)}</small>
+            <strong>
+              {isKnownEffort(option)
+                ? t(`chat.reasoningLevels.${option}`)
+                : formatExtraEffort(option)}
+            </strong>
+            {isKnownEffort(option) ? (
+              <small>{t(`chat.reasoningDescriptions.${option}`)}</small>
+            ) : null}
           </span>
           {value === option && <Check size={15} />}
         </button>
