@@ -303,7 +303,7 @@ const inferCapabilities = (
   const nonChat = /(embedding|embed-|rerank|moderation|whisper|tts|speech)/.test(id)
   return {
     chat: !nonChat && !/(dall-e|image-)/.test(id),
-    vision: /(vision|vl|gpt-4o|gpt-4\.1|gemini|claude-3|claude-[4-9]|qwen.*vl)/.test(id),
+    vision: /(vision|vl|gpt-4o|gpt-4\.1|gpt-6|gemini|claude-3|claude-[4-9]|qwen.*vl)/.test(id),
     imageGeneration: /(dall-e|gpt-image|image-generation|flux)/.test(id),
     reasoning: isReasoningModel(
       { id: modelId, ...(modelName ? { name: modelName } : {}) },

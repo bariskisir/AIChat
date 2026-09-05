@@ -1182,14 +1182,16 @@ export default class ChatService {
       ...(isKimiModel ? {} : { temperature: 0.2 }),
       ...(reasoningParameters ?? {}),
     }
-    // OpenAI reasoning models (o1/o3/o4-mini/gpt-5 non-chat) require max_completion_tokens instead of max_tokens.
+    // OpenAI reasoning models (o1/o3/o4-mini/gpt-5/gpt-6 non-chat) require max_completion_tokens instead of max_tokens.
     const isOpenAIReasoningModelId = (id: string): boolean => {
       const lower = id.toLowerCase()
+      const base = lower.split('/').at(-1) ?? lower
       return (
-        lower.startsWith('o1') ||
-        lower.startsWith('o3') ||
-        lower.startsWith('o4-mini') ||
-        (lower.startsWith('gpt-5') && !lower.startsWith('gpt-5-chat'))
+        base.startsWith('o1') ||
+        base.startsWith('o3') ||
+        base.startsWith('o4-mini') ||
+        (base.startsWith('gpt-5') && !base.startsWith('gpt-5-chat')) ||
+        (base.startsWith('gpt-6') && !base.startsWith('gpt-6-chat'))
       )
     }
     if (isOpenAIReasoningModelId(modelId) && body.max_tokens != null) {

@@ -1,4 +1,4 @@
-/** OpenAI-family reasoning-model detection predicates (o-series, GPT-5, GPT-OSS). */
+/** OpenAI-family reasoning-model detection predicates (o-series, GPT-5, GPT-6, GPT-OSS). */
 
 import { detectProviderKind, getLowerBaseModelName } from '../reasoning.shared'
 import type { ReasoningModelLike, ReasoningProviderLike } from '../reasoning.types'
@@ -27,14 +27,15 @@ const hasGpt5BaseSeries = (modelId: string): boolean => {
 export const isOpenAIModel = (model: ReasoningModelLike): boolean =>
   GPT_WORD_PATTERN.test(getLowerBaseModelName(model.id)) || isOpenAIReasoningModel(model)
 
-/** OpenAI reasoning models (o1 without preview/mini, o3, o4, gpt-oss, non-chat GPT-5). */
+/** OpenAI reasoning models (o1 without preview/mini, o3, o4, gpt-oss, non-chat GPT-5/6). */
 export const isSupportedReasoningEffortOpenAIModel = (model: ReasoningModelLike): boolean => {
   const modelId = getLowerBaseModelName(model.id)
   return (
     isO1WithoutLegacyVariants(modelId) ||
     /o[34]/.test(modelId) ||
     /gpt-oss/.test(modelId) ||
-    (isGPT5FamilyModel(model) && !modelId.includes('chat'))
+    (isGPT5FamilyModel(model) && !modelId.includes('chat')) ||
+    (isGPT6FamilyModel(model) && !modelId.includes('chat'))
   )
 }
 
@@ -74,8 +75,13 @@ export const isGPT51SeriesModel = (model: ReasoningModelLike): boolean =>
 export const isGPT52SeriesModel = (model: ReasoningModelLike): boolean =>
   /gpt-5\.2/.test(getLowerBaseModelName(model.id))
 
-/** GPT-5.x models that accept reasoning_effort 'none'. */
+/** GPT-6 family (gpt-6, gpt-6-astra, future gpt-6.x variants). */
+export const isGPT6FamilyModel = (model: ReasoningModelLike): boolean =>
+  /gpt-6/.test(getLowerBaseModelName(model.id))
+
+/** GPT-5.x models that accept reasoning_effort 'none' (GPT-6 never does: API returns 400). */
 export function isSupportNoneReasoningEffortModel(model: ReasoningModelLike): boolean {
+  if (isGPT6FamilyModel(model)) return false
   const modelId = getLowerBaseModelName(model.id)
   if (!isGPT5FamilyModel(model) || isGPT5SeriesModel(model)) return false
   if (modelId.includes('chat') || modelId.includes('pro')) return false

@@ -97,6 +97,7 @@ export {
   isGPT52SeriesModel,
   isGPT5ProModel,
   isGPT5SeriesModel,
+  isGPT6FamilyModel,
   isOpenAIDeepResearchModel,
   isOpenAIModel,
   isOpenAIOpenWeightModel,

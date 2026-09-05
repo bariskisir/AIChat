@@ -44,6 +44,7 @@ import {
   isGPT52SeriesModel,
   isGPT5FamilyModel,
   isGPT5SeriesModel,
+  isGPT6FamilyModel,
   isOpenAIDeepResearchModel,
   isOpenAIOpenWeightModel,
   isSupportedReasoningEffortOpenAIModel,
@@ -70,6 +71,7 @@ export const MODEL_SUPPORTED_REASONING_EFFORT = {
   gpt5_2: ['none', 'low', 'medium', 'high', 'xhigh'] as const,
   gpt5pro: ['high'] as const,
   gpt52pro: ['medium', 'high', 'xhigh'] as const,
+  gpt6: ['low', 'medium', 'high', 'xhigh'] as const,
   gpt_oss: ['low', 'medium', 'high'] as const,
   grok: ['low', 'high'] as const,
   grok4_fast: ['auto'] as const,
@@ -118,6 +120,7 @@ export const MODEL_SUPPORTED_OPTIONS = {
   gpt5_2: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gpt5_2] as const,
   gpt5_1_codex_max: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gpt5_1_codex_max] as const,
   gpt52pro: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gpt52pro] as const,
+  gpt6: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gpt6] as const,
   gpt_oss: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.gpt_oss] as const,
   grok: ['default', ...MODEL_SUPPORTED_REASONING_EFFORT.grok] as const,
   grok4_fast: ['default', 'none', ...MODEL_SUPPORTED_REASONING_EFFORT.grok4_fast] as const,
@@ -201,6 +204,8 @@ const getThinkModelTypeId = (
         thinkingModelType = 'gpt5_2'
       }
     }
+  } else if (isGPT6FamilyModel(model)) {
+    thinkingModelType = 'gpt6'
   } else if (isOpenAIOpenWeightModel(model)) {
     thinkingModelType = 'gpt_oss'
   } else if (isSupportedReasoningEffortOpenAIModel(model)) {
