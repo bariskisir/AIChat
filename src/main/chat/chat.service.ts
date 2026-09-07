@@ -43,6 +43,10 @@ const MAX_BATCH_NOT_FOUND_RETRIES = 6
 /** Removes a batch routing suffix from the model sent inside a batch job. */
 const batchModelId = (modelId: string): string => modelId.replace(/:batch$/i, '')
 
+/** Maps one local conversation to the stable OpenCode session identifier for its chat. */
+export const opencodeSessionId = (conversationId: string): string =>
+  `ses_${conversationId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`.slice(0, 30)
+
 /** Narrows an unknown JSON value to a non-array record. */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === 'object' && !Array.isArray(value))
@@ -293,6 +297,7 @@ export default class ChatService {
           },
         ],
         AbortSignal.timeout(30_000),
+        request.conversationId,
       )
       const title = sanitizeTitle(content)
       if (title) {
@@ -329,7 +334,7 @@ export default class ChatService {
       [...request.messages].reverse().find((message) => message.role === 'user')?.content ?? ''
     let searchResult: WebSearchResult | null = null
     if (request.searchMode !== 'off') {
-      const queries = await this.generateSearchQueries(prompt, signal)
+      const queries = await this.generateSearchQueries(prompt, signal, request.conversationId)
       const settings = await this.storage.loadSettings()
       searchResult = await this.webSearch.search(
         request.searchMode,
@@ -404,7 +409,7 @@ export default class ChatService {
       throw new Error('Image generation requires an OpenAI-compatible provider.')
     let response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
       method: 'POST',
-      headers: this.headers(apiKey, provider.customHeaders),
+      headers: this.headers(provider, apiKey),
       body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
       signal,
     })
@@ -412,7 +417,7 @@ export default class ChatService {
       await response.body?.cancel().catch(() => undefined)
       response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
         method: 'POST',
-        headers: this.headers(apiKey, provider.customHeaders),
+        headers: this.headers(provider, apiKey),
         body: JSON.stringify({ model: request.model.modelId, prompt }),
         signal,
       })
@@ -533,6 +538,7 @@ export default class ChatService {
           signal,
           requestId,
           emit,
+          batchContext.conversationId,
         )
         this.compatibleEndpointCache.set(key, 'responses')
         this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
@@ -552,6 +558,7 @@ export default class ChatService {
           signal,
           requestId,
           emit,
+          batchContext.conversationId,
         )
         this.compatibleEndpointCache.set(key, 'chat')
         this.logger.info('ChatService', `Cached chat endpoint for ${provider.id}/${modelId}`)
@@ -570,6 +577,7 @@ export default class ChatService {
           signal,
           requestId,
           emit,
+          batchContext.conversationId,
         )
         this.compatibleEndpointCache.set(key, 'chat')
       } catch (error) {
@@ -588,6 +596,7 @@ export default class ChatService {
           signal,
           requestId,
           emit,
+          batchContext.conversationId,
         )
         this.compatibleEndpointCache.set(key, 'responses')
         this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
@@ -608,6 +617,7 @@ export default class ChatService {
     signal: AbortSignal,
     requestId: string,
     emit: Emit,
+    conversationId?: string | undefined,
   ): Promise<void> {
     const reasoningParameters = buildReasoningParameters(modelId, reasoningEffort, {
       id: provider.id,
@@ -626,7 +636,7 @@ export default class ChatService {
     const sendRequest = (): Promise<Response> =>
       fetch(endpoint, {
         method: 'POST',
-        headers: this.headers(apiKey, provider.customHeaders),
+        headers: this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
         signal,
       })
@@ -655,12 +665,13 @@ export default class ChatService {
     signal: AbortSignal,
     requestId: string,
     emit: Emit,
+    conversationId?: string | undefined,
   ): Promise<void> {
     const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: this.headers(apiKey, provider.customHeaders),
+      headers: this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
       signal,
     })
@@ -759,7 +770,7 @@ export default class ChatService {
     const customId = randomUUID()
     const response = await fetch(provider.batchUrl, {
       method: 'POST',
-      headers: this.headers(apiKey, provider.customHeaders),
+      headers: this.headers(provider, apiKey),
       body: JSON.stringify({
         endpoint: '/v1/chat/completions',
         model: resolvedModelId,
@@ -797,7 +808,7 @@ export default class ChatService {
       }
       await this.waitForDirectBatchPoll(signal)
       const response = await fetch(`${provider.batchUrl}/${encodeURIComponent(batchId)}`, {
-        headers: this.headers(apiKey, provider.customHeaders),
+        headers: this.headers(provider, apiKey),
         signal,
       })
       if (response.status === 404 && missingBatchRetries < MAX_BATCH_NOT_FOUND_RETRIES) {
@@ -858,7 +869,7 @@ export default class ChatService {
         modelId: job.modelId,
       })
       const response = await fetch(`${job.batchUrl}/${encodeURIComponent(job.batchId)}`, {
-        headers: this.headers(apiKey, provider.customHeaders),
+        headers: this.headers(provider, apiKey),
         signal: controller.signal,
       })
       if (response.status === 404 && job.missingPolls < MAX_BATCH_NOT_FOUND_RETRIES) {
@@ -1042,6 +1053,7 @@ export default class ChatService {
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
+    conversationId?: string | undefined,
   ): Promise<string> {
     if (provider.batchUrl && this.isBatchModel(provider, modelId)) {
       return this.completeOpenAiCompatibleBatch(
@@ -1053,7 +1065,13 @@ export default class ChatService {
       )
     }
     if (provider.id === 'opencode') {
-      return this.completeOpenAiCompatibleStream(provider, modelId, messages, signal)
+      return this.completeOpenAiCompatibleStream(
+        provider,
+        modelId,
+        messages,
+        signal,
+        conversationId,
+      )
     }
     const key = this.compatibleCacheKey(provider.id, modelId)
     const preferred = this.compatibleEndpointCache.get(key)
@@ -1119,6 +1137,7 @@ export default class ChatService {
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
+    conversationId?: string | undefined,
   ): Promise<string> {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
     let content = ''
@@ -1133,6 +1152,7 @@ export default class ChatService {
       (event) => {
         if (event.type === 'content') content += event.delta
       },
+      conversationId,
     )
     if (!content) throw new Error('Quick Model returned no text.')
     return content
@@ -1184,7 +1204,7 @@ export default class ChatService {
     const sendRequest = (): Promise<Response> =>
       fetch(endpoint, {
         method: 'POST',
-        headers: this.headers(apiKey, provider.customHeaders),
+        headers: this.headers(provider, apiKey),
         body: JSON.stringify(body),
         signal,
       })
@@ -1219,7 +1239,7 @@ export default class ChatService {
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: this.headers(apiKey, provider.customHeaders),
+      headers: this.headers(provider, apiKey),
       body: JSON.stringify(body),
       signal,
     })
@@ -1384,7 +1404,11 @@ export default class ChatService {
   }
 
   /** Builds title-search queries with the Quick Model and falls back to the user prompt. */
-  private async generateSearchQueries(prompt: string, signal: AbortSignal): Promise<string[]> {
+  private async generateSearchQueries(
+    prompt: string,
+    signal: AbortSignal,
+    conversationId?: string | undefined,
+  ): Promise<string[]> {
     const quick = this.providers.snapshot().quickModel
     if (!quick || !prompt.trim()) return [prompt.trim()].filter(Boolean)
     try {
@@ -1399,6 +1423,7 @@ export default class ChatService {
           { role: 'user', content: prompt },
         ],
         signal,
+        conversationId,
       )
       const match = content.match(/\[[\s\S]*\]/)
       const parsed: unknown = match ? JSON.parse(match[0]) : null
@@ -1419,6 +1444,7 @@ export default class ChatService {
     model: ModelReference,
     messages: CompatibleMessage[],
     signal: AbortSignal,
+    conversationId?: string | undefined,
   ): Promise<string> {
     const { provider } = this.providers.resolve(model)
     if (provider.type === 'chatgpt') {
@@ -1467,7 +1493,13 @@ export default class ChatService {
         void this.claude.deleteConversation(provider.id, organizationId, conversationId)
       }
     }
-    return this.completeOpenAiCompatibleWithFallback(provider, model.modelId, messages, signal)
+    return this.completeOpenAiCompatibleWithFallback(
+      provider,
+      model.modelId,
+      messages,
+      signal,
+      conversationId,
+    )
   }
 
   /** Converts durable messages, attachments, and context boundaries into provider messages. */
@@ -1503,15 +1535,19 @@ export default class ChatService {
     })
   }
 
-  /** Creates JSON request headers with optional dual-compatible authentication and custom headers. */
+  /** Creates JSON request headers, adding a stable session header for OpenCode chats. */
   private headers(
+    provider: CompatibleProvider,
     apiKey: string,
-    customHeaders?: Record<string, string> | undefined | undefined,
+    conversationId?: string | undefined,
   ): Record<string, string> {
     return {
       'Content-Type': 'application/json',
-      ...(customHeaders ?? {}),
+      ...(provider.customHeaders ?? {}),
       ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
+      ...(provider.id === 'opencode' && conversationId
+        ? { 'x-opencode-session': opencodeSessionId(conversationId) }
+        : {}),
     }
   }
 
