@@ -10,6 +10,7 @@ import type {
   WebSearchMode,
 } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
+import { httpFetch } from '../http/http.fetch'
 import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
 import { normalizeOpenAiBaseUrl } from '../providers/openai-compatible/openai-compatible.base-url'
@@ -407,15 +408,18 @@ export default class ChatService {
     if (!prompt) throw new Error('An image prompt is required.')
     if (provider.type !== 'openai-compatible')
       throw new Error('Image generation requires an OpenAI-compatible provider.')
-    let response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
-      method: 'POST',
-      headers: this.headers(provider, apiKey),
-      body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
-      signal,
-    })
+    let response = await httpFetch(
+      `${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`,
+      {
+        method: 'POST',
+        headers: this.headers(provider, apiKey),
+        body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
+        signal,
+      },
+    )
     if (!response.ok && response.status === 400) {
       await response.body?.cancel().catch(() => undefined)
-      response = await fetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
+      response = await httpFetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
         method: 'POST',
         headers: this.headers(provider, apiKey),
         body: JSON.stringify({ model: request.model.modelId, prompt }),
@@ -434,7 +438,7 @@ export default class ChatService {
       return
     }
     if (image?.url) {
-      const imageResponse = await fetch(image.url, { signal })
+      const imageResponse = await httpFetch(image.url, { signal })
       if (!imageResponse.ok) throw new Error('The generated image could not be downloaded.')
       const type = imageResponse.headers.get('content-type') || 'image/png'
       const base64 = Buffer.from(await imageResponse.arrayBuffer()).toString('base64')
@@ -634,7 +638,7 @@ export default class ChatService {
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current compatible request body so unsupported usage options can be retried. */
     const sendRequest = (): Promise<Response> =>
-      fetch(endpoint, {
+      httpFetch(endpoint, {
         method: 'POST',
         headers: this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
@@ -669,7 +673,7 @@ export default class ChatService {
   ): Promise<void> {
     const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
-    const response = await fetch(endpoint, {
+    const response = await httpFetch(endpoint, {
       method: 'POST',
       headers: this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
@@ -768,7 +772,7 @@ export default class ChatService {
       ...(reasoningParameters ?? {}),
     }
     const customId = randomUUID()
-    const response = await fetch(provider.batchUrl, {
+    const response = await httpFetch(provider.batchUrl, {
       method: 'POST',
       headers: this.headers(provider, apiKey),
       body: JSON.stringify({
@@ -807,7 +811,7 @@ export default class ChatService {
         throw new Error('Batch API returned no batch identifier.')
       }
       await this.waitForDirectBatchPoll(signal)
-      const response = await fetch(`${provider.batchUrl}/${encodeURIComponent(batchId)}`, {
+      const response = await httpFetch(`${provider.batchUrl}/${encodeURIComponent(batchId)}`, {
         headers: this.headers(provider, apiKey),
         signal,
       })
@@ -868,7 +872,7 @@ export default class ChatService {
         providerId: job.providerId,
         modelId: job.modelId,
       })
-      const response = await fetch(`${job.batchUrl}/${encodeURIComponent(job.batchId)}`, {
+      const response = await httpFetch(`${job.batchUrl}/${encodeURIComponent(job.batchId)}`, {
         headers: this.headers(provider, apiKey),
         signal: controller.signal,
       })
@@ -1202,7 +1206,7 @@ export default class ChatService {
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
     const sendRequest = (): Promise<Response> =>
-      fetch(endpoint, {
+      httpFetch(endpoint, {
         method: 'POST',
         headers: this.headers(provider, apiKey),
         body: JSON.stringify(body),
@@ -1237,7 +1241,7 @@ export default class ChatService {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
     const body = buildResponsesRequest(messages, modelId, UTILITY_REASONING_EFFORT, false)
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
-    const response = await fetch(endpoint, {
+    const response = await httpFetch(endpoint, {
       method: 'POST',
       headers: this.headers(provider, apiKey),
       body: JSON.stringify(body),
@@ -1262,7 +1266,7 @@ export default class ChatService {
   ): Promise<void> {
     const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
     const response = await this.chatgpt.fetchWithCredentials(providerId, (credentials) =>
-      fetch(CHATGPT_RESPONSES_URL, {
+      httpFetch(CHATGPT_RESPONSES_URL, {
         method: 'POST',
         headers: this.chatGptHeaders(credentials.accessToken, credentials.accountId),
         body: JSON.stringify(body),
@@ -1450,7 +1454,7 @@ export default class ChatService {
     if (provider.type === 'chatgpt') {
       const body = buildResponsesRequest(messages, model.modelId, UTILITY_REASONING_EFFORT, false)
       const response = await this.chatgpt.fetchWithCredentials(provider.id, (credentials) =>
-        fetch(CHATGPT_RESPONSES_URL, {
+        httpFetch(CHATGPT_RESPONSES_URL, {
           method: 'POST',
           headers: this.chatGptHeaders(credentials.accessToken, credentials.accountId),
           body: JSON.stringify(body),

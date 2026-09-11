@@ -11,6 +11,7 @@ import type {
   TokenUsage,
 } from '@shared/index'
 import { isReasoningEffortValue } from '@shared/index'
+import { httpFetch } from '../../http/http.fetch'
 
 /** ChatGPT OAuth and backend endpoint inventory. */
 export const CHATGPT_CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann'
@@ -371,7 +372,7 @@ let cachedClientVersion: string | null = null
 export const getChatGptClientVersion = async (): Promise<string> => {
   if (cachedClientVersion) return cachedClientVersion
   try {
-    const response = await fetch(CODEX_LATEST_URL, {
+    const response = await httpFetch(CODEX_LATEST_URL, {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(10_000),
     })

@@ -24,6 +24,7 @@ import {
   parseChatGptUsage,
 } from './chatgpt.protocol'
 import type { ChatGptCredentials, CodexAuthFile } from './chatgpt.types'
+import { httpFetch } from '../../http/http.fetch'
 
 const CHATGPT_SCOPE = 'openid profile email offline_access'
 const CHATGPT_AUTH_URL = 'https://auth.openai.com/oauth/authorize'
@@ -110,7 +111,7 @@ export class ChatGptAuth {
   /** Fetches rate-limit usage for the ChatGPT provider account. */
   public async fetchUsage(providerId: string): Promise<ProviderUsageState> {
     const response = await this.fetchWithCredentials(providerId, (credentials) =>
-      fetch(CHATGPT_USAGE_URL, {
+      httpFetch(CHATGPT_USAGE_URL, {
         headers: this.chatGptHeaders(credentials.accessToken, credentials.accountId, false),
         signal: AbortSignal.timeout(30_000),
       }),
@@ -123,7 +124,7 @@ export class ChatGptAuth {
   public async fetchModels(providerId: string): Promise<ProviderModelDefinition[]> {
     const version = await getChatGptClientVersion()
     const response = await this.fetchWithCredentials(providerId, (credentials) =>
-      fetch(`${CHATGPT_MODELS_URL}?client_version=${encodeURIComponent(version)}`, {
+      httpFetch(`${CHATGPT_MODELS_URL}?client_version=${encodeURIComponent(version)}`, {
         headers: this.chatGptHeaders(credentials.accessToken, credentials.accountId, false),
         signal: AbortSignal.timeout(30_000),
       }),
@@ -198,7 +199,7 @@ export class ChatGptAuth {
 
   /** Exchanges the OAuth authorization code for the credential token payload. */
   private async exchangeCode(code: string, verifier: string): Promise<CodexAuthFile | null> {
-    const response = await fetch(CHATGPT_TOKEN_URL, {
+    const response = await httpFetch(CHATGPT_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
@@ -276,7 +277,7 @@ export class ChatGptAuth {
     const refreshToken = file.tokens?.refresh_token
     if (!refreshToken) return Promise.resolve()
     const promise = (async (): Promise<void> => {
-      const response = await fetch(CHATGPT_TOKEN_URL, {
+      const response = await httpFetch(CHATGPT_TOKEN_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

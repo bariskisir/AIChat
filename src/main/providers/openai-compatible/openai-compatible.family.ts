@@ -6,6 +6,7 @@
 import type { ProviderConnectionInput, ProviderModelDefinition } from '@shared/index'
 import { normalizeOpenAiBaseUrl } from './openai-compatible.base-url'
 import type { ProviderFamily } from '../provider.family'
+import { httpFetch } from '../../http/http.fetch'
 import {
   inferCapabilities,
   inferModelGroup,
@@ -38,7 +39,7 @@ export class OpenAiCompatibleFamily implements ProviderFamily {
       headers['x-api-key'] = connection.apiKey
     }
     this.logger.info('OpenAiCompatibleFamily', `Fetching models from ${baseUrl}/models`)
-    const response = await fetch(`${baseUrl}/models`, {
+    const response = await httpFetch(`${baseUrl}/models`, {
       headers,
       signal: AbortSignal.timeout(30_000),
     })

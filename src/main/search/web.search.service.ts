@@ -5,6 +5,7 @@ import turndownSource from 'turndown/lib/turndown.browser.umd.js?raw'
 import type { Citation, WebSearchMode } from '@shared/index'
 import { clampSurrogateBoundary } from '@shared/index'
 import type LoggerService from '../logging/logger.service'
+import { httpFetch } from '../http/http.fetch'
 import SearchWindowService from './hidden.window.service'
 
 export interface WebSearchResult {
@@ -308,7 +309,7 @@ export default class WebSearchService {
   private async fetchPageContent(url: string, signal: AbortSignal): Promise<SearchContent | null> {
     try {
       if (signal.aborted) throw abortError()
-      const response = await fetch(url, {
+      const response = await httpFetch(url, {
         headers: {
           'User-Agent': CHROME_USER_AGENT,
           'Accept-Language': 'en-US,en;q=0.9',

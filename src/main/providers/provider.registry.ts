@@ -22,6 +22,7 @@ import {
 } from '@shared/index'
 import { z } from 'zod'
 import { parseCatalogReasoningEfforts } from './model.qualification'
+import { httpFetch } from '../http/http.fetch'
 import type LoggerService from '../logging/logger.service'
 import { normalizeOpenAiBaseUrl } from './openai-compatible/openai-compatible.base-url'
 import type { ProviderFamily } from './provider.family'
@@ -964,7 +965,7 @@ export class ProviderRegistry {
       headers['x-api-key'] = provider.apiKey
     }
     this.logger.info('ProviderRegistry', `Fetching models from ${baseUrl}/models`)
-    const response = await fetch(`${baseUrl}/models`, {
+    const response = await httpFetch(`${baseUrl}/models`, {
       headers,
       signal: AbortSignal.timeout(30_000),
     })
