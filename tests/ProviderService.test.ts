@@ -68,26 +68,53 @@ describe('ProviderRegistry', () => {
     const snapshot = registry.snapshot()
     const opencode = snapshot.providers.find((provider) => provider.id === 'opencode')
 
-    expect(fetch).toHaveBeenCalledWith(
-      'https://opencode.ai/zen/v1/models',
-      expect.objectContaining({
-        headers: {
-          Authorization: 'Bearer public',
-          'User-Agent': 'opencode',
-          'x-api-key': 'public',
-        },
-      }),
-    )
+    const modelsCall = vi
+      .mocked(fetch)
+      .mock.calls.find(([url]) => url === 'https://opencode.ai/zen/v1/models')
+    expect(modelsCall).toBeDefined()
+    const modelsHeaders = (modelsCall?.[1] as RequestInit)?.headers as Record<string, string>
+    expect(modelsHeaders.Authorization).toBe('Bearer public')
+    expect(modelsHeaders['x-api-key']).toBe('public')
+    expect(modelsHeaders['User-Agent']).toMatch(/^opencode\/.+/)
     expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 1 })
     expect(registry.getEditorData('opencode')).toMatchObject({
       apiKey: 'public',
-      selectedModelIds: ['deepseek/deepseek-v3-free'],
+      selectedModelIds: ['muse-spark-1.2-contributor-free'],
     })
     expect(snapshot.lastUsedModel).toEqual({
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     })
     expect(snapshot.quickModel).toEqual(snapshot.lastUsedModel)
+  })
+
+  it('selects the first Muse model when several releases are available', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                { id: 'muse-spark-1.2-contributor-free', name: 'Muse Spark 1.2 Contributor Free' },
+                { id: 'muse-spark-1.3-contributor-free', name: 'Muse Spark 1.3 Contributor Free' },
+                { id: 'deepseek/deepseek-v3-free', name: 'DeepSeek V3 Free' },
+              ],
+            }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ),
+      ),
+    )
+
+    const sorted = await createRegistry(join(rootPath, 'sorted'))
+
+    expect(sorted.getEditorData('opencode')).toMatchObject({
+      selectedModelIds: ['muse-spark-1.3-contributor-free'],
+    })
+    expect(sorted.snapshot().quickModel).toEqual({
+      providerId: 'opencode',
+      modelId: 'muse-spark-1.3-contributor-free',
+    })
   })
 
   it('selects the first free OpenCode chat model from a replacement catalog', async () => {
@@ -135,7 +162,7 @@ describe('ProviderRegistry', () => {
     })
   })
 
-  it('applies the OpenCode User-Agent header once to existing installs that lack it', async () => {
+  it('clears the legacy OpenCode User-Agent header so the settings field stays empty', async () => {
     await writeFile(
       join(rootPath, 'providers.json'),
       JSON.stringify({
@@ -149,6 +176,7 @@ describe('ProviderRegistry', () => {
             builtin: true,
             enabled: true,
             apiKey: 'public',
+            customHeaders: { 'User-Agent': 'opencode', 'X-Custom': 'kept' },
             models: [],
             selectedModelIds: [],
           },
@@ -162,10 +190,10 @@ describe('ProviderRegistry', () => {
     vi.mocked(fetch).mockClear()
 
     const upgraded = await createRegistry()
-    expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'User-Agent': 'opencode' })
+    expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'X-Custom': 'kept' })
 
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(4)
+    expect(persisted.migrationVersion).toBe(5)
 
     await upgraded.save({
       id: 'opencode',
@@ -267,7 +295,7 @@ describe('ProviderRegistry', () => {
       'openai/gpt-4o',
     ])
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(4)
+    expect(persisted.migrationVersion).toBe(5)
 
     // A second launch does not refetch: the stored server levels are kept as-is.
     vi.stubGlobal(
@@ -871,18 +899,18 @@ describe('ProviderRegistry', () => {
   it('resolves a selected model with its plaintext key for chat requests', () => {
     const resolved = registry.resolve({
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     })
 
     expect(resolved.apiKey).toBe('public')
     expect(resolved.provider).toMatchObject({ id: 'opencode', enabled: true })
-    expect(resolved.modelDefinition).toMatchObject({ modelId: 'deepseek/deepseek-v3-free' })
+    expect(resolved.modelDefinition).toMatchObject({ modelId: 'muse-spark-1.2-contributor-free' })
   })
 
   it('persists favorites and the last-used model for selected models', async () => {
     const reference: ModelReference = {
       providerId: 'opencode',
-      modelId: 'deepseek/deepseek-v3-free',
+      modelId: 'muse-spark-1.2-contributor-free',
     }
     await registry.setFavorite(reference, true)
     expect(registry.snapshot().favorites).toEqual([reference])

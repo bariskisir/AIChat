@@ -12,6 +12,7 @@ import {
   inferModelGroup,
   parseCatalogReasoningEfforts,
 } from '../model.qualification'
+import { getOpencodeClientVersion, opencodeUserAgent } from '../opencode/opencode.protocol'
 import type LoggerService from '../../logging/logger.service'
 
 /** Creates a status-only API error without exposing response bodies or request credentials. */
@@ -33,6 +34,12 @@ export class OpenAiCompatibleFamily implements ProviderFamily {
     const baseUrl = normalizeOpenAiBaseUrl(connection.baseUrl)
     const headers: Record<string, string> = {
       ...(connection.customHeaders ?? {}),
+    }
+    if (connection.id === 'opencode') {
+      for (const key of Object.keys(headers)) {
+        if (key.toLowerCase() === 'user-agent') delete headers[key]
+      }
+      headers['User-Agent'] = opencodeUserAgent(await getOpencodeClientVersion())
     }
     if (connection.apiKey) {
       headers.Authorization = `Bearer ${connection.apiKey}`

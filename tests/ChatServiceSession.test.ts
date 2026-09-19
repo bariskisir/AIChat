@@ -1,8 +1,9 @@
 /** Verifies per-conversation OpenCode session identifiers sent with compatible chat requests. */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRequest, ChatStreamEvent, ProviderSummary } from '@shared/index'
 import ChatService, { opencodeSessionId } from '@main/chat/chat.service'
+import { resetOpencodeClientVersionCache } from '@main/providers/opencode/opencode.protocol'
 
 /** Returns a minimal request with one user message for the given conversation. */
 const createRequest = (conversationId: string, requestId: string): ChatRequest => ({
@@ -68,18 +69,59 @@ const createService = (provider: ProviderSummary) => {
   )
 }
 
-/** Returns one OpenAI-compatible streaming chat response for the fetch stub. */
-const streamedResponse = (): Response =>
+/** Returns one OpenCode Responses streaming response for the fetch stub. */
+const streamedResponsesResponse = (): Response =>
+  new Response('data: {"type":"response.output_text.delta","delta":"4"}\n\ndata: [DONE]\n\n', {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  })
+
+/** Returns one legacy chat-completions streaming response for non-OpenCode providers. */
+const streamedChatResponse = (): Response =>
   new Response('data: {"choices":[{"delta":{"content":"4"}}]}\n\ndata: [DONE]\n\n', {
     status: 200,
     headers: { 'content-type': 'text/event-stream' },
   })
 
+/** Routes version lookups to a pinned version and chat calls to a streaming response. */
+const stubOpencodeFetch = (
+  fetchMock: ReturnType<typeof vi.fn>,
+  chatResponse: () => Response = streamedResponsesResponse,
+): void => {
+  fetchMock.mockImplementation(async (input: string | URL | Request) => {
+    const url = String(input)
+    if (url.includes('registry.npmjs.org')) {
+      return new Response(JSON.stringify({ version: '1.18.31' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    return chatResponse()
+  })
+}
+
 /** Reads the request headers recorded for one fetch mock call. */
 const requestHeaders = (init: RequestInit | undefined): Record<string, string> =>
   (init as RequestInit).headers as Record<string, string>
 
+/** Reads the JSON request body recorded for one fetch mock call. */
+const requestBody = (init: RequestInit | undefined): Record<string, unknown> =>
+  JSON.parse((init as RequestInit).body as string) as Record<string, unknown>
+
+/** Finds the first fetch call targeting the OpenCode Responses endpoint. */
+const findResponsesCall = (
+  fetchMock: ReturnType<typeof vi.fn>,
+): [string, RequestInit | undefined] => {
+  const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/responses'))
+  if (!call) throw new Error('OpenCode responses endpoint was not called.')
+  return call as [string, RequestInit | undefined]
+}
+
 describe('ChatService OpenCode session headers', () => {
+  beforeEach(() => {
+    resetOpencodeClientVersionCache()
+  })
+
   afterEach(() => {
     vi.unstubAllGlobals()
   })
@@ -87,15 +129,15 @@ describe('ChatService OpenCode session headers', () => {
   it('derives a stable, prefixed session identifier from a conversation', () => {
     const first = '5da0c64d-a2f4-4ab9-9a00-eef49ebba100'
     const second = 'f3cdb6ac-8eaa-479e-9a67-37e5af58c100'
-    expect(opencodeSessionId(first)).toMatch(/^ses_[a-z0-9]+$/)
+    expect(opencodeSessionId(first)).toMatch(/^ses_[a-z0-9]{26}$/)
     expect(opencodeSessionId(first)).toBe(opencodeSessionId(first))
     expect(opencodeSessionId(first)).not.toBe(opencodeSessionId(second))
   })
 
   it('sends the same session header for every OpenCode request in one conversation', async () => {
-    const fetchMock = vi.fn<
-      (_input: string | URL | Request, _init?: RequestInit) => Promise<Response>
-    >(async () => streamedResponse())
+    const fetchMock =
+      vi.fn<(_input: string | URL | Request, _init?: RequestInit) => Promise<Response>>()
+    stubOpencodeFetch(fetchMock)
     vi.stubGlobal('fetch', fetchMock)
     const service = createService(createProvider())
     const events: ChatStreamEvent[] = []
@@ -109,20 +151,28 @@ describe('ChatService OpenCode session headers', () => {
       (event) => events.push(event),
     )
 
-    expect(fetchMock).toHaveBeenCalledTimes(2)
     const expected = opencodeSessionId('5da0c64d-a2f4-4ab9-9a00-eef49ebba100')
-    const firstCall = fetchMock.mock.calls[0]
-    const secondCall = fetchMock.mock.calls[1]
-    if (!firstCall || !secondCall) throw new Error('OpenCode endpoint was not called.')
-    expect(requestHeaders(firstCall[1])['x-opencode-session']).toBe(expected)
-    expect(requestHeaders(secondCall[1])['x-opencode-session']).toBe(expected)
+    const responsesCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).endsWith('/responses'),
+    )
+    expect(responsesCalls).toHaveLength(2)
+    for (const [, init] of responsesCalls) {
+      const headers = requestHeaders(init)
+      expect(headers['x-opencode-session']).toBe(expected)
+      expect(headers['User-Agent']).toBe('opencode/1.18.31')
+      const body = requestBody(init)
+      expect(body.tools).toEqual([
+        { type: 'function', name: 'bash', parameters: {} },
+        { type: 'function', name: 'read', parameters: {} },
+      ])
+    }
     expect(events).toContainEqual({ requestId: 'request-1', type: 'complete' })
   })
 
   it('sends the conversation session header on OpenCode quick-model calls', async () => {
-    const fetchMock = vi.fn<
-      (_input: string | URL | Request, _init?: RequestInit) => Promise<Response>
-    >(async () => streamedResponse())
+    const fetchMock =
+      vi.fn<(_input: string | URL | Request, _init?: RequestInit) => Promise<Response>>()
+    stubOpencodeFetch(fetchMock)
     vi.stubGlobal('fetch', fetchMock)
     const provider = createProvider()
     const service = createService(provider) as unknown as {
@@ -145,17 +195,17 @@ describe('ChatService OpenCode session headers', () => {
       ),
     ).resolves.toBe('4')
 
-    const request = fetchMock.mock.calls[0]
-    if (!request) throw new Error('OpenCode endpoint was not called.')
-    expect(requestHeaders(request[1])['x-opencode-session']).toBe(
+    const [, init] = findResponsesCall(fetchMock)
+    expect(requestHeaders(init)['x-opencode-session']).toBe(
       opencodeSessionId('5da0c64d-a2f4-4ab9-9a00-eef49ebba100'),
     )
+    expect(requestHeaders(init)['User-Agent']).toBe('opencode/1.18.31')
   })
 
   it('omits the session header for non-OpenCode providers', async () => {
     const fetchMock = vi.fn<
       (_input: string | URL | Request, _init?: RequestInit) => Promise<Response>
-    >(async () => streamedResponse())
+    >(async () => streamedChatResponse())
     vi.stubGlobal('fetch', fetchMock)
     const service = createService(createProvider('deepseek'))
 

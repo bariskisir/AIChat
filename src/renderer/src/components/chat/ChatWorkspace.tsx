@@ -40,6 +40,12 @@ import {
 } from '@renderer/store/appSlice'
 import { toConversationSummary } from '@renderer/utils/formatters'
 import {
+  forgetInFlightConversation,
+  getInFlightConversation,
+  rememberInFlightConversation,
+  trackInFlightConversation,
+} from '@renderer/utils/inFlightConversations'
+import {
   clampText,
   formatCharacterCount,
   MAX_PASTED_TEXT_CHARACTERS,
@@ -101,6 +107,9 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
   const { t } = useTranslation()
   const conversationRef = useRef<Conversation | null>(currentConversation)
   const activeRequests = useRef(new Map<string, ActiveRequest>())
+  const backgroundChainsRef = useRef(new Map<string, Promise<void>>())
+  const backgroundSaveTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>())
+  const backgroundLoadsRef = useRef(new Map<string, Promise<Conversation | null>>())
   const pendingDeltasRef = useRef(new Map<string, { content: string; reasoning: string }>())
   const deltaFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const timelineRef = useRef<HTMLDivElement>(null)
@@ -137,6 +146,15 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     [dispatch],
   )
 
+  /** Reports whether any completion for the given conversation is still tracked. */
+  const hasActiveRequest = useCallback(
+    (conversationId: string): boolean =>
+      [...activeRequests.current.values()].some(
+        (request) => request.conversationId === conversationId,
+      ),
+    [],
+  )
+
   /** Replaces the current topic through both a synchronous ref and Redux. */
   const updateConversation = useCallback(
     (transform: (conversation: Conversation) => Conversation): void => {
@@ -144,6 +162,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       if (!current) return
       const next = { ...transform(current), updatedAt: new Date().toISOString() }
       conversationRef.current = next
+      rememberInFlightConversation(next)
       dispatch(setCurrentConversation(next))
     },
     [dispatch],
@@ -293,11 +312,17 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
     saveTimerRef.current = window.setTimeout(() => {
       saveTimerRef.current = null
-      void window.app.saveConversation(currentConversation).catch((error: unknown) => {
-        logger.error('Chat topic could not be persisted.', error)
-      })
+      const persisted = currentConversation
+      void window.app
+        .saveConversation(persisted)
+        .then(() => {
+          if (!hasActiveRequest(persisted.id)) forgetInFlightConversation(persisted.id)
+        })
+        .catch((error: unknown) => {
+          logger.error('Chat topic could not be persisted.', error)
+        })
     }, 500)
-  }, [currentConversation])
+  }, [currentConversation, hasActiveRequest])
 
   useEffect(() => {
     if (activeRequestCount === 0) return
@@ -313,11 +338,6 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
   }, [activeRequestCount])
 
   useEffect(() => {
-    /** Conversations whose requests finish while another topic is active. */
-    const backgroundConversations = new Map<string, Conversation | Promise<Conversation | null>>()
-    const backgroundSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
-    const backgroundChains = new Map<string, Promise<void>>()
-
     /** Applies one stream event to a conversation object without touching the Redux topic. */
     const applyEventToConversation = (
       conversation: Conversation,
@@ -405,31 +425,42 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       event: ChatStreamEvent,
       messageId: string,
     ): void => {
-      const chain = (backgroundChains.get(conversationId) ?? Promise.resolve()).then(async () => {
-        let entry = backgroundConversations.get(conversationId)
-        if (entry === undefined) {
-          const pending = window.app.getConversation(conversationId).catch(() => null)
-          backgroundConversations.set(conversationId, pending)
-          entry = pending
+      const chains = backgroundChainsRef.current
+      const chain = (chains.get(conversationId) ?? Promise.resolve()).then(async () => {
+        let loaded = getInFlightConversation(conversationId)
+        if (!loaded) {
+          const loads = backgroundLoadsRef.current
+          const pending =
+            loads.get(conversationId) ??
+            window.app.getConversation(conversationId).catch(() => null)
+          loads.set(conversationId, pending)
+          const fromDisk = await pending
+          loads.delete(conversationId)
+          if (!fromDisk) return
+          trackInFlightConversation(fromDisk)
+          loaded = fromDisk
         }
-        const loaded = await entry
-        if (!loaded) return
         const next = {
           ...applyEventToConversation(loaded, event, messageId),
           updatedAt: new Date().toISOString(),
         }
-        backgroundConversations.set(conversationId, next)
+        rememberInFlightConversation(next)
         if (event.type === 'title') {
           dispatch(replaceConversationSummary(toConversationSummary(next)))
         }
+        const timers = backgroundSaveTimersRef.current
         if (event.type === 'complete' || event.type === 'error') {
-          const timer = backgroundSaveTimers.get(conversationId)
+          const timer = timers.get(conversationId)
           if (timer) window.clearTimeout(timer)
-          backgroundSaveTimers.delete(conversationId)
-          backgroundConversations.delete(conversationId)
-          void window.app.saveConversation(next).catch((error: unknown) => {
-            logger.error('Background topic could not be persisted.', error)
-          })
+          timers.delete(conversationId)
+          void window.app
+            .saveConversation(next)
+            .then(() => {
+              if (!hasActiveRequest(conversationId)) forgetInFlightConversation(conversationId)
+            })
+            .catch((error: unknown) => {
+              logger.error('Background topic could not be persisted.', error)
+            })
           return
         }
         if (
@@ -442,21 +473,21 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
           })
           return
         }
-        const existing = backgroundSaveTimers.get(conversationId)
+        const existing = timers.get(conversationId)
         if (existing) window.clearTimeout(existing)
-        backgroundSaveTimers.set(
+        timers.set(
           conversationId,
           window.setTimeout(() => {
-            backgroundSaveTimers.delete(conversationId)
-            const latest = backgroundConversations.get(conversationId)
-            if (!latest || latest instanceof Promise) return
+            timers.delete(conversationId)
+            const latest = getInFlightConversation(conversationId)
+            if (!latest) return
             void window.app.saveConversation(latest).catch((error: unknown) => {
               logger.error('Background topic could not be persisted.', error)
             })
           }, 300),
         )
       })
-      backgroundChains.set(
+      chains.set(
         conversationId,
         chain.catch((error: unknown) => {
           logger.error('Background stream could not be applied.', error)
@@ -495,6 +526,15 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
               title: event.title,
               isDefaultTitle: false,
             }))
+          } else {
+            const inFlight = getInFlightConversation(conversationId)
+            if (inFlight) {
+              rememberInFlightConversation({
+                ...inFlight,
+                title: event.title,
+                isDefaultTitle: false,
+              })
+            }
           }
         }
         return
@@ -587,8 +627,6 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     })
     return () => {
       unsubscribe()
-      for (const timer of backgroundSaveTimers.values()) window.clearTimeout(timer)
-      backgroundSaveTimers.clear()
       if (deltaFlushTimerRef.current) window.clearTimeout(deltaFlushTimerRef.current)
       deltaFlushTimerRef.current = null
     }
@@ -596,6 +634,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
     currentConversation?.id,
     dispatch,
     flushPendingDeltas,
+    hasActiveRequest,
     queueStreamDelta,
     syncConversationGeneratingState,
     t,
@@ -755,6 +794,7 @@ const ChatWorkspace = ({ expanded, onToggleExpanded }: ChatWorkspaceProps): Reac
       : 'default'
     const assistant = { ...createMessage('assistant', '', 'streaming'), model }
     updateConversation((value) => ({ ...value, messages: [...displayedHistory, assistant] }))
+    if (conversationRef.current) trackInFlightConversation(conversationRef.current)
     const requestId = crypto.randomUUID()
     activeRequests.current.set(requestId, {
       messageId: assistant.id,

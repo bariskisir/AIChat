@@ -1,9 +1,10 @@
 /** Verifies durable batch-model routing for OpenAI-compatible chat providers. */
 
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRequest, ChatStreamEvent, ProviderSummary } from '@shared/index'
 import type { PersistedBatchJob } from '@main/persistence/storage.service'
 import ChatService from '@main/chat/chat.service'
+import { resetOpencodeClientVersionCache } from '@main/providers/opencode/opencode.protocol'
 
 /** Returns a minimal request with one user message for compatible-provider tests. */
 const createRequest = (modelId: string): ChatRequest => ({
@@ -101,6 +102,10 @@ const flushPromises = async (): Promise<void> => {
 }
 
 describe('ChatService batch routing', () => {
+  beforeEach(() => {
+    resetOpencodeClientVersionCache()
+  })
+
   afterEach(() => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
@@ -226,14 +231,22 @@ describe('ChatService batch routing', () => {
     )
   })
 
-  it('uses the streaming chat endpoint for OpenCode quick-model tasks', async () => {
-    const fetchMock = vi.fn(
-      async (_input: string | URL | Request, _init?: RequestInit) =>
-        new Response('data: {"choices":[{"delta":{"content":"Title"}}]}\n\ndata: [DONE]\n\n', {
+  it('uses the streaming responses endpoint for OpenCode quick-model tasks', async () => {
+    const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
+      if (String(_input).includes('registry.npmjs.org')) {
+        return new Response(JSON.stringify({ version: '1.18.31' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(
+        'data: {"type":"response.output_text.delta","delta":"Title"}\n\ndata: [DONE]\n\n',
+        {
           status: 200,
           headers: { 'content-type': 'text/event-stream' },
-        }),
-    )
+        },
+      )
+    })
     vi.stubGlobal('fetch', fetchMock)
     const provider = createProvider(undefined, 'opencode')
     const { service } = createService(provider)
@@ -255,9 +268,20 @@ describe('ChatService batch routing', () => {
       ),
     ).resolves.toBe('Title')
 
-    const request = fetchMock.mock.calls[0]
-    if (!request) throw new Error('OpenCode chat endpoint was not called.')
-    expect(JSON.parse((request[1] as RequestInit).body as string)).toMatchObject({ stream: true })
+    const responsesCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/responses'))
+    if (!responsesCall) throw new Error('OpenCode responses endpoint was not called.')
+    const body = JSON.parse((responsesCall[1] as RequestInit).body as string) as Record<
+      string,
+      unknown
+    >
+    expect(body).toMatchObject({ stream: true })
+    expect(body.tools).toEqual([
+      { type: 'function', name: 'bash', parameters: {} },
+      { type: 'function', name: 'read', parameters: {} },
+    ])
+    const headers = (responsesCall[1] as RequestInit).headers as Record<string, string>
+    expect(headers['User-Agent']).toBe('opencode/1.18.31')
+    expect(headers['x-opencode-session']).toMatch(/^ses_[a-z0-9]{26}$/)
   })
 
   it('continues a saved batch after application restart and writes its result to storage', async () => {

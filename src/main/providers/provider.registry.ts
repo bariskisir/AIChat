@@ -25,6 +25,7 @@ import { parseCatalogReasoningEfforts } from './model.qualification'
 import { httpFetch } from '../http/http.fetch'
 import type LoggerService from '../logging/logger.service'
 import { normalizeOpenAiBaseUrl } from './openai-compatible/openai-compatible.base-url'
+import { getOpencodeClientVersion, opencodeUserAgent } from './opencode/opencode.protocol'
 import type { ProviderFamily } from './provider.family'
 
 /** One persisted provider record with plaintext credentials and selected catalog entries. */
@@ -105,6 +106,21 @@ const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
       }
     }
   },
+  /**
+   * Migration 5: clears the legacy OpenCode User-Agent from custom headers.
+   * Mandatory OpenCode headers are now sent in the background, so the settings
+   * field stays empty unless the user adds their own extra headers.
+   */
+  (state) => {
+    const opencode = state.providers.find((provider) => provider.id === 'opencode')
+    if (!opencode) return
+    const cleaned: Record<string, string> = {}
+    for (const [key, value] of Object.entries(opencode.customHeaders)) {
+      if (key.toLowerCase() === 'user-agent') continue
+      cleaned[key] = value
+    }
+    opencode.customHeaders = cleaned
+  },
 ]
 
 /** One built-in preset shipped with the application. */
@@ -129,7 +145,6 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
     baseUrl: 'https://opencode.ai/zen/v1',
     defaultApiKey: 'public',
     enabledByDefault: true,
-    customHeaders: { 'User-Agent': 'opencode' },
   },
   {
     id: 'deepseek',
@@ -960,6 +975,12 @@ export class ProviderRegistry {
     const headers: Record<string, string> = {
       ...(provider.customHeaders ?? {}),
     }
+    if (provider.id === 'opencode') {
+      for (const key of Object.keys(headers)) {
+        if (key.toLowerCase() === 'user-agent') delete headers[key]
+      }
+      headers['User-Agent'] = opencodeUserAgent(await getOpencodeClientVersion())
+    }
     if (provider.apiKey) {
       headers.Authorization = `Bearer ${provider.apiKey}`
       headers['x-api-key'] = provider.apiKey
@@ -1016,7 +1037,7 @@ export class ProviderRegistry {
     )
   }
 
-  /** Fetches the first-install OpenCode catalog and selects the preferred free chat model. */
+  /** Fetches the first-install OpenCode catalog and selects the preferred free Muse chat model. */
   private async initializeOpenCodeDefaults(): Promise<void> {
     const provider = this.requireProvider('opencode')
     try {
@@ -1036,7 +1057,12 @@ export class ProviderRegistry {
       const freeChatModels = models.filter(
         (model) => model.capabilities.chat && searchableText(model).includes('free'),
       )
-      const selected = freeChatModels[0]
+      const sorted = freeChatModels
+        .filter((model) => searchableText(model).includes('muse'))
+        .sort((left, right) =>
+          searchableText(right).localeCompare(searchableText(left), undefined, { numeric: true }),
+        )
+      const selected = sorted[0] ?? freeChatModels[0]
       if (!selected) {
         this.logger.warn(
           'ProviderRegistry',

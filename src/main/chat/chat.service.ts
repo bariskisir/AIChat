@@ -26,6 +26,13 @@ import {
   ClaudeStreamAccumulator,
   resolveClaudeThinking,
 } from '../providers/claude-web/claude-web.protocol'
+import {
+  getOpencodeClientVersion,
+  OPENCODE_CHAT_TOOLS,
+  OPENCODE_TOOLS,
+  opencodeSessionId as buildOpencodeSessionId,
+  opencodeUserAgent,
+} from '../providers/opencode/opencode.protocol'
 import type StorageService from '../persistence/storage.service'
 import type { PersistedBatchJob } from '../persistence/storage.service'
 import type { WebSearchResult } from '../search/web.search.service'
@@ -45,8 +52,8 @@ const MAX_BATCH_NOT_FOUND_RETRIES = 6
 const batchModelId = (modelId: string): string => modelId.replace(/:batch$/i, '')
 
 /** Maps one local conversation to the stable OpenCode session identifier for its chat. */
-export const opencodeSessionId = (conversationId: string): string =>
-  `ses_${conversationId.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`.slice(0, 30)
+export const opencodeSessionId = (conversationId: string | undefined): string =>
+  buildOpencodeSessionId(conversationId)
 
 /** Narrows an unknown JSON value to a non-array record. */
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -412,7 +419,7 @@ export default class ChatService {
       `${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`,
       {
         method: 'POST',
-        headers: this.headers(provider, apiKey),
+        headers: await this.headers(provider, apiKey, request.conversationId),
         body: JSON.stringify({ model: request.model.modelId, prompt, response_format: 'b64_json' }),
         signal,
       },
@@ -421,7 +428,7 @@ export default class ChatService {
       await response.body?.cancel().catch(() => undefined)
       response = await httpFetch(`${normalizeOpenAiBaseUrl(provider.baseUrl)}/images/generations`, {
         method: 'POST',
-        headers: this.headers(provider, apiKey),
+        headers: await this.headers(provider, apiKey, request.conversationId),
         body: JSON.stringify({ model: request.model.modelId, prompt }),
         signal,
       })
@@ -526,6 +533,41 @@ export default class ChatService {
         batchContext,
       )
       return
+    }
+    if (provider.id === 'opencode') {
+      try {
+        await this.streamOpenAiCompatibleResponses(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+          batchContext.conversationId,
+        )
+        return
+      } catch (error) {
+        if (signal.aborted) throw error
+        this.logger.warn(
+          'ChatService',
+          `OpenCode responses failed for ${modelId}, trying chat completions.`,
+          error,
+        )
+        await this.streamOpenAiCompatibleChat(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+          batchContext.conversationId,
+        )
+        return
+      }
     }
     const key = this.compatibleCacheKey(provider.id, modelId)
     const preferred = this.compatibleEndpointCache.get(key)
@@ -634,13 +676,14 @@ export default class ChatService {
       stream: true,
       stream_options: { include_usage: true },
       ...(reasoningParameters ?? {}),
+      ...(provider.id === 'opencode' ? { tools: [...OPENCODE_CHAT_TOOLS] } : {}),
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current compatible request body so unsupported usage options can be retried. */
-    const sendRequest = (): Promise<Response> =>
+    const sendRequest = async (): Promise<Response> =>
       httpFetch(endpoint, {
         method: 'POST',
-        headers: this.headers(provider, apiKey, conversationId),
+        headers: await this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
         signal,
       })
@@ -672,10 +715,17 @@ export default class ChatService {
     conversationId?: string | undefined,
   ): Promise<void> {
     const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
+    if (provider.id === 'opencode') {
+      body.tools = [...OPENCODE_TOOLS]
+      // The Zen Responses API rejects `reasoning.effort: 'off'`; quick-model and
+      // thinking-off calls omit reasoning entirely, matching the working payloads.
+      const reasoning = body.reasoning as { effort?: unknown } | undefined
+      if (reasoning?.effort === 'off') delete body.reasoning
+    }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
     const response = await httpFetch(endpoint, {
       method: 'POST',
-      headers: this.headers(provider, apiKey, conversationId),
+      headers: await this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
       signal,
     })
@@ -774,7 +824,7 @@ export default class ChatService {
     const customId = randomUUID()
     const response = await httpFetch(provider.batchUrl, {
       method: 'POST',
-      headers: this.headers(provider, apiKey),
+      headers: await this.headers(provider, apiKey),
       body: JSON.stringify({
         endpoint: '/v1/chat/completions',
         model: resolvedModelId,
@@ -812,7 +862,7 @@ export default class ChatService {
       }
       await this.waitForDirectBatchPoll(signal)
       const response = await httpFetch(`${provider.batchUrl}/${encodeURIComponent(batchId)}`, {
-        headers: this.headers(provider, apiKey),
+        headers: await this.headers(provider, apiKey),
         signal,
       })
       if (response.status === 404 && missingBatchRetries < MAX_BATCH_NOT_FOUND_RETRIES) {
@@ -873,7 +923,7 @@ export default class ChatService {
         modelId: job.modelId,
       })
       const response = await httpFetch(`${job.batchUrl}/${encodeURIComponent(job.batchId)}`, {
-        headers: this.headers(provider, apiKey),
+        headers: await this.headers(provider, apiKey),
         signal: controller.signal,
       })
       if (response.status === 404 && job.missingPolls < MAX_BATCH_NOT_FOUND_RETRIES) {
@@ -1088,6 +1138,7 @@ export default class ChatService {
           modelId,
           messages,
           signal,
+          conversationId,
         )
         this.compatibleEndpointCache.set(key, 'responses')
         this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
@@ -1099,7 +1150,13 @@ export default class ChatService {
           `Responses quick call failed for ${provider.id}/${modelId}, trying chat.`,
           error,
         )
-        const content = await this.completeOpenAiCompatibleChat(provider, modelId, messages, signal)
+        const content = await this.completeOpenAiCompatibleChat(
+          provider,
+          modelId,
+          messages,
+          signal,
+          conversationId,
+        )
         this.compatibleEndpointCache.set(key, 'chat')
         this.logger.info('ChatService', `Cached chat endpoint for ${provider.id}/${modelId}`)
         return content
@@ -1109,7 +1166,13 @@ export default class ChatService {
     /** Tries chat first, then responses on any non-abort failure. */
     const tryChatFirst = async (): Promise<string> => {
       try {
-        const content = await this.completeOpenAiCompatibleChat(provider, modelId, messages, signal)
+        const content = await this.completeOpenAiCompatibleChat(
+          provider,
+          modelId,
+          messages,
+          signal,
+          conversationId,
+        )
         this.compatibleEndpointCache.set(key, 'chat')
         return content
       } catch (error) {
@@ -1124,6 +1187,7 @@ export default class ChatService {
           modelId,
           messages,
           signal,
+          conversationId,
         )
         this.compatibleEndpointCache.set(key, 'responses')
         this.logger.info('ChatService', `Cached responses endpoint for ${provider.id}/${modelId}`)
@@ -1135,7 +1199,7 @@ export default class ChatService {
     return tryChatFirst()
   }
 
-  /** Collects OpenCode quick-model output through its supported streaming chat transport. */
+  /** Collects OpenCode quick-model output, trying Responses first and falling back to chat. */
   private async completeOpenAiCompatibleStream(
     provider: CompatibleProvider,
     modelId: string,
@@ -1144,22 +1208,55 @@ export default class ChatService {
     conversationId?: string | undefined,
   ): Promise<string> {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
-    let content = ''
-    await this.streamOpenAiCompatibleChat(
-      provider,
-      apiKey,
-      modelId,
-      messages,
-      UTILITY_REASONING_EFFORT,
-      signal,
-      'quick-opencode',
-      (event) => {
-        if (event.type === 'content') content += event.delta
-      },
-      conversationId,
-    )
-    if (!content) throw new Error('Quick Model returned no text.')
-    return content
+    /** Collects streamed content through one transport, returning empty text on empty streams. */
+    const collectThrough = async (transport: 'responses' | 'chat'): Promise<string> => {
+      let content = ''
+      if (transport === 'responses') {
+        await this.streamOpenAiCompatibleResponses(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          UTILITY_REASONING_EFFORT,
+          signal,
+          'quick-opencode',
+          (event) => {
+            if (event.type === 'content') content += event.delta
+          },
+          conversationId,
+        )
+      } else {
+        await this.streamOpenAiCompatibleChat(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          UTILITY_REASONING_EFFORT,
+          signal,
+          'quick-opencode',
+          (event) => {
+            if (event.type === 'content') content += event.delta
+          },
+          conversationId,
+        )
+      }
+      return content
+    }
+    try {
+      const content = await collectThrough('responses')
+      if (content) return content
+      throw new Error('Quick Model returned no text.')
+    } catch (error) {
+      if (signal.aborted) throw error
+      this.logger.warn(
+        'ChatService',
+        `OpenCode responses quick call failed for ${modelId}, trying chat completions.`,
+        error,
+      )
+      const content = await collectThrough('chat')
+      if (!content) throw new Error('Quick Model returned no text.')
+      return content
+    }
   }
 
   /** Completes one internal Quick Model request through its configured batch endpoint. */
@@ -1190,6 +1287,7 @@ export default class ChatService {
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
+    conversationId?: string | undefined,
   ): Promise<string> {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
     const reasoningParameters = buildReasoningParameters(modelId, UTILITY_REASONING_EFFORT, {
@@ -1202,13 +1300,14 @@ export default class ChatService {
       messages,
       stream: false,
       ...(reasoningParameters ?? {}),
+      ...(provider.id === 'opencode' ? { tools: [...OPENCODE_CHAT_TOOLS] } : {}),
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
     /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
-    const sendRequest = (): Promise<Response> =>
+    const sendRequest = async (): Promise<Response> =>
       httpFetch(endpoint, {
         method: 'POST',
-        headers: this.headers(provider, apiKey),
+        headers: await this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
         signal,
       })
@@ -1237,13 +1336,19 @@ export default class ChatService {
     modelId: string,
     messages: CompatibleMessage[],
     signal: AbortSignal,
+    conversationId?: string | undefined,
   ): Promise<string> {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
     const body = buildResponsesRequest(messages, modelId, UTILITY_REASONING_EFFORT, false)
+    if (provider.id === 'opencode') {
+      body.tools = [...OPENCODE_TOOLS]
+      const reasoning = body.reasoning as { effort?: unknown } | undefined
+      if (reasoning?.effort === 'off') delete body.reasoning
+    }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
     const response = await httpFetch(endpoint, {
       method: 'POST',
-      headers: this.headers(provider, apiKey),
+      headers: await this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
       signal,
     })
@@ -1539,19 +1644,30 @@ export default class ChatService {
     })
   }
 
-  /** Creates JSON request headers, adding a stable session header for OpenCode chats. */
-  private headers(
+  /** Creates JSON request headers, adding versioned UA and session headers for OpenCode chats. */
+  private async headers(
     provider: CompatibleProvider,
     apiKey: string,
     conversationId?: string | undefined,
-  ): Record<string, string> {
+  ): Promise<Record<string, string>> {
+    if (provider.id !== 'opencode') {
+      return {
+        'Content-Type': 'application/json',
+        ...(provider.customHeaders ?? {}),
+        ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
+      }
+    }
+    const customHeaders = { ...(provider.customHeaders ?? {}) }
+    for (const key of Object.keys(customHeaders)) {
+      if (key.toLowerCase() === 'user-agent') delete customHeaders[key]
+    }
+    const version = await getOpencodeClientVersion()
     return {
       'Content-Type': 'application/json',
-      ...(provider.customHeaders ?? {}),
+      ...customHeaders,
+      'User-Agent': opencodeUserAgent(version),
       ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
-      ...(provider.id === 'opencode' && conversationId
-        ? { 'x-opencode-session': opencodeSessionId(conversationId) }
-        : {}),
+      'x-opencode-session': opencodeSessionId(conversationId),
     }
   }
 

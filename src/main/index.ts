@@ -19,6 +19,7 @@ import {
   ChatGptFamily,
   ClaudeWebAuth,
   ClaudeWebFamily,
+  getOpencodeClientVersion,
   OpenAiCompatibleFamily,
   ProviderRegistry,
 } from './providers/index'
@@ -55,6 +56,13 @@ const openApplicationWindow = async (): Promise<void> => {
   providers.registerFamily(new ClaudeWebFamily(claude))
   providers.registerFamily(new OpenAiCompatibleFamily(logger))
   await providers.initialize()
+  void getOpencodeClientVersion()
+    .then((version) => {
+      logger.info('Application', `Resolved OpenCode client version ${version}.`)
+    })
+    .catch((error: unknown) => {
+      logger.warn('Application', 'OpenCode client version could not be resolved.', error)
+    })
   const updater = new AppUpdater(logger)
   const chat = new ChatService(providers, chatgpt, claude, storage, logger)
   const attachments = new AttachmentService(storage)

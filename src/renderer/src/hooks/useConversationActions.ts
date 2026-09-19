@@ -15,6 +15,10 @@ import {
   setCurrentConversation,
 } from '@renderer/store/appSlice'
 import { toConversationSummary } from '@renderer/utils/formatters'
+import {
+  forgetInFlightConversation,
+  getInFlightConversation,
+} from '@renderer/utils/inFlightConversations'
 
 const logger = createLogger('ConversationActions')
 let selectionRevision = 0
@@ -34,6 +38,7 @@ export const useConversationActions = () => {
       try {
         const conversation = await window.app.getConversation(id)
         if (!conversation) {
+          forgetInFlightConversation(id)
           dispatch(removeConversationSummary(id))
           if (conversations.length === 1) {
             const replacement = await window.app.createConversation()
@@ -45,6 +50,18 @@ export const useConversationActions = () => {
               const loaded = await window.app.getConversation(next.id)
               if (loaded && revision === selectionRevision) dispatch(setCurrentConversation(loaded))
             }
+          }
+          return
+        }
+        const inFlight = getInFlightConversation(id)
+        if (inFlight) {
+          if (revision !== selectionRevision) return
+          dispatch(setCurrentConversation(inFlight))
+          void window.app.saveConversation(inFlight).catch((error: unknown) => {
+            logger.error('In-flight conversation could not be persisted.', error)
+          })
+          if (!inFlight.messages.some((item) => item.status === 'streaming')) {
+            forgetInFlightConversation(id)
           }
           return
         }
