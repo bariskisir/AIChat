@@ -27,6 +27,7 @@ import {
   resolveClaudeThinking,
 } from '../providers/claude-web/claude-web.protocol'
 import {
+  applyOpencodeSessionPolicy,
   getOpencodeClientVersion,
   OPENCODE_CHAT_TOOLS,
   OPENCODE_TOOLS,
@@ -670,9 +671,11 @@ export default class ChatService {
       name: provider.name,
       baseUrl: provider.baseUrl,
     })
+    const outgoingMessages =
+      provider.id === 'opencode' ? applyOpencodeSessionPolicy(messages) : messages
     const body: Record<string, unknown> = {
       model: modelId,
-      messages,
+      messages: outgoingMessages,
       stream: true,
       stream_options: { include_usage: true },
       ...(reasoningParameters ?? {}),
@@ -714,7 +717,9 @@ export default class ChatService {
     emit: Emit,
     conversationId?: string | undefined,
   ): Promise<void> {
-    const body = buildResponsesRequest(messages, modelId, reasoningEffort, true)
+    const outgoingMessages =
+      provider.id === 'opencode' ? applyOpencodeSessionPolicy(messages) : messages
+    const body = buildResponsesRequest(outgoingMessages, modelId, reasoningEffort, true)
     if (provider.id === 'opencode') {
       body.tools = [...OPENCODE_TOOLS]
       // The Zen Responses API rejects `reasoning.effort: 'off'`; quick-model and
@@ -1295,9 +1300,11 @@ export default class ChatService {
       name: provider.name,
       baseUrl: provider.baseUrl,
     })
+    const outgoingMessages =
+      provider.id === 'opencode' ? applyOpencodeSessionPolicy(messages) : messages
     const body: Record<string, unknown> = {
       model: modelId,
-      messages,
+      messages: outgoingMessages,
       stream: false,
       ...(reasoningParameters ?? {}),
       ...(provider.id === 'opencode' ? { tools: [...OPENCODE_CHAT_TOOLS] } : {}),
@@ -1339,7 +1346,9 @@ export default class ChatService {
     conversationId?: string | undefined,
   ): Promise<string> {
     const { apiKey } = this.providers.resolve({ providerId: provider.id, modelId })
-    const body = buildResponsesRequest(messages, modelId, UTILITY_REASONING_EFFORT, false)
+    const outgoingMessages =
+      provider.id === 'opencode' ? applyOpencodeSessionPolicy(messages) : messages
+    const body = buildResponsesRequest(outgoingMessages, modelId, UTILITY_REASONING_EFFORT, false)
     if (provider.id === 'opencode') {
       body.tools = [...OPENCODE_TOOLS]
       const reasoning = body.reasoning as { effort?: unknown } | undefined

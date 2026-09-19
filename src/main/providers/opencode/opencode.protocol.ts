@@ -24,6 +24,83 @@ export const OPENCODE_CHAT_TOOLS: Array<Record<string, unknown>> = [
   { type: 'function', function: { name: 'read' } },
 ]
 
+/** Instruction prepended to the first OpenCode user message so the model avoids tool calls. */
+export const OPENCODE_NO_TOOLS_INSTRUCTION = 'Do not use tools.'
+
+/** Minimal message shape shared by chat-completions and Responses request builders. */
+export interface OpencodeMessageLike {
+  role: string
+  content: string | Array<Record<string, unknown>>
+}
+
+/** Extracts plain text from one message content value, preserving stream-significant whitespace. */
+const opencodeTextContent = (content: string | Array<Record<string, unknown>>): string => {
+  if (typeof content === 'string') return content
+  const parts: string[] = []
+  for (const part of content) {
+    if (part.type === 'text' && typeof part.text === 'string' && part.text) {
+      parts.push(part.text)
+    }
+  }
+  return parts.join('\n\n')
+}
+
+/**
+ * Merges system prompts into every user message for OpenCode providers.
+ * The Zen backend handles system instructions more reliably when they are
+ * inlined, and every OpenCode turn carries an explicit no-tools directive
+ * so the whole session stays tool-free. System messages are removed from
+ * the returned array.
+ */
+export const applyOpencodeSessionPolicy = <T extends OpencodeMessageLike>(
+  messages: readonly T[],
+): T[] => {
+  const systemTexts: string[] = []
+  for (const message of messages) {
+    if (message.role !== 'system') continue
+    const text =
+      typeof message.content === 'string'
+        ? message.content.trim()
+        : opencodeTextContent(message.content).trim()
+    if (text) systemTexts.push(text)
+  }
+  const prefix =
+    systemTexts.length > 0
+      ? `${systemTexts.join('\n\n')}\n\n${OPENCODE_NO_TOOLS_INSTRUCTION}`
+      : OPENCODE_NO_TOOLS_INSTRUCTION
+  const withoutSystem = messages.filter((message) => message.role !== 'system')
+  if (!withoutSystem.some((message) => message.role === 'user')) {
+    return [{ role: 'user', content: prefix } as T, ...withoutSystem]
+  }
+  return withoutSystem.map((message) => {
+    if (message.role !== 'user') return message
+    if (typeof message.content === 'string') {
+      if (message.content.startsWith(prefix)) return message
+      const original = message.content.trim()
+      return {
+        ...message,
+        content: original ? `${prefix}\n\n${message.content}` : prefix,
+      }
+    }
+    const first = message.content[0]
+    if (
+      first &&
+      first.type === 'text' &&
+      typeof first.text === 'string' &&
+      first.text.startsWith(prefix)
+    ) {
+      return message
+    }
+    return {
+      ...message,
+      content: [{ type: 'text', text: prefix }, ...message.content],
+    }
+  })
+}
+
+/** Backwards-compatible alias kept for the first-message-only policy name. */
+export const applyOpencodeFirstMessagePolicy = applyOpencodeSessionPolicy
+
 /** Lowercase alphanumeric alphabet used for session identifier padding. */
 const SESSION_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
