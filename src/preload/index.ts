@@ -81,6 +81,10 @@ const api: ApiBridge = {
     ipcRenderer.invoke(IpcChannel.AttachmentsCreateText, { conversationId, text }),
   /** Changes the native always-on-top state. */
   setAlwaysOnTop: (enabled) => ipcRenderer.invoke(IpcChannel.WindowAlwaysOnTop, enabled),
+  /** Applies a live window opacity without persisting it. Returns the applied value. */
+  setWindowOpacity: (opacity) => ipcRenderer.invoke(IpcChannel.WindowSetOpacity, opacity),
+  /** Reports the current native window opacity. */
+  getWindowOpacity: () => ipcRenderer.invoke(IpcChannel.WindowGetOpacity),
   /** Minimizes the main application window. */
   minimizeWindow: () => ipcRenderer.invoke(IpcChannel.WindowMinimize),
   /** Toggles and reports the native maximized state. */

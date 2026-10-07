@@ -10,6 +10,8 @@ export {
   PAGE_ZOOM_LIMITS,
   THEME_MODES,
   TIME_FORMATS,
+  TRAY_ICON_PRESETS,
+  WINDOW_OPACITY_LIMITS,
 } from './domain/app-settings'
 export type {
   AppLocale,
@@ -19,6 +21,7 @@ export type {
   NavbarPosition,
   ThemeMode,
   TimeFormat,
+  TrayIconPreset,
 } from './domain/app-settings'
 export type { ChatAttachment } from './domain/attachments'
 export { MAX_CHAT_ERROR_LENGTH } from './domain/chat'

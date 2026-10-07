@@ -2,7 +2,7 @@
 
 import { promises as fs } from 'node:fs'
 import { app, dialog, ipcMain, shell, type BrowserWindow, type WebContents } from 'electron'
-import { IpcChannel, type UpdateStateEvent } from '@shared/index'
+import { IpcChannel, WINDOW_OPACITY_LIMITS, type UpdateStateEvent } from '@shared/index'
 import { z } from 'zod'
 import { settingsPatchSchema } from '../config/settings.schema'
 import type AppUpdater from '../updates/app.updater'
@@ -73,8 +73,12 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       settings.showTrayIcon = false
       settings.minimizeToTray = false
       settings.startMinimized = false
+      settings.showTaskbar = true
     }
     window.webContents.setZoomFactor(settings.pageZoom)
+    window.setContentProtection(settings.contentProtection)
+    window.setOpacity(settings.windowOpacity)
+    window.setSkipTaskbar(!settings.showTaskbar)
     let conversations = await services.storage.listConversations()
     if (conversations.length === 0) {
       await services.storage.createConversation()
@@ -99,9 +103,13 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       delete patch.showTrayIcon
       delete patch.minimizeToTray
       delete patch.startMinimized
+      delete patch.showTaskbar
     }
     const saved = await services.storage.updateSettings(patch)
     window.setAlwaysOnTop(saved.alwaysOnTop)
+    window.setContentProtection(saved.contentProtection)
+    window.setOpacity(saved.windowOpacity)
+    window.setSkipTaskbar(!saved.showTaskbar)
     window.webContents.setZoomFactor(saved.pageZoom)
     services.tray.applySettings(saved)
     services.logger.setLevel(saved.logLevel)
@@ -218,6 +226,21 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
     assertSender(event.sender)
     if (typeof enabled !== 'boolean') throw new Error('Invalid window preference.')
     window.setAlwaysOnTop(enabled)
+  })
+  ipcMain.handle(IpcChannel.WindowSetOpacity, (event, input: unknown) => {
+    assertSender(event.sender)
+    const opacity = Number(input)
+    if (!Number.isFinite(opacity)) throw new Error('Invalid window opacity.')
+    const clamped = Math.min(
+      WINDOW_OPACITY_LIMITS.max,
+      Math.max(WINDOW_OPACITY_LIMITS.min, opacity),
+    )
+    window.setOpacity(clamped)
+    return clamped
+  })
+  ipcMain.handle(IpcChannel.WindowGetOpacity, (event) => {
+    assertSender(event.sender)
+    return window.getOpacity()
   })
   ipcMain.handle(IpcChannel.WindowMinimize, (event) => {
     assertSender(event.sender)

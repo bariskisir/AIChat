@@ -1,6 +1,6 @@
 {
   "name": "ai-chat",
-  "version": "3.11.4",
+  "version": "3.12.0",
   "description": "Simple multi-provider AI chat desktop application",
   "main": "./out/main/index.js",
   "author": "bariskisir",
@@ -98,6 +98,14 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "build/tray-icon-bluetooth.png",
+        "to": "tray-icon-bluetooth.png"
+      },
+      {
+        "from": "build/tray-icon-weather.png",
+        "to": "tray-icon-weather.png"
       }
     ],
     "win": {

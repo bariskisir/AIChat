@@ -140,6 +140,31 @@ describe('TrayService', () => {
     expect(service.shouldMinimizeOnClose()).toBe(false)
   })
 
+  it('recreates the tray icon when the selected preset changes', () => {
+    const service = new TrayService(
+      createWindow(),
+      { showTrayIcon: true, minimizeToTray: false, trayIcon: 'default' },
+      createLogger(),
+    )
+    const first = electronMocks.instances[0]
+    expect(first).toBeDefined()
+
+    service.applySettings({
+      showTrayIcon: true,
+      minimizeToTray: false,
+      trayIcon: 'bluetooth',
+    })
+    expect(first?.destroy).toHaveBeenCalledOnce()
+    expect(electronMocks.instances).toHaveLength(2)
+
+    service.applySettings({
+      showTrayIcon: true,
+      minimizeToTray: false,
+      trayIcon: 'bluetooth',
+    })
+    expect(electronMocks.instances).toHaveLength(2)
+  })
+
   it('builds an unseparated Open, Settings, Exit menu and opens settings', () => {
     const window = createWindow()
     new TrayService(window, { showTrayIcon: true, minimizeToTray: true }, createLogger())

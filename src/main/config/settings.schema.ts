@@ -8,6 +8,8 @@ import {
   PAGE_ZOOM_LIMITS,
   TIME_FORMATS,
   THEME_MODES,
+  TRAY_ICON_PRESETS,
+  WINDOW_OPACITY_LIMITS,
   type AppSettings,
 } from '@shared/index'
 import { z } from 'zod'
@@ -20,6 +22,10 @@ const settingsFieldsSchema = z.object({
   pageZoom: z.number().min(PAGE_ZOOM_LIMITS.min).max(PAGE_ZOOM_LIMITS.max),
   timeFormat: z.enum(TIME_FORMATS),
   alwaysOnTop: z.boolean(),
+  contentProtection: z.boolean(),
+  windowOpacity: z.number().min(WINDOW_OPACITY_LIMITS.min).max(WINDOW_OPACITY_LIMITS.max),
+  trayIcon: z.enum(TRAY_ICON_PRESETS),
+  showTaskbar: z.boolean(),
   showTrayIcon: z.boolean(),
   minimizeToTray: z.boolean(),
   startMinimized: z.boolean(),

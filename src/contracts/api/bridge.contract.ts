@@ -91,6 +91,10 @@ export interface ApiBridge {
   createTextAttachment(conversationId: string, text: string): Promise<ChatAttachment>
   /** Changes the native always-on-top state. */
   setAlwaysOnTop(enabled: boolean): Promise<void>
+  /** Applies a live window opacity without persisting it. Returns the applied value. */
+  setWindowOpacity(opacity: number): Promise<number>
+  /** Reports the current native window opacity. */
+  getWindowOpacity(): Promise<number>
   /** Minimizes the main application window. */
   minimizeWindow(): Promise<void>
   /** Toggles the native maximized state and reports the result. */

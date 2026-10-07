@@ -2,10 +2,15 @@
  * Renders application appearance and navbar layout preferences.
  */
 
-import { Button, Segmented, Tooltip } from 'antd'
+import { Button, Segmented, Slider, Switch, Tooltip } from 'antd'
 import { Minus, Monitor, Moon, PanelLeft, PanelTop, Plus, RotateCcw, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { PAGE_ZOOM_LIMITS, type NavbarPosition, type ThemeMode } from '@shared/index'
+import {
+  PAGE_ZOOM_LIMITS,
+  WINDOW_OPACITY_LIMITS,
+  type NavbarPosition,
+  type ThemeMode,
+} from '@shared/index'
 import { useSettingsActions } from '@renderer/hooks/useSettingsActions'
 import { useAppSelector } from '@renderer/store'
 import SettingLabel from '../components/SettingLabel'
@@ -102,6 +107,40 @@ const DisplaySettingsSection = (): React.JSX.Element => {
                 })
               }
             />
+          </div>
+        </div>
+        <div className={styles.settingRow}>
+          <SettingLabel
+            title={t('settings.contentProtection')}
+            description={t('settings.contentProtectionDescription')}
+          />
+          <div className={styles.settingControl}>
+            <Switch
+              checked={settings.contentProtection}
+              onChange={(contentProtection) =>
+                void settingsActions.saveSettings({ contentProtection })
+              }
+            />
+          </div>
+        </div>
+        <div className={styles.settingRow}>
+          <SettingLabel
+            title={t('settings.windowOpacity')}
+            description={t('settings.windowOpacityDescription')}
+          />
+          <div className={styles.settingControl}>
+            <Slider
+              min={Math.round(WINDOW_OPACITY_LIMITS.min * 100)}
+              max={Math.round(WINDOW_OPACITY_LIMITS.max * 100)}
+              step={Math.round(WINDOW_OPACITY_LIMITS.step * 100)}
+              value={Math.round(settings.windowOpacity * 100)}
+              tooltip={{ formatter: (value) => `${value}%` }}
+              style={{ width: 160 }}
+              onChange={(percent) =>
+                void settingsActions.saveSettings({ windowOpacity: percent / 100 })
+              }
+            />
+            <span className={styles.zoomValue}>{Math.round(settings.windowOpacity * 100)}%</span>
           </div>
         </div>
       </section>
