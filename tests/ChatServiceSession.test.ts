@@ -31,7 +31,7 @@ const createProvider = (id = 'opencode'): ProviderSummary => ({
   id,
   name: id === 'opencode' ? 'OpenCode' : 'Provider',
   type: 'openai-compatible',
-  baseUrl: id === 'opencode' ? 'https://opencode.ai/zen/v1' : 'https://provider.example/v1',
+  baseUrl: id === 'opencode' ? 'https://opencode.ai/inference/v1' : 'https://provider.example/v1',
   builtin: false,
   enabled: true,
   hasApiKey: true,
@@ -129,7 +129,7 @@ describe('ChatService OpenCode session headers', () => {
   it('derives a stable, prefixed session identifier from a conversation', () => {
     const first = '5da0c64d-a2f4-4ab9-9a00-eef49ebba100'
     const second = 'f3cdb6ac-8eaa-479e-9a67-37e5af58c100'
-    expect(opencodeSessionId(first)).toMatch(/^ses_[a-z0-9]{26}$/)
+    expect(opencodeSessionId(first)).toMatch(/^ses_[0-9a-f]{12}[A-Za-z0-9]{14}$/)
     expect(opencodeSessionId(first)).toBe(opencodeSessionId(first))
     expect(opencodeSessionId(first)).not.toBe(opencodeSessionId(second))
   })
@@ -159,11 +159,17 @@ describe('ChatService OpenCode session headers', () => {
     for (const [, init] of responsesCalls) {
       const headers = requestHeaders(init)
       expect(headers['x-opencode-session']).toBe(expected)
-      expect(headers['User-Agent']).toBe('opencode/1.18.31')
+      expect(headers['x-opencode-session-id']).toBe(expected)
+      expect(headers['x-session-affinity']).toBe(expected)
+      expect(headers['User-Agent']).toBe('opencode/latest/1.18.31/cli')
       const body = requestBody(init)
       expect(body.tools).toEqual([
         { type: 'function', name: 'bash', parameters: {} },
+        { type: 'function', name: 'edit', parameters: {} },
+        { type: 'function', name: 'glob', parameters: {} },
+        { type: 'function', name: 'grep', parameters: {} },
         { type: 'function', name: 'read', parameters: {} },
+        { type: 'function', name: 'write', parameters: {} },
       ])
     }
     expect(events).toContainEqual({ requestId: 'request-1', type: 'complete' })
@@ -199,7 +205,7 @@ describe('ChatService OpenCode session headers', () => {
     expect(requestHeaders(init)['x-opencode-session']).toBe(
       opencodeSessionId('5da0c64d-a2f4-4ab9-9a00-eef49ebba100'),
     )
-    expect(requestHeaders(init)['User-Agent']).toBe('opencode/1.18.31')
+    expect(requestHeaders(init)['User-Agent']).toBe('opencode/latest/1.18.31/cli')
   })
 
   it('omits the session header for non-OpenCode providers', async () => {

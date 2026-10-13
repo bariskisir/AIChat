@@ -70,7 +70,7 @@ describe('ProviderRegistry', () => {
 
     const modelsCall = vi
       .mocked(fetch)
-      .mock.calls.find(([url]) => url === 'https://opencode.ai/zen/v1/models')
+      .mock.calls.find(([url]) => url === 'https://opencode.ai/inference/v1/models')
     expect(modelsCall).toBeDefined()
     const modelsHeaders = (modelsCall?.[1] as RequestInit)?.headers as Record<string, string>
     expect(modelsHeaders.Authorization).toBe('Bearer public')
@@ -142,7 +142,7 @@ describe('ProviderRegistry', () => {
       id: 'opencode',
       type: 'openai-compatible',
       name: 'OpenCode',
-      baseUrl: 'https://opencode.ai/zen/v1',
+      baseUrl: 'https://opencode.ai/inference/v1',
       apiKey: 'personal-key',
       catalogModels: [catalogModel('custom/model', 'Custom Model')],
       selectedModelIds: ['custom/model'],
@@ -191,15 +191,16 @@ describe('ProviderRegistry', () => {
 
     const upgraded = await createRegistry()
     expect(upgraded.getEditorData('opencode').customHeaders).toEqual({ 'X-Custom': 'kept' })
+    expect(upgraded.getEditorData('opencode').baseUrl).toBe('https://opencode.ai/inference/v1')
 
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(5)
+    expect(persisted.migrationVersion).toBe(6)
 
     await upgraded.save({
       id: 'opencode',
       type: 'openai-compatible',
       name: 'OpenCode',
-      baseUrl: 'https://opencode.ai/zen/v1',
+      baseUrl: 'https://opencode.ai/inference/v1',
       apiKey: 'public',
       catalogModels: [],
       selectedModelIds: [],
@@ -295,7 +296,7 @@ describe('ProviderRegistry', () => {
       'openai/gpt-4o',
     ])
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(5)
+    expect(persisted.migrationVersion).toBe(6)
 
     // A second launch does not refetch: the stored server levels are kept as-is.
     vi.stubGlobal(
@@ -459,7 +460,7 @@ describe('ProviderRegistry', () => {
             id: 'opencode',
             name: 'OpenCode',
             type: 'openai-compatible',
-            baseUrl: 'https://opencode.ai/zen/v1',
+            baseUrl: 'https://opencode.ai/inference/v1',
             batchUrl: '',
             batchPollIntervalSeconds: 30,
             batchModelRegex: 'batch',

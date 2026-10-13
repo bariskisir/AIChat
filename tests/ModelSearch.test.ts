@@ -98,5 +98,7 @@ describe('modelSearch', () => {
     expect(getModelLogoById('k3po')).toBeUndefined()
     expect(getModelLogoById('deepseek-chat')).toBeDefined()
     expect(getModelLogoById('claude-3-7-sonnet')).toBeDefined()
+    expect(getModelLogoById('muse-spark-1.3-contributor-free')).toBeDefined()
+    expect(getModelLogoById('muse-spark-1.2')).toBeDefined()
   })
 })

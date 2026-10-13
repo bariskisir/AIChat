@@ -45,7 +45,7 @@ export function getModelLogoById(modelId: string): string | undefined {
     '(amazon|nova-)': AmazonModelLogo,
     '(gemini|gemma|palm-|veo|bison|imagen|google)': GoogleModelLogo,
     '(hermes|nous)': NousResearchModelLogo,
-    '(llama|meta)': MetaModelLogo,
+    '(llama|meta|muse|spark)': MetaModelLogo,
     '(mistral|mixtral|magistral)': MistralModelLogo,
     '(moonshot|kimi|^k[3-9](?:[-_.]|$))': MoonshotAiModelLogo,
     '(phi|wizardlm|orca|microsoft)': MicrosoftModelLogo,

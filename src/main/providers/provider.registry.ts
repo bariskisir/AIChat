@@ -121,6 +121,17 @@ const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
     }
     opencode.customHeaders = cleaned
   },
+  /**
+   * Migration 6: points the built-in OpenCode provider at the canonical
+   * inference endpoint used by the OpenCode CLI v2.
+   */
+  (state) => {
+    const opencode = state.providers.find((provider) => provider.id === 'opencode')
+    if (!opencode) return
+    if (opencode.baseUrl.replace(/\/+$/, '') === 'https://opencode.ai/zen/v1') {
+      opencode.baseUrl = 'https://opencode.ai/inference/v1'
+    }
+  },
 ]
 
 /** One built-in preset shipped with the application. */
@@ -142,7 +153,7 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
     id: 'opencode',
     name: 'OpenCode',
     type: 'openai-compatible',
-    baseUrl: 'https://opencode.ai/zen/v1',
+    baseUrl: 'https://opencode.ai/inference/v1',
     defaultApiKey: 'public',
     enabledByDefault: true,
   },

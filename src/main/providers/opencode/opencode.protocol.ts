@@ -10,18 +10,68 @@ import { httpFetch } from '../../http/http.fetch'
 export const OPENCODE_LATEST_URL = 'https://registry.npmjs.org/opencode-ai/latest'
 
 /** Pinned OpenCode client version used when the NPM registry is unreachable. */
-export const DEFAULT_OPENCODE_CLIENT_VERSION = '1.18.31'
+export const DEFAULT_OPENCODE_CLIENT_VERSION = '2.0.28'
 
 /** Tools the OpenCode Zen Responses endpoint requires on every request. */
 export const OPENCODE_TOOLS: Array<Record<string, unknown>> = [
   { type: 'function', name: 'bash', parameters: {} },
+  { type: 'function', name: 'edit', parameters: {} },
+  { type: 'function', name: 'glob', parameters: {} },
+  { type: 'function', name: 'grep', parameters: {} },
   { type: 'function', name: 'read', parameters: {} },
+  { type: 'function', name: 'write', parameters: {} },
 ]
 
 /** Tools the OpenCode Zen chat-completions endpoint requires: function names nested under `function`. */
 export const OPENCODE_CHAT_TOOLS: Array<Record<string, unknown>> = [
-  { type: 'function', function: { name: 'bash' } },
-  { type: 'function', function: { name: 'read' } },
+  {
+    type: 'function',
+    function: {
+      name: 'bash',
+      description: 'bash tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'edit',
+      description: 'edit tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'glob',
+      description: 'glob tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'grep',
+      description: 'grep tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'read',
+      description: 'read tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write',
+      description: 'write tool',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
 ]
 
 /** Instruction prepended to the first OpenCode user message so the model avoids tool calls. */
@@ -101,36 +151,56 @@ export const applyOpencodeSessionPolicy = <T extends OpencodeMessageLike>(
 /** Backwards-compatible alias kept for the first-message-only policy name. */
 export const applyOpencodeFirstMessagePolicy = applyOpencodeSessionPolicy
 
-/** Lowercase alphanumeric alphabet used for session identifier padding. */
-const SESSION_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
+/** Base62 alphabet used for the random tail of canonical OpenCode session identifiers. */
+const SESSION_BASE62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
 
-/** Generates cryptographically random lowercase alphanumeric characters. */
-const randomSuffix = (length: number): string => {
-  if (length <= 0) return ''
-  const bytes = randomBytes(length)
-  let output = ''
+/** Monotonic counter mixed into the timestamp so identifiers created in the same millisecond differ. */
+let sessionCounter = 0
+let lastSessionTimestamp = 0
+
+/** In-memory affinity cache: one stable canonical session per local conversation. */
+const sessionAffinityCache = new Map<string, string>()
+
+/** Generates one canonical `ses_` identifier with an inverted timestamp prefix. */
+const createCanonicalSessionId = (): string => {
+  const timestamp = Date.now()
+  if (timestamp !== lastSessionTimestamp) {
+    lastSessionTimestamp = timestamp
+    sessionCounter = 0
+  }
+  sessionCounter += 1
+  const current = BigInt(timestamp) * 0x1000n + BigInt(sessionCounter)
+  const inverted = ~current
+  const time = Array.from({ length: 6 }, (_, index) =>
+    Number((inverted >> BigInt(40 - 8 * index)) & 0xffn)
+      .toString(16)
+      .padStart(2, '0'),
+  ).join('')
+  const bytes = randomBytes(14)
+  let tail = ''
   for (let index = 0; index < bytes.length; index += 1) {
     const byte = bytes[index]
     if (byte === undefined) continue
-    output += SESSION_ALPHABET[byte % SESSION_ALPHABET.length]
+    tail += SESSION_BASE62[byte % SESSION_BASE62.length]
   }
-  return output
+  return `ses_${time}${tail}`
 }
 
 /**
  * Maps one local conversation to the stable OpenCode session identifier.
- * The identifier is always `ses_` followed by exactly 26 lowercase
- * alphanumeric characters, deriving deterministically from the conversation
- * identifier and padding with random characters when it is too short.
+ * The identifier is always `ses_` followed by 12 lowercase hex characters
+ * (inverted timestamp, matching `ses_<12 hex><14 base62>`) and 14 Base62
+ * characters. Identifiers are generated once per conversation and reused
+ * so provider routing and prompt caching stay stable, mirroring
+ * `SessionAffinity` in the OpenCode CLI.
  */
 export const opencodeSessionId = (conversationId?: string | undefined): string => {
-  const cleaned = (conversationId ?? '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
-  const deterministic = cleaned.slice(0, 26)
-  const suffix =
-    deterministic.length >= 26
-      ? deterministic
-      : `${deterministic}${randomSuffix(26 - deterministic.length)}`
-  return `ses_${suffix}`
+  const key = (conversationId ?? '').trim() || 'default'
+  const cached = sessionAffinityCache.get(key)
+  if (cached) return cached
+  const created = createCanonicalSessionId()
+  sessionAffinityCache.set(key, created)
+  return created
 }
 
 let cachedClientVersion: string | null = null
@@ -140,6 +210,9 @@ let cachedClientVersionPromise: Promise<string> | null = null
 export const resetOpencodeClientVersionCache = (): void => {
   cachedClientVersion = null
   cachedClientVersionPromise = null
+  sessionAffinityCache.clear()
+  sessionCounter = 0
+  lastSessionTimestamp = 0
 }
 
 /** Resolves the OpenCode client version from the NPM registry once per process. */
@@ -173,4 +246,4 @@ export const getOpencodeClientVersion = async (): Promise<string> => {
 }
 
 /** Builds the mandatory OpenCode User-Agent header value for one client version. */
-export const opencodeUserAgent = (version: string): string => `opencode/${version}`
+export const opencodeUserAgent = (version: string): string => `opencode/latest/${version}/cli`

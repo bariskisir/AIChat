@@ -277,11 +277,15 @@ describe('ChatService batch routing', () => {
     expect(body).toMatchObject({ stream: true })
     expect(body.tools).toEqual([
       { type: 'function', name: 'bash', parameters: {} },
+      { type: 'function', name: 'edit', parameters: {} },
+      { type: 'function', name: 'glob', parameters: {} },
+      { type: 'function', name: 'grep', parameters: {} },
       { type: 'function', name: 'read', parameters: {} },
+      { type: 'function', name: 'write', parameters: {} },
     ])
     const headers = (responsesCall[1] as RequestInit).headers as Record<string, string>
-    expect(headers['User-Agent']).toBe('opencode/1.18.31')
-    expect(headers['x-opencode-session']).toMatch(/^ses_[a-z0-9]{26}$/)
+    expect(headers['User-Agent']).toBe('opencode/latest/1.18.31/cli')
+    expect(headers['x-opencode-session']).toMatch(/^ses_[0-9a-f]{12}[A-Za-z0-9]{14}$/)
   })
 
   it('continues a saved batch after application restart and writes its result to storage', async () => {

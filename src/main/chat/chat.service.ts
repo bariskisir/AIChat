@@ -1671,12 +1671,17 @@ export default class ChatService {
       if (key.toLowerCase() === 'user-agent') delete customHeaders[key]
     }
     const version = await getOpencodeClientVersion()
+    const affinity = buildOpencodeSessionId(conversationId)
     return {
       'Content-Type': 'application/json',
       ...customHeaders,
       'User-Agent': opencodeUserAgent(version),
       ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
-      'x-opencode-session': opencodeSessionId(conversationId),
+      'x-opencode-session': affinity,
+      'x-opencode-session-id': affinity,
+      'x-session-affinity': affinity,
+      'X-Session-Id': affinity,
+      'x-opencode-client': 'cli',
     }
   }
 
