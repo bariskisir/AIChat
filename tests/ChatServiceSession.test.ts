@@ -45,12 +45,12 @@ const createStorage = () => ({
 })
 
 /** Creates a chat service with deterministic provider and storage dependencies. */
-const createService = (provider: ProviderSummary) => {
+const createService = (provider: ProviderSummary, apiKey = 'test-key') => {
   const providers = {
     snapshot: vi.fn(() => ({ providers: [provider], quickModel: null })),
     resolve: vi.fn(() => ({
       provider,
-      apiKey: 'test-key',
+      apiKey,
       modelDefinition: {
         modelId: 'muse-spark-1.2-contributor-free',
         name: 'Muse Spark',
@@ -90,8 +90,8 @@ const stubOpencodeFetch = (
 ): void => {
   fetchMock.mockImplementation(async (input: string | URL | Request) => {
     const url = String(input)
-    if (url.includes('registry.npmjs.org')) {
-      return new Response(JSON.stringify({ version: '1.18.31' }), {
+    if (url.includes('opencode.ai/update/api')) {
+      return new Response(JSON.stringify({ version: '2.0.29' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -161,15 +161,82 @@ describe('ChatService OpenCode session headers', () => {
       expect(headers['x-opencode-session']).toBe(expected)
       expect(headers['x-opencode-session-id']).toBe(expected)
       expect(headers['x-session-affinity']).toBe(expected)
-      expect(headers['User-Agent']).toBe('opencode/latest/1.18.31/cli')
+      expect(headers['User-Agent']).toBe('opencode/latest/2.0.29/cli')
+      expect(headers['x-api-key']).toBeUndefined()
       const body = requestBody(init)
       expect(body.tools).toEqual([
-        { type: 'function', name: 'bash', parameters: {} },
-        { type: 'function', name: 'edit', parameters: {} },
-        { type: 'function', name: 'glob', parameters: {} },
-        { type: 'function', name: 'grep', parameters: {} },
-        { type: 'function', name: 'read', parameters: {} },
-        { type: 'function', name: 'write', parameters: {} },
+        {
+          type: 'function',
+          name: 'bash',
+          description: 'Run a shell command',
+          parameters: {
+            type: 'object',
+            properties: { command: { type: 'string' } },
+            required: ['command'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
+        {
+          type: 'function',
+          name: 'edit',
+          description: 'Edit a file',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
+        {
+          type: 'function',
+          name: 'glob',
+          description: 'Find files by pattern',
+          parameters: {
+            type: 'object',
+            properties: { pattern: { type: 'string' } },
+            required: ['pattern'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
+        {
+          type: 'function',
+          name: 'grep',
+          description: 'Search file contents',
+          parameters: {
+            type: 'object',
+            properties: { pattern: { type: 'string' } },
+            required: ['pattern'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
+        {
+          type: 'function',
+          name: 'read',
+          description: 'Read a file',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
+        {
+          type: 'function',
+          name: 'write',
+          description: 'Write a file',
+          parameters: {
+            type: 'object',
+            properties: { path: { type: 'string' } },
+            required: ['path'],
+            additionalProperties: false,
+          },
+          strict: false,
+        },
       ])
     }
     expect(events).toContainEqual({ requestId: 'request-1', type: 'complete' })
@@ -205,7 +272,26 @@ describe('ChatService OpenCode session headers', () => {
     expect(requestHeaders(init)['x-opencode-session']).toBe(
       opencodeSessionId('5da0c64d-a2f4-4ab9-9a00-eef49ebba100'),
     )
-    expect(requestHeaders(init)['User-Agent']).toBe('opencode/latest/1.18.31/cli')
+    expect(requestHeaders(init)['User-Agent']).toBe('opencode/latest/2.0.29/cli')
+  })
+
+  it('falls back to the public bearer and strips custom auth headers for OpenCode', async () => {
+    const fetchMock =
+      vi.fn<(_input: string | URL | Request, _init?: RequestInit) => Promise<Response>>()
+    stubOpencodeFetch(fetchMock)
+    vi.stubGlobal('fetch', fetchMock)
+    const provider = { ...createProvider(), customHeaders: { 'x-api-key': 'stale-key' } }
+    const service = createService(provider, '')
+
+    await service.start(
+      createRequest('5da0c64d-a2f4-4ab9-9a00-eef49ebba100', 'request-1'),
+      () => undefined,
+    )
+
+    const [, init] = findResponsesCall(fetchMock)
+    const headers = requestHeaders(init)
+    expect(headers.Authorization).toBe('Bearer public')
+    expect(headers['x-api-key']).toBeUndefined()
   })
 
   it('omits the session header for non-OpenCode providers', async () => {

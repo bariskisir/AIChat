@@ -217,7 +217,8 @@ export default class AttachmentService {
     let extractedText = 'This document is attached, but no plain-text preview was available.'
     if (EXTRACTABLE_DOCUMENT_EXTENSIONS.has(extension)) {
       try {
-        extractedText = (await parseOffice(localPath)).toText().slice(0, 10_000_000)
+        const { value } = await (await parseOffice(localPath)).to('text')
+        extractedText = value.slice(0, 10_000_000)
       } catch {
         // Unsupported or damaged documents remain attached with a safe metadata fallback.
       }

@@ -132,6 +132,23 @@ const PROVIDER_FILE_MIGRATIONS: ProviderFileMigration[] = [
       opencode.baseUrl = 'https://opencode.ai/inference/v1'
     }
   },
+  /**
+   * Migration 7: aligns existing installs with the fixed free-tier request
+   * shape. The old Zen endpoint is rewritten to the canonical inference
+   * endpoint, and an empty key falls back to `public` like the CLI.
+   * Non-empty keys (paid Console keys) are left untouched.
+   */
+  (state) => {
+    const opencode = state.providers.find((provider) => provider.id === 'opencode')
+    if (!opencode) return
+    const baseUrl = opencode.baseUrl.replace(/\/+$/, '')
+    if (baseUrl === '' || baseUrl === 'https://opencode.ai/zen/v1') {
+      opencode.baseUrl = 'https://opencode.ai/inference/v1'
+    }
+    if (!opencode.apiKey) {
+      opencode.apiKey = 'public'
+    }
+  },
 ]
 
 /** One built-in preset shipped with the application. */
@@ -1048,7 +1065,7 @@ export class ProviderRegistry {
     )
   }
 
-  /** Fetches the first-install OpenCode catalog and selects the preferred free Muse chat model. */
+  /** Fetches the first-install OpenCode catalog, keeping every free chat model with Muse preferred. */
   private async initializeOpenCodeDefaults(): Promise<void> {
     const provider = this.requireProvider('opencode')
     try {
@@ -1073,16 +1090,16 @@ export class ProviderRegistry {
         .sort((left, right) =>
           searchableText(right).localeCompare(searchableText(left), undefined, { numeric: true }),
         )
-      const selected = sorted[0] ?? freeChatModels[0]
-      if (!selected) {
+      const preferred = sorted[0] ?? freeChatModels[0]
+      if (!preferred) {
         this.logger.warn(
           'ProviderRegistry',
           'Initial OpenCode catalog did not contain a free chat model.',
         )
         return
       }
-      provider.models = [selected]
-      provider.selectedModelIds = [selected.modelId]
+      provider.models = [preferred, ...freeChatModels.filter((model) => model !== preferred)]
+      provider.selectedModelIds = provider.models.map((model) => model.modelId)
       this.assignInitialDefaults(provider)
     } catch (error) {
       this.logger.warn('ProviderRegistry', 'Initial OpenCode model fetch failed.', error)

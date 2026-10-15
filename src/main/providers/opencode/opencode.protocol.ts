@@ -6,70 +6,174 @@
 import { randomBytes } from 'node:crypto'
 import { httpFetch } from '../../http/http.fetch'
 
-/** NPM registry document holding the latest published opencode-ai version. */
-export const OPENCODE_LATEST_URL = 'https://registry.npmjs.org/opencode-ai/latest'
+/** Update endpoint holding the latest published opencode CLI version (v2 line). */
+export const OPENCODE_LATEST_URL = 'https://opencode.ai/update/api/latest/cli/npm'
 
-/** Pinned OpenCode client version used when the NPM registry is unreachable. */
-export const DEFAULT_OPENCODE_CLIENT_VERSION = '2.0.28'
+/** Pinned OpenCode client version used when the update endpoint is unreachable. */
+export const DEFAULT_OPENCODE_CLIENT_VERSION = '2.0.29'
 
-/** Tools the OpenCode Zen Responses endpoint requires on every request. */
+/**
+ * Tools the OpenCode Responses endpoint requires on every request.
+ * Every tool carries a description and a JSON-schema parameters object:
+ * the free-tier gate rejects placeholder tools without them.
+ */
 export const OPENCODE_TOOLS: Array<Record<string, unknown>> = [
-  { type: 'function', name: 'bash', parameters: {} },
-  { type: 'function', name: 'edit', parameters: {} },
-  { type: 'function', name: 'glob', parameters: {} },
-  { type: 'function', name: 'grep', parameters: {} },
-  { type: 'function', name: 'read', parameters: {} },
-  { type: 'function', name: 'write', parameters: {} },
+  {
+    type: 'function',
+    name: 'bash',
+    description: 'Run a shell command',
+    parameters: {
+      type: 'object',
+      properties: { command: { type: 'string' } },
+      required: ['command'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: 'function',
+    name: 'edit',
+    description: 'Edit a file',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: 'function',
+    name: 'glob',
+    description: 'Find files by pattern',
+    parameters: {
+      type: 'object',
+      properties: { pattern: { type: 'string' } },
+      required: ['pattern'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: 'function',
+    name: 'grep',
+    description: 'Search file contents',
+    parameters: {
+      type: 'object',
+      properties: { pattern: { type: 'string' } },
+      required: ['pattern'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: 'function',
+    name: 'read',
+    description: 'Read a file',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
+  {
+    type: 'function',
+    name: 'write',
+    description: 'Write a file',
+    parameters: {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    },
+    strict: false,
+  },
 ]
 
-/** Tools the OpenCode Zen chat-completions endpoint requires: function names nested under `function`. */
+/**
+ * Tools the OpenCode chat-completions endpoint requires: function names nested
+ * under `function`. Like the Responses tools, every entry carries a description
+ * and a JSON-schema parameters object the free-tier gate accepts.
+ */
 export const OPENCODE_CHAT_TOOLS: Array<Record<string, unknown>> = [
   {
     type: 'function',
     function: {
       name: 'bash',
-      description: 'bash tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Run a shell command',
+      parameters: {
+        type: 'object',
+        properties: { command: { type: 'string' } },
+        required: ['command'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'edit',
-      description: 'edit tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Edit a file',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string' } },
+        required: ['path'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'glob',
-      description: 'glob tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Find files by pattern',
+      parameters: {
+        type: 'object',
+        properties: { pattern: { type: 'string' } },
+        required: ['pattern'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'grep',
-      description: 'grep tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Search file contents',
+      parameters: {
+        type: 'object',
+        properties: { pattern: { type: 'string' } },
+        required: ['pattern'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'read',
-      description: 'read tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Read a file',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string' } },
+        required: ['path'],
+        additionalProperties: false,
+      },
     },
   },
   {
     type: 'function',
     function: {
       name: 'write',
-      description: 'write tool',
-      parameters: { type: 'object', properties: {} },
+      description: 'Write a file',
+      parameters: {
+        type: 'object',
+        properties: { path: { type: 'string' } },
+        required: ['path'],
+        additionalProperties: false,
+      },
     },
   },
 ]
@@ -215,7 +319,7 @@ export const resetOpencodeClientVersionCache = (): void => {
   lastSessionTimestamp = 0
 }
 
-/** Resolves the OpenCode client version from the NPM registry once per process. */
+/** Resolves the OpenCode client version from the update endpoint once per process. */
 export const getOpencodeClientVersion = async (): Promise<string> => {
   if (cachedClientVersion) return cachedClientVersion
   if (cachedClientVersionPromise) return cachedClientVersionPromise

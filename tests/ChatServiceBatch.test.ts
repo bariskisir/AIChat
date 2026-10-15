@@ -233,8 +233,8 @@ describe('ChatService batch routing', () => {
 
   it('uses the streaming responses endpoint for OpenCode quick-model tasks', async () => {
     const fetchMock = vi.fn(async (_input: string | URL | Request, _init?: RequestInit) => {
-      if (String(_input).includes('registry.npmjs.org')) {
-        return new Response(JSON.stringify({ version: '1.18.31' }), {
+      if (String(_input).includes('opencode.ai/update/api')) {
+        return new Response(JSON.stringify({ version: '2.0.29' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
         })
@@ -276,15 +276,83 @@ describe('ChatService batch routing', () => {
     >
     expect(body).toMatchObject({ stream: true })
     expect(body.tools).toEqual([
-      { type: 'function', name: 'bash', parameters: {} },
-      { type: 'function', name: 'edit', parameters: {} },
-      { type: 'function', name: 'glob', parameters: {} },
-      { type: 'function', name: 'grep', parameters: {} },
-      { type: 'function', name: 'read', parameters: {} },
-      { type: 'function', name: 'write', parameters: {} },
+      {
+        type: 'function',
+        name: 'bash',
+        description: 'Run a shell command',
+        parameters: {
+          type: 'object',
+          properties: { command: { type: 'string' } },
+          required: ['command'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
+      {
+        type: 'function',
+        name: 'edit',
+        description: 'Edit a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
+      {
+        type: 'function',
+        name: 'glob',
+        description: 'Find files by pattern',
+        parameters: {
+          type: 'object',
+          properties: { pattern: { type: 'string' } },
+          required: ['pattern'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
+      {
+        type: 'function',
+        name: 'grep',
+        description: 'Search file contents',
+        parameters: {
+          type: 'object',
+          properties: { pattern: { type: 'string' } },
+          required: ['pattern'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
+      {
+        type: 'function',
+        name: 'read',
+        description: 'Read a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
+      {
+        type: 'function',
+        name: 'write',
+        description: 'Write a file',
+        parameters: {
+          type: 'object',
+          properties: { path: { type: 'string' } },
+          required: ['path'],
+          additionalProperties: false,
+        },
+        strict: false,
+      },
     ])
     const headers = (responsesCall[1] as RequestInit).headers as Record<string, string>
-    expect(headers['User-Agent']).toBe('opencode/latest/1.18.31/cli')
+    expect(headers['User-Agent']).toBe('opencode/latest/2.0.29/cli')
+    expect(headers['x-api-key']).toBeUndefined()
+    expect(headers.Authorization).toBe('Bearer test-key')
     expect(headers['x-opencode-session']).toMatch(/^ses_[0-9a-f]{12}[A-Za-z0-9]{14}$/)
   })
 

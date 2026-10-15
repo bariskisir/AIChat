@@ -1668,15 +1668,22 @@ export default class ChatService {
     }
     const customHeaders = { ...(provider.customHeaders ?? {}) }
     for (const key of Object.keys(customHeaders)) {
-      if (key.toLowerCase() === 'user-agent') delete customHeaders[key]
+      // The free-tier gate rejects `x-api-key` and a spoofed UA, so neither
+      // may reach the wire even when the user added them as custom headers.
+      if (key.toLowerCase() === 'user-agent' || key.toLowerCase() === 'x-api-key') {
+        delete customHeaders[key]
+      }
     }
     const version = await getOpencodeClientVersion()
     const affinity = buildOpencodeSessionId(conversationId)
+    // The CLI always authenticates logged-out calls with the `public` key;
+    // an empty key must fall back to it instead of sending no auth header.
+    const bearer = apiKey || 'public'
     return {
       'Content-Type': 'application/json',
       ...customHeaders,
       'User-Agent': opencodeUserAgent(version),
-      ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
+      Authorization: `Bearer ${bearer}`,
       'x-opencode-session': affinity,
       'x-opencode-session-id': affinity,
       'x-session-affinity': affinity,

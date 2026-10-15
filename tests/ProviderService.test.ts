@@ -3,7 +3,7 @@
  * model selection, catalog routing, and chat-model preferences.
  */
 
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -76,10 +76,14 @@ describe('ProviderRegistry', () => {
     expect(modelsHeaders.Authorization).toBe('Bearer public')
     expect(modelsHeaders['x-api-key']).toBe('public')
     expect(modelsHeaders['User-Agent']).toMatch(/^opencode\/.+/)
-    expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 1 })
+    expect(opencode).toMatchObject({ enabled: true, hasApiKey: true, modelCount: 3 })
     expect(registry.getEditorData('opencode')).toMatchObject({
       apiKey: 'public',
-      selectedModelIds: ['muse-spark-1.2-contributor-free'],
+      selectedModelIds: [
+        'muse-spark-1.2-contributor-free',
+        'deepseek/deepseek-v3-free',
+        'meta/llama-free',
+      ],
     })
     expect(snapshot.lastUsedModel).toEqual({
       providerId: 'opencode',
@@ -109,7 +113,11 @@ describe('ProviderRegistry', () => {
     const sorted = await createRegistry(join(rootPath, 'sorted'))
 
     expect(sorted.getEditorData('opencode')).toMatchObject({
-      selectedModelIds: ['muse-spark-1.3-contributor-free'],
+      selectedModelIds: [
+        'muse-spark-1.3-contributor-free',
+        'deepseek/deepseek-v3-free',
+        'muse-spark-1.2-contributor-free',
+      ],
     })
     expect(sorted.snapshot().quickModel).toEqual({
       providerId: 'opencode',
@@ -194,7 +202,7 @@ describe('ProviderRegistry', () => {
     expect(upgraded.getEditorData('opencode').baseUrl).toBe('https://opencode.ai/inference/v1')
 
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(6)
+    expect(persisted.migrationVersion).toBe(7)
 
     await upgraded.save({
       id: 'opencode',
@@ -208,6 +216,54 @@ describe('ProviderRegistry', () => {
 
     const relaunched = await createRegistry()
     expect(relaunched.getEditorData('opencode').customHeaders).toBeUndefined()
+  })
+
+  it('rewrites the legacy Zen endpoint and empty key once when upgrading', async () => {
+    /** Writes one legacy OpenCode record with the given URL and key. */
+    const writeLegacy = async (root: string, baseUrl: string, apiKey: string): Promise<void> => {
+      await mkdir(root, { recursive: true })
+      await writeFile(
+        join(root, 'providers.json'),
+        JSON.stringify({
+          revision: 1,
+          providers: [
+            {
+              id: 'opencode',
+              name: 'OpenCode',
+              type: 'openai-compatible',
+              baseUrl,
+              builtin: true,
+              enabled: true,
+              apiKey,
+              customHeaders: {},
+              models: [],
+              selectedModelIds: [],
+            },
+          ],
+          favorites: [],
+          lastUsedModel: null,
+          quickModel: null,
+          titleGenerationEnabled: true,
+        }),
+      )
+    }
+    const legacyRoot = join(rootPath, 'legacy')
+    await writeLegacy(legacyRoot, 'https://opencode.ai/zen/v1', '')
+    const upgraded = await createRegistry(legacyRoot)
+    expect(upgraded.getEditorData('opencode')).toMatchObject({
+      baseUrl: 'https://opencode.ai/inference/v1',
+      apiKey: 'public',
+    })
+    const persisted = JSON.parse(await readFile(join(legacyRoot, 'providers.json'), 'utf8'))
+    expect(persisted.migrationVersion).toBe(7)
+
+    const paidRoot = join(rootPath, 'paid')
+    await writeLegacy(paidRoot, 'https://opencode.ai/zen/v1', 'personal-key')
+    const kept = await createRegistry(paidRoot)
+    expect(kept.getEditorData('opencode')).toMatchObject({
+      baseUrl: 'https://opencode.ai/inference/v1',
+      apiKey: 'personal-key',
+    })
   })
 
   it('refreshes server reasoning levels once when upgrading stored catalogs', async () => {
@@ -296,7 +352,7 @@ describe('ProviderRegistry', () => {
       'openai/gpt-4o',
     ])
     const persisted = JSON.parse(await readFile(join(rootPath, 'providers.json'), 'utf8'))
-    expect(persisted.migrationVersion).toBe(6)
+    expect(persisted.migrationVersion).toBe(7)
 
     // A second launch does not refetch: the stored server levels are kept as-is.
     vi.stubGlobal(
