@@ -14,7 +14,6 @@ import { setConversationsSidebarWidth } from '@renderer/store/appSlice'
 import styles from './ConversationsSidebar.module.scss'
 
 const MIN_SIDEBAR_WIDTH = 100
-const SIDEBAR_WIDTH_KEY = 'conversationsSidebarWidth'
 
 /** Renders new, open, rename, delete, and collapse actions for locally persisted conversations. */
 const ConversationsSidebar = (): React.JSX.Element => {
@@ -37,34 +36,17 @@ const ConversationsSidebar = (): React.JSX.Element => {
   const [deletingAll, setDeletingAll] = useState(false)
   const [resizing, setResizing] = useState(false)
 
-  /** Restores the previously dragged sidebar width from local storage on mount. */
+  /** Fits the restored sidebar into the window on mount and keeps it fitting after resizes. */
   useEffect(() => {
-    const stored = localStorage.getItem(SIDEBAR_WIDTH_KEY)
-    if (stored !== null) {
-      const parsed = Number(stored)
-      if (Number.isFinite(parsed)) {
-        const maxFit = Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - 160)
-        dispatch(
-          setConversationsSidebarWidth(Math.min(Math.max(parsed, MIN_SIDEBAR_WIDTH), maxFit)),
-        )
-      }
-    }
-  }, [dispatch])
-
-  /** Persists the sidebar width so it survives application restarts. */
-  useEffect(() => {
-    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(sidebarWidth))
-  }, [sidebarWidth])
-
-  /** Shrinks the sidebar when the window becomes too narrow for it and the chat. */
-  useEffect(() => {
-    /** Clamps the persisted sidebar width to the space available after a window resize. */
-    const onResize = (): void => {
+    /** Clamps the sidebar width to the space available in the current window. */
+    const fitWidth = (): void => {
       const maxFit = Math.max(MIN_SIDEBAR_WIDTH, window.innerWidth - 160)
-      if (sidebarWidth > maxFit) dispatch(setConversationsSidebarWidth(maxFit))
+      const clamped = Math.min(Math.max(sidebarWidth, MIN_SIDEBAR_WIDTH), maxFit)
+      if (clamped !== sidebarWidth) dispatch(setConversationsSidebarWidth(clamped))
     }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
+    fitWidth()
+    window.addEventListener('resize', fitWidth)
+    return () => window.removeEventListener('resize', fitWidth)
   }, [sidebarWidth, dispatch])
 
   /** Tracks pointer movement to resize the sidebar until the pointer is released. */

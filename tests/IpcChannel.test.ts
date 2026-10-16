@@ -47,6 +47,7 @@ describe('IpcChannel', () => {
     expect(channels).toContain('window:toggle-maximize')
     expect(channels).toContain('window:close')
     expect(channels).toContain('window:is-maximized')
+    expect(channels).toContain('window:sidebar-state-set')
     expect(channels).toContain('event:window-maximized-changed')
   })
 

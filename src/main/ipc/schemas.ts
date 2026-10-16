@@ -160,3 +160,8 @@ export const fileSaveSchema = z.object({
   suggestedName: z.string().trim().min(1).max(200),
   content: z.string().max(35_000_000),
 })
+
+export const sidebarStateSchema = z.object({
+  open: z.boolean(),
+  width: z.number().min(1).max(100_000),
+})

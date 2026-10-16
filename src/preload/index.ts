@@ -93,6 +93,8 @@ const api: ApiBridge = {
   closeWindow: () => ipcRenderer.invoke(IpcChannel.WindowClose),
   /** Reads the current native maximized state. */
   isWindowMaximized: () => ipcRenderer.invoke(IpcChannel.WindowIsMaximized),
+  /** Persists the conversation sidebar width and collapse state with window geometry. */
+  setSidebarState: (state) => ipcRenderer.invoke(IpcChannel.WindowSidebarStateSet, state),
   /** Synchronizes native chrome with the resolved theme. */
   setTheme: (theme) => ipcRenderer.invoke(IpcChannel.ThemeSet, theme),
   /** Opens an HTTP(S) target in the system browser. */

@@ -23,6 +23,7 @@ import type { LogRecord } from '../domain/runtime'
 import type { DesktopPlatform } from '../domain/runtime'
 import type { ThemeMode } from '../domain/app-settings'
 import type { UpdateStateEvent } from '../domain/updates'
+import type { SidebarState } from '../domain/window'
 
 /** Hydrates the renderer with all state needed for first render. */
 export interface BootstrapData {
@@ -31,6 +32,7 @@ export interface BootstrapData {
   currentConversation: Conversation
   providers: ProviderSnapshot
   generatingConversationIds: string[]
+  sidebar: SidebarState | null
   platform: DesktopPlatform
   version: string
 }
@@ -103,6 +105,8 @@ export interface ApiBridge {
   closeWindow(): Promise<void>
   /** Reads the current native maximized state. */
   isWindowMaximized(): Promise<boolean>
+  /** Persists the conversation sidebar width and collapse state with window geometry. */
+  setSidebarState(state: SidebarState): Promise<void>
   /** Synchronizes native title-bar colors with the renderer theme. */
   setTheme(theme: Exclude<ThemeMode, 'system'>): Promise<void>
   /** Opens an HTTP(S) URL in the system browser. */

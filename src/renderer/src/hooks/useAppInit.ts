@@ -7,19 +7,29 @@ import { App as AntdApp } from 'antd'
 import i18n from '@renderer/i18n'
 import { createLogger } from '@renderer/services/LoggerService'
 import { hydrate, setPage, setUpdateState } from '@renderer/store/appSlice'
-import { useAppDispatch } from '@renderer/store'
+import { useAppDispatch, useAppSelector } from '@renderer/store'
 
 const logger = createLogger('AppInit')
 
 /** Loads persisted state and maintains typed IPC subscriptions for the app lifetime. */
 export const useAppInit = (): void => {
   const dispatch = useAppDispatch()
+  const initialized = useAppSelector((state) => state.app.initialized)
+  const sidebarOpen = useAppSelector((state) => state.app.conversationsSidebarOpen)
+  const sidebarWidth = useAppSelector((state) => state.app.conversationsSidebarWidth)
   const { message } = AntdApp.useApp()
   const messageRef = useRef(message)
 
   useEffect(() => {
     messageRef.current = message
   }, [message])
+
+  useEffect(() => {
+    if (!initialized) return
+    void window.app
+      .setSidebarState({ open: sidebarOpen, width: sidebarWidth })
+      .catch((error) => logger.warn('Conversation sidebar state could not be persisted.', error))
+  }, [initialized, sidebarOpen, sidebarWidth])
 
   useEffect(() => {
     let active = true

@@ -12,6 +12,7 @@ import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
 import type StorageService from '../persistence/storage.service'
 import type TrayService from '../tray/tray.service'
+import type WindowService from '../window/window.service'
 import {
   chatRequestSchema,
   conversationIdSchema,
@@ -28,6 +29,7 @@ import {
   providerInputSchema,
   providerUsageFetchSchema,
   rendererLogSchema,
+  sidebarStateSchema,
 } from './schemas'
 
 interface IpcServices {
@@ -38,6 +40,7 @@ interface IpcServices {
   tray: TrayService
   updater: AppUpdater
   logger: LoggerService
+  windowService: WindowService
 }
 
 /** Removes prior handlers before a replacement main window is attached. */
@@ -92,6 +95,7 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
       currentConversation: await services.storage.getConversation(firstConversation.id),
       providers: services.providers.snapshot(),
       generatingConversationIds: await services.chat.getQueuedBatchConversationIds(),
+      sidebar: services.windowService.getSidebarState(),
       platform: process.platform,
       version: app.getVersion(),
     }
@@ -262,6 +266,10 @@ export const registerIpc = (window: BrowserWindow, services: IpcServices): void 
   ipcMain.handle(IpcChannel.WindowIsMaximized, (event) => {
     assertSender(event.sender)
     return window.isMaximized()
+  })
+  ipcMain.handle(IpcChannel.WindowSidebarStateSet, (event, input: unknown) => {
+    assertSender(event.sender)
+    services.windowService.setSidebarState(sidebarStateSchema.parse(input))
   })
   ipcMain.handle(IpcChannel.ThemeSet, (event, theme: unknown) => {
     assertSender(event.sender)

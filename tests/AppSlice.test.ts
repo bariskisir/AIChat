@@ -46,24 +46,39 @@ const providers: BootstrapData['providers'] = {
   titleGenerationEnabled: true,
 }
 
+/** Creates a minimal deterministic bootstrap payload for reducer tests. */
+const bootstrap = (overrides: Partial<BootstrapData> = {}): BootstrapData => ({
+  settings: { ...DEFAULT_SETTINGS, theme: 'light' },
+  conversations: [conversation('00000000-0000-4000-8000-000000000001')],
+  currentConversation: conversation('00000000-0000-4000-8000-000000000001'),
+  providers,
+  generatingConversationIds: [],
+  sidebar: null,
+  platform: 'linux',
+  version: '1.0.0',
+  ...overrides,
+})
+
 describe('appSlice', () => {
   it('hydrates application state once', () => {
-    const payload: BootstrapData = {
-      settings: { ...DEFAULT_SETTINGS, theme: 'light' },
-      conversations: [conversation('00000000-0000-4000-8000-000000000001')],
-      currentConversation: conversation('00000000-0000-4000-8000-000000000001'),
-      providers,
-      generatingConversationIds: [],
-      platform: 'linux',
-      version: '1.0.0',
-    }
+    const payload = bootstrap({ sidebar: { open: false, width: 300 } })
     const hydrated = reducer(undefined, hydrate(payload))
-    const repeated = reducer(hydrated, hydrate({ ...payload, version: '2.0.0' }))
+    const repeated = reducer(hydrated, hydrate(bootstrap({ version: '2.0.0' })))
 
     expect(hydrated.initialized).toBe(true)
     expect(hydrated.settings.theme).toBe('light')
     expect(hydrated.version).toBe('1.0.0')
+    expect(hydrated.conversationsSidebarOpen).toBe(false)
+    expect(hydrated.conversationsSidebarWidth).toBe(300)
     expect(repeated.version).toBe('1.0.0')
+    expect(repeated.conversationsSidebarOpen).toBe(false)
+  })
+
+  it('keeps the default sidebar state when no window state was persisted', () => {
+    const hydrated = reducer(undefined, hydrate(bootstrap()))
+
+    expect(hydrated.conversationsSidebarOpen).toBe(true)
+    expect(hydrated.conversationsSidebarWidth).toBe(266)
   })
 
   it('changes page and settings section', () => {

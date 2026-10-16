@@ -82,6 +82,10 @@ const appSlice = createSlice({
       state.currentConversation = action.payload.currentConversation
       state.providers = action.payload.providers
       state.generatingConversationIds = action.payload.generatingConversationIds
+      if (action.payload.sidebar) {
+        state.conversationsSidebarOpen = action.payload.sidebar.open
+        state.conversationsSidebarWidth = action.payload.sidebar.width
+      }
     },
     /** Opens a top-level application page. */
     setPage(state, action: PayloadAction<AppPage>) {

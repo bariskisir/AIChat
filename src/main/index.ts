@@ -82,7 +82,16 @@ const openApplicationWindow = async (): Promise<void> => {
     event.preventDefault()
     window.hide()
   })
-  registerIpc(window, { storage, providers, chat, attachments, tray, updater, logger })
+  registerIpc(window, {
+    storage,
+    providers,
+    chat,
+    attachments,
+    tray,
+    updater,
+    logger,
+    windowService,
+  })
   await chat.startBatchQueue((streamEvent) => sendChatStream(window, streamEvent))
   window.once('closed', () => chat.dispose())
 
