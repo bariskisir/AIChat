@@ -1065,7 +1065,7 @@ export class ProviderRegistry {
     )
   }
 
-  /** Fetches the first-install OpenCode catalog, keeping every free chat model with Muse preferred. */
+  /** Fetches the first-install OpenCode catalog, keeping every free chat model with DeepSeek preferred. */
   private async initializeOpenCodeDefaults(): Promise<void> {
     const provider = this.requireProvider('opencode')
     try {
@@ -1086,7 +1086,7 @@ export class ProviderRegistry {
         (model) => model.capabilities.chat && searchableText(model).includes('free'),
       )
       const sorted = freeChatModels
-        .filter((model) => searchableText(model).includes('muse'))
+        .filter((model) => searchableText(model).includes('deepseek'))
         .sort((left, right) =>
           searchableText(right).localeCompare(searchableText(left), undefined, { numeric: true }),
         )

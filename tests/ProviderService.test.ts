@@ -48,7 +48,7 @@ beforeEach(async () => {
             data: [
               { id: 'meta/llama-free', name: 'Llama Free' },
               { id: 'muse-spark-1.2-contributor-free', name: 'Muse Spark 1.2 Contributor Free' },
-              { id: 'deepseek/deepseek-v3-free', name: 'DeepSeek V3 Free' },
+              { id: 'deepseek/deepseek-v4.1-flash-free', name: 'DeepSeek V4.1 Flash Free' },
             ],
           }),
           { status: 200, headers: { 'content-type': 'application/json' } },
@@ -80,19 +80,19 @@ describe('ProviderRegistry', () => {
     expect(registry.getEditorData('opencode')).toMatchObject({
       apiKey: 'public',
       selectedModelIds: [
-        'muse-spark-1.2-contributor-free',
-        'deepseek/deepseek-v3-free',
+        'deepseek/deepseek-v4.1-flash-free',
         'meta/llama-free',
+        'muse-spark-1.2-contributor-free',
       ],
     })
     expect(snapshot.lastUsedModel).toEqual({
       providerId: 'opencode',
-      modelId: 'muse-spark-1.2-contributor-free',
+      modelId: 'deepseek/deepseek-v4.1-flash-free',
     })
     expect(snapshot.quickModel).toEqual(snapshot.lastUsedModel)
   })
 
-  it('selects the first Muse model when several releases are available', async () => {
+  it('selects the latest DeepSeek release when several free models are available', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(
@@ -100,9 +100,9 @@ describe('ProviderRegistry', () => {
           new Response(
             JSON.stringify({
               data: [
-                { id: 'muse-spark-1.2-contributor-free', name: 'Muse Spark 1.2 Contributor Free' },
                 { id: 'muse-spark-1.3-contributor-free', name: 'Muse Spark 1.3 Contributor Free' },
-                { id: 'deepseek/deepseek-v3-free', name: 'DeepSeek V3 Free' },
+                { id: 'deepseek/deepseek-v4-free', name: 'DeepSeek V4 Free' },
+                { id: 'deepseek/deepseek-v4.1-flash-free', name: 'DeepSeek V4.1 Flash Free' },
               ],
             }),
             { status: 200, headers: { 'content-type': 'application/json' } },
@@ -114,14 +114,14 @@ describe('ProviderRegistry', () => {
 
     expect(sorted.getEditorData('opencode')).toMatchObject({
       selectedModelIds: [
+        'deepseek/deepseek-v4.1-flash-free',
+        'deepseek/deepseek-v4-free',
         'muse-spark-1.3-contributor-free',
-        'deepseek/deepseek-v3-free',
-        'muse-spark-1.2-contributor-free',
       ],
     })
     expect(sorted.snapshot().quickModel).toEqual({
       providerId: 'opencode',
-      modelId: 'muse-spark-1.3-contributor-free',
+      modelId: 'deepseek/deepseek-v4.1-flash-free',
     })
   })
 
