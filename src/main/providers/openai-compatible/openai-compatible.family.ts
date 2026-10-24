@@ -7,6 +7,7 @@ import type { ProviderConnectionInput, ProviderModelDefinition } from '@shared/i
 import { normalizeOpenAiBaseUrl } from './openai-compatible.base-url'
 import type { ProviderFamily } from '../provider.family'
 import { httpFetch } from '../../http/http.fetch'
+import { bunFetch } from '../../http/bun.fetch'
 import {
   inferCapabilities,
   inferModelGroup,
@@ -35,18 +36,27 @@ export class OpenAiCompatibleFamily implements ProviderFamily {
     const headers: Record<string, string> = {
       ...(connection.customHeaders ?? {}),
     }
+    const isBun = connection.fetchType === 'bun' || connection.id === 'opencode'
     if (connection.id === 'opencode') {
       for (const key of Object.keys(headers)) {
         if (key.toLowerCase() === 'user-agent') delete headers[key]
       }
       headers['User-Agent'] = opencodeUserAgent(await getOpencodeClientVersion())
+      headers['x-opencode-client'] = 'cli'
+      headers.Accept = '*/*'
+      headers.Connection = 'keep-alive'
     }
     if (connection.apiKey) {
       headers.Authorization = `Bearer ${connection.apiKey}`
       headers['x-api-key'] = connection.apiKey
+    } else if (connection.id === 'opencode') {
+      headers.Authorization = 'Bearer public'
     }
-    this.logger.info('OpenAiCompatibleFamily', `Fetching models from ${baseUrl}/models`)
-    const response = await httpFetch(`${baseUrl}/models`, {
+    const catalogUrl =
+      connection.id === 'opencode' ? 'https://opencode.ai/inference/v1/models' : `${baseUrl}/models`
+    this.logger.info('OpenAiCompatibleFamily', `Fetching models from ${catalogUrl}`)
+    const fetcher = isBun ? bunFetch : httpFetch
+    const response = await fetcher(catalogUrl, {
       headers,
       signal: AbortSignal.timeout(30_000),
     })

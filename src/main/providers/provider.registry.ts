@@ -12,6 +12,7 @@ import {
   type ProviderAuthStatus,
   type ProviderConnectionInput,
   type ProviderEditorData,
+  type ProviderFetchType,
   type ProviderInput,
   type ProviderModelDefinition,
   type ProviderSnapshot,
@@ -23,6 +24,7 @@ import {
 import { z } from 'zod'
 import { parseCatalogReasoningEfforts } from './model.qualification'
 import { httpFetch } from '../http/http.fetch'
+import { bunFetch } from '../http/bun.fetch'
 import type LoggerService from '../logging/logger.service'
 import { normalizeOpenAiBaseUrl } from './openai-compatible/openai-compatible.base-url'
 import { getOpencodeClientVersion, opencodeUserAgent } from './opencode/opencode.protocol'
@@ -34,6 +36,7 @@ interface ProviderRecord {
   name: string
   type: ProviderType
   baseUrl: string
+  fetchType?: ProviderFetchType | undefined
   batchUrl: string
   batchPollIntervalSeconds: number
   batchModelRegex: string
@@ -157,6 +160,7 @@ interface BuiltinProviderPreset {
   name: string
   type: ProviderType
   baseUrl?: string
+  fetchType?: ProviderFetchType
   batchUrl?: string
   batchPollIntervalSeconds?: number
   batchModelRegex?: string
@@ -173,6 +177,7 @@ const BUILTIN_PROVIDERS: BuiltinProviderPreset[] = [
     baseUrl: 'https://opencode.ai/inference/v1',
     defaultApiKey: 'public',
     enabledByDefault: true,
+    fetchType: 'bun',
   },
   {
     id: 'deepseek',
@@ -696,6 +701,9 @@ export class ProviderRegistry {
       name: provider.name,
       type: provider.type,
       baseUrl: provider.baseUrl,
+      ...(provider.fetchType || provider.id === 'opencode'
+        ? { fetchType: provider.fetchType ?? 'bun' }
+        : {}),
       ...(provider.batchUrl ? { batchUrl: provider.batchUrl } : {}),
       ...(provider.id === 'openrouter'
         ? {
@@ -1003,18 +1011,27 @@ export class ProviderRegistry {
     const headers: Record<string, string> = {
       ...(provider.customHeaders ?? {}),
     }
+    const isBun = provider.fetchType === 'bun' || provider.id === 'opencode'
     if (provider.id === 'opencode') {
       for (const key of Object.keys(headers)) {
         if (key.toLowerCase() === 'user-agent') delete headers[key]
       }
       headers['User-Agent'] = opencodeUserAgent(await getOpencodeClientVersion())
+      headers['x-opencode-client'] = 'cli'
+      headers.Accept = '*/*'
+      headers.Connection = 'keep-alive'
     }
     if (provider.apiKey) {
       headers.Authorization = `Bearer ${provider.apiKey}`
       headers['x-api-key'] = provider.apiKey
+    } else if (provider.id === 'opencode') {
+      headers.Authorization = 'Bearer public'
     }
-    this.logger.info('ProviderRegistry', `Fetching models from ${baseUrl}/models`)
-    const response = await httpFetch(`${baseUrl}/models`, {
+    const catalogUrl =
+      provider.id === 'opencode' ? 'https://opencode.ai/inference/v1/models' : `${baseUrl}/models`
+    this.logger.info('ProviderRegistry', `Fetching models from ${catalogUrl}`)
+    const fetcher = isBun ? bunFetch : httpFetch
+    const response = await fetcher(catalogUrl, {
       headers,
       signal: AbortSignal.timeout(30_000),
     })

@@ -40,12 +40,16 @@ export interface ModelReference {
   modelId: string
 }
 
+/** Supported outbound HTTP network engine implementations. */
+export type ProviderFetchType = 'bun' | 'default'
+
 /** Public provider data used by the ordered overview. */
 export interface ProviderSummary {
   id: string
   name: string
   type: ProviderType
   baseUrl: string
+  fetchType?: ProviderFetchType | undefined
   batchUrl?: string | undefined
   batchPollIntervalSeconds?: number | undefined
   batchModelRegex?: string | undefined
@@ -80,6 +84,7 @@ export interface ProviderConnectionInput {
   type: ProviderType
   name: string
   baseUrl?: string | undefined
+  fetchType?: ProviderFetchType | undefined
   batchUrl?: string | undefined
   batchPollIntervalSeconds?: number | undefined
   batchModelRegex?: string | undefined

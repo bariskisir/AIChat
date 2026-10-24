@@ -4,7 +4,19 @@
  */
 
 import { randomBytes } from 'node:crypto'
-import { httpFetch } from '../../http/http.fetch'
+import { bunFetch } from '../../http/bun.fetch'
+
+/** In-memory cached project identifier generated for OpenCode CLI emulation. */
+let defaultProjectId: string | null = null
+
+/** Generates or reuses a 40-character hex project identifier for OpenCode CLI emulation. */
+export const opencodeProjectId = (): string => {
+  if (process.env.OPENCODE_PROJECT) return process.env.OPENCODE_PROJECT
+  if (!defaultProjectId) {
+    defaultProjectId = randomBytes(20).toString('hex')
+  }
+  return defaultProjectId
+}
 
 /** Update endpoint holding the latest published opencode CLI version (v2 line). */
 export const OPENCODE_LATEST_URL = 'https://opencode.ai/update/api/latest/cli/npm'
@@ -200,56 +212,96 @@ const opencodeTextContent = (content: string | Array<Record<string, unknown>>): 
 }
 
 /**
- * Merges system prompts into every user message for OpenCode providers.
- * The Zen backend handles system instructions more reliably when they are
- * inlined, and every OpenCode turn carries an explicit no-tools directive
- * so the whole session stays tool-free. System messages are removed from
- * the returned array.
+ * Canonical system prompt required by OpenCode CLI backend to identify
+ * legitimate OpenCode client sessions.
+ */
+export const OPENCODE_HARNESS_SYSTEM_PROMPT = `You are an AI agent running in OpenCode, a coding agent harness. Help the user accomplish their goals using the tools you have available.
+
+# Harness
+- Responses are rendered as GitHub-flavored Markdown.
+- <system-reminder> blocks are harness instructions, not user-authored content. Read and follow them.
+- Prefer parallelizing independent tool calls.
+- Prefer dedicated tools over shell commands; fall back to the shell when a tool cannot do what you need.
+- Do not chain shell commands with separators like echo "====="; or printf '---'; the output becomes noisy in a way that makes the user's side of the conversation worse.
+- Use the write tool to create files or completely replace their content. Prefer using the edit tool for targeted changes.
+- Use the edit tool for targeted changes to existing text files. It replaces the exact text in oldString with newString, and the values must differ. By default, oldString must occur exactly once. If it occurs multiple times, include more surrounding context to make it unique or set replaceAll to true to replace every occurrence.
+
+# Communication
+- Use clear file paths when referring to files.
+- Keep responses clear and concise, and avoid unnecessary technical jargon.
+
+# Working in codebases
+- Keep changes consistent with the structure, naming, style, and patterns of the surrounding code.
+- Treat unfamiliar files or changes as potential user work and investigate before deleting or overwriting them.
+
+# Your Model
+- Name: OpenCode Assistant
+- Provider ID: opencode
+- Model ID: default
+# Code Mode
+
+Use the execute tool to call the tools listed below. They cannot be called directly. They only work inside code you pass to execute.
+
+The catalog is complete. Do not guess tool names.
+
+## Available tools
+
+- opencode (8 tools)
+  - tools.opencode.list_mcp_resources
+  - tools.opencode.models
+  - tools.opencode.read_mcp_resource
+  - tools.opencode.session_move
+  - tools.opencode.session_rename
+  - tools.opencode.worktree_create
+  - tools.opencode.worktree_list
+  - tools.opencode.worktree_remove
+
+Skills provide specialized instructions and workflows for specific tasks.
+Use the skill tool to load a skill when a task matches its description.
+<available_skills>
+  <skill>
+    <id>opencode</id>
+    <name>OpenCode</name>
+    <description>OpenCode CLI assistant</description>
+  </skill>
+</available_skills>
+
+Today's date: Sat Oct 24 2026
+
+Here is some useful information about the environment you are running in:
+<env>
+  Working directory: C:\\Users\\black
+  Workspace root folder: C:\\Users\\black
+  Is directory a git repo: no
+  Platform: win32
+</env>`
+
+/**
+ * Merges the mandatory OpenCode harness system prompt into the message list,
+ * preserving any user-defined system instructions under User Instructions.
  */
 export const applyOpencodeSessionPolicy = <T extends OpencodeMessageLike>(
   messages: readonly T[],
 ): T[] => {
-  const systemTexts: string[] = []
+  const userSystemTexts: string[] = []
   for (const message of messages) {
-    if (message.role !== 'system') continue
-    const text =
-      typeof message.content === 'string'
-        ? message.content.trim()
-        : opencodeTextContent(message.content).trim()
-    if (text) systemTexts.push(text)
+    if (message.role === 'system') {
+      const text =
+        typeof message.content === 'string'
+          ? message.content.trim()
+          : opencodeTextContent(message.content).trim()
+      if (text) userSystemTexts.push(text)
+    }
   }
-  const prefix =
-    systemTexts.length > 0
-      ? `${systemTexts.join('\n\n')}\n\n${OPENCODE_NO_TOOLS_INSTRUCTION}`
-      : OPENCODE_NO_TOOLS_INSTRUCTION
-  const withoutSystem = messages.filter((message) => message.role !== 'system')
-  if (!withoutSystem.some((message) => message.role === 'user')) {
-    return [{ role: 'user', content: prefix } as T, ...withoutSystem]
-  }
-  return withoutSystem.map((message) => {
-    if (message.role !== 'user') return message
-    if (typeof message.content === 'string') {
-      if (message.content.startsWith(prefix)) return message
-      const original = message.content.trim()
-      return {
-        ...message,
-        content: original ? `${prefix}\n\n${message.content}` : prefix,
-      }
-    }
-    const first = message.content[0]
-    if (
-      first &&
-      first.type === 'text' &&
-      typeof first.text === 'string' &&
-      first.text.startsWith(prefix)
-    ) {
-      return message
-    }
-    return {
-      ...message,
-      content: [{ type: 'text', text: prefix }, ...message.content],
-    }
-  })
+
+  const systemContent =
+    userSystemTexts.length > 0
+      ? `${OPENCODE_HARNESS_SYSTEM_PROMPT}\n\n# User Instructions\n${userSystemTexts.join('\n\n')}`
+      : OPENCODE_HARNESS_SYSTEM_PROMPT
+
+  const nonSystemMessages = messages.filter((message) => message.role !== 'system')
+
+  return [{ role: 'system', content: systemContent } as T, ...nonSystemMessages]
 }
 
 /** Backwards-compatible alias kept for the first-message-only policy name. */
@@ -314,6 +366,7 @@ let cachedClientVersionPromise: Promise<string> | null = null
 export const resetOpencodeClientVersionCache = (): void => {
   cachedClientVersion = null
   cachedClientVersionPromise = null
+  defaultProjectId = null
   sessionAffinityCache.clear()
   sessionCounter = 0
   lastSessionTimestamp = 0
@@ -325,8 +378,13 @@ export const getOpencodeClientVersion = async (): Promise<string> => {
   if (cachedClientVersionPromise) return cachedClientVersionPromise
   cachedClientVersionPromise = (async (): Promise<string> => {
     try {
-      const response = await httpFetch(OPENCODE_LATEST_URL, {
-        headers: { Accept: 'application/json' },
+      const currentVersion = cachedClientVersion ?? DEFAULT_OPENCODE_CLIENT_VERSION
+      const response = await bunFetch(OPENCODE_LATEST_URL, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': opencodeUserAgent(currentVersion),
+          'x-opencode-client': 'cli',
+        },
         signal: AbortSignal.timeout(10_000),
       })
       if (response.ok) {
@@ -351,3 +409,56 @@ export const getOpencodeClientVersion = async (): Promise<string> => {
 
 /** Builds the mandatory OpenCode User-Agent header value for one client version. */
 export const opencodeUserAgent = (version: string): string => `opencode/latest/${version}/cli`
+
+/** Generates W3C traceparent and B3 tracing headers matching OpenCode CLI behavior. */
+export const createOpencodeTraceHeaders = (): { b3: string; traceparent: string } => {
+  const traceId = randomBytes(16).toString('hex')
+  const spanId = randomBytes(8).toString('hex')
+  const sampleTail = randomBytes(8).toString('hex')
+  return {
+    b3: `${traceId}-${spanId}-1-${sampleTail}`,
+    traceparent: `00-${traceId}-${spanId}-01`,
+  }
+}
+
+/** Parameters required to format canonical OpenCode headers. */
+export interface OpencodeHeaderOptions {
+  version: string
+  apiKey?: string | undefined
+  conversationId?: string | undefined
+  customHeaders?: Record<string, string> | undefined
+}
+
+/** Formats the complete Bun-compatible header set for OpenCode API requests. */
+export const buildOpencodeHeaders = (options: OpencodeHeaderOptions): Record<string, string> => {
+  const affinity = opencodeSessionId(options.conversationId)
+  const bearer = options.apiKey || 'public'
+  const traces = createOpencodeTraceHeaders()
+  const project = opencodeProjectId()
+
+  const custom = { ...(options.customHeaders ?? {}) }
+  for (const key of Object.keys(custom)) {
+    if (key.toLowerCase() === 'user-agent' || key.toLowerCase() === 'x-api-key') {
+      delete custom[key]
+    }
+  }
+
+  return {
+    'Content-Type': 'application/json',
+    ...custom,
+    'User-Agent': opencodeUserAgent(options.version),
+    Authorization: `Bearer ${bearer}`,
+    b3: traces.b3,
+    traceparent: traces.traceparent,
+    'x-opencode-client': 'cli',
+    'x-opencode-project': project,
+    'x-opencode-session': affinity,
+    'x-opencode-session-id': affinity,
+    'x-session-affinity': affinity,
+    'x-session-id': affinity,
+    'X-Session-Id': affinity,
+    Accept: '*/*',
+    'Accept-Encoding': 'gzip, deflate, br, zstd',
+    Connection: 'keep-alive',
+  }
+}

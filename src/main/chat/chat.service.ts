@@ -7,10 +7,12 @@ import type {
   ChatRequest,
   ChatStreamEvent,
   ModelReference,
+  ProviderFetchType,
   WebSearchMode,
 } from '@shared/index'
 import { buildReasoningParameters } from '../reasoning/index'
 import { httpFetch } from '../http/http.fetch'
+import { bunFetch } from '../http/bun.fetch'
 import type LoggerService from '../logging/logger.service'
 import type { ProviderRegistry } from '../providers/index'
 import { normalizeOpenAiBaseUrl } from '../providers/openai-compatible/openai-compatible.base-url'
@@ -28,11 +30,11 @@ import {
 } from '../providers/claude-web/claude-web.protocol'
 import {
   applyOpencodeSessionPolicy,
+  buildOpencodeHeaders,
   getOpencodeClientVersion,
   OPENCODE_CHAT_TOOLS,
   OPENCODE_TOOLS,
   opencodeSessionId as buildOpencodeSessionId,
-  opencodeUserAgent,
 } from '../providers/opencode/opencode.protocol'
 import type StorageService from '../persistence/storage.service'
 import type { PersistedBatchJob } from '../persistence/storage.service'
@@ -107,6 +109,7 @@ interface CompatibleProvider {
   id: string
   name: string
   baseUrl: string
+  fetchType?: ProviderFetchType | undefined
   batchUrl?: string | undefined
   batchPollIntervalSeconds?: number | undefined
   batchModelRegex?: string | undefined
@@ -536,6 +539,21 @@ export default class ChatService {
       return
     }
     if (provider.id === 'opencode') {
+      const isFreeTier = !apiKey || apiKey === 'public' || modelId.endsWith('-free')
+      if (isFreeTier) {
+        await this.streamOpenAiCompatibleChat(
+          provider,
+          apiKey,
+          modelId,
+          messages,
+          reasoningEffort,
+          signal,
+          requestId,
+          emit,
+          batchContext.conversationId,
+        )
+        return
+      }
       try {
         await this.streamOpenAiCompatibleResponses(
           provider,
@@ -682,9 +700,11 @@ export default class ChatService {
       ...(provider.id === 'opencode' ? { tools: [...OPENCODE_CHAT_TOOLS] } : {}),
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
+    const fetcher =
+      provider.fetchType === 'bun' || provider.id === 'opencode' ? bunFetch : httpFetch
     /** Sends the current compatible request body so unsupported usage options can be retried. */
     const sendRequest = async (): Promise<Response> =>
-      httpFetch(endpoint, {
+      fetcher(endpoint, {
         method: 'POST',
         headers: await this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
@@ -728,7 +748,9 @@ export default class ChatService {
       if (reasoning?.effort === 'off') delete body.reasoning
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
-    const response = await httpFetch(endpoint, {
+    const fetcher =
+      provider.fetchType === 'bun' || provider.id === 'opencode' ? bunFetch : httpFetch
+    const response = await fetcher(endpoint, {
       method: 'POST',
       headers: await this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
@@ -1247,6 +1269,12 @@ export default class ChatService {
       }
       return content
     }
+    const isFreeTier = !apiKey || apiKey === 'public' || modelId.endsWith('-free')
+    if (isFreeTier) {
+      const content = await collectThrough('chat')
+      if (!content) throw new Error('Quick Model returned no text.')
+      return content
+    }
     try {
       const content = await collectThrough('responses')
       if (content) return content
@@ -1310,9 +1338,11 @@ export default class ChatService {
       ...(provider.id === 'opencode' ? { tools: [...OPENCODE_CHAT_TOOLS] } : {}),
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/chat/completions`
+    const fetcher =
+      provider.fetchType === 'bun' || provider.id === 'opencode' ? bunFetch : httpFetch
     /** Sends the current body so a provider rejecting the reasoning keys can be retried. */
     const sendRequest = async (): Promise<Response> =>
-      httpFetch(endpoint, {
+      fetcher(endpoint, {
         method: 'POST',
         headers: await this.headers(provider, apiKey, conversationId),
         body: JSON.stringify(body),
@@ -1355,7 +1385,9 @@ export default class ChatService {
       if (reasoning?.effort === 'off') delete body.reasoning
     }
     const endpoint = `${normalizeOpenAiBaseUrl(provider.baseUrl)}/responses`
-    const response = await httpFetch(endpoint, {
+    const fetcher =
+      provider.fetchType === 'bun' || provider.id === 'opencode' ? bunFetch : httpFetch
+    const response = await fetcher(endpoint, {
       method: 'POST',
       headers: await this.headers(provider, apiKey, conversationId),
       body: JSON.stringify(body),
@@ -1666,30 +1698,13 @@ export default class ChatService {
         ...(apiKey ? { Authorization: `Bearer ${apiKey}`, 'x-api-key': apiKey } : {}),
       }
     }
-    const customHeaders = { ...(provider.customHeaders ?? {}) }
-    for (const key of Object.keys(customHeaders)) {
-      // The free-tier gate rejects `x-api-key` and a spoofed UA, so neither
-      // may reach the wire even when the user added them as custom headers.
-      if (key.toLowerCase() === 'user-agent' || key.toLowerCase() === 'x-api-key') {
-        delete customHeaders[key]
-      }
-    }
     const version = await getOpencodeClientVersion()
-    const affinity = buildOpencodeSessionId(conversationId)
-    // The CLI always authenticates logged-out calls with the `public` key;
-    // an empty key must fall back to it instead of sending no auth header.
-    const bearer = apiKey || 'public'
-    return {
-      'Content-Type': 'application/json',
-      ...customHeaders,
-      'User-Agent': opencodeUserAgent(version),
-      Authorization: `Bearer ${bearer}`,
-      'x-opencode-session': affinity,
-      'x-opencode-session-id': affinity,
-      'x-session-affinity': affinity,
-      'X-Session-Id': affinity,
-      'x-opencode-client': 'cli',
-    }
+    return buildOpencodeHeaders({
+      version,
+      apiKey,
+      conversationId,
+      customHeaders: provider.customHeaders,
+    })
   }
 
   /** Creates the ChatGPT backend headers used by Responses API and upload requests. */

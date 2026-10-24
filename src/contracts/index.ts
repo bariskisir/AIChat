@@ -53,6 +53,7 @@ export type {
   ProviderAuthStatus,
   ProviderConnectionInput,
   ProviderEditorData,
+  ProviderFetchType,
   ProviderInput,
   ProviderModelDefinition,
   ProviderSnapshot,
